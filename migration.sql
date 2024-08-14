@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS webhooks (
 
 CREATE TABLE IF NOT EXISTS events (
     id BIGSERIAL NOT NULL,
-    webhook_id BIGSERIAL REFERENCES webhooks(id) ON DELETE CASCADE,
+    webhook_id BIGSERIAL REFERENCES webhooks(id) NOT NULL,
     snapshot_data TEXT NOT NULL,
     http_response_code INTEGER,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE TABLE IF NOT EXISTS event_cooldowns (
     id BIGSERIAL NOT NULL,
-    webhook_id BIGSERIAL REFERENCES webhooks(id) ON DELETE CASCADE,
+    webhook_id BIGSERIAL REFERENCES webhooks(id) NOT NULL,
     last_triggered_at TIMESTAMP WITH TIME ZONE NOT NULL,
 
     CONSTRAINT event_cooldowns_pkey PRIMARY KEY (id)
