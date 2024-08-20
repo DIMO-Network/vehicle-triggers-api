@@ -25,7 +25,7 @@ export GOOSE_DRIVER=postgres
 ```
 
 Add a migrations:
-`$ goose -dir migrations create <migration_name> sql`
+`$ goose -dir internal/infrastructure/db/migrations create <migration_name> sql`
 
 Migrate DB to latest:
-`$ go run ./cmd/devices-api migrate`
+`$ go run ./cmd/vehicle-events migrate`
