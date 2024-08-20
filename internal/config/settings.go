@@ -10,6 +10,7 @@ type Settings struct {
 	Port        string      `yaml:"PORT"`
 	GRPCPort    string      `yaml:"GRPC_PORT"`
 	LogLevel    string      `yaml:"LOG_LEVEL"`
+	ServiceName string      `yaml:"SERVICE_NAME"`
 	DB          db.Settings `yaml:"DB"`
 }
 

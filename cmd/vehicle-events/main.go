@@ -33,7 +33,7 @@ func main() {
 	}
 	logger := zerolog.New(os.Stdout).Level(level).With().
 		Timestamp().
-		//Str("app", settings.ServiceName).
+		Str("app", settings.ServiceName).
 		Str("git-sha1", gitSha1).
 		Logger()
 
