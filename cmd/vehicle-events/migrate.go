@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"github.com/DIMO-Network/vehicle-events-api/internal/config"
+	"github.com/pressly/goose/v3"
+	"github.com/rs/zerolog"
 
 	"github.com/DIMO-Network/shared/db"
 	_ "github.com/lib/pq"
-	"github.com/rs/zerolog"
 )
 
 func migrateDatabase(ctx context.Context, logger zerolog.Logger, s *config.Settings, args []string) {
@@ -29,7 +31,7 @@ func migrateDatabase(ctx context.Context, logger zerolog.Logger, s *config.Setti
 		logger.Fatal().Err(err).Msg("could not create schema:")
 	}
 	goose.SetTableName("vehicle_events_api.migrations")
-	if err := goose.Run(command, sqlDb.DBS().Writer.DB, "internal/infrastructure/db/migrations"); err != nil {
+	if err := goose.RunContext(ctx, command, sqlDb.DBS().Writer.DB, "internal/infrastructure/db/migrations"); err != nil {
 		logger.Fatal().Err(err).Msg("failed to apply go code migrations")
 	}
 }
