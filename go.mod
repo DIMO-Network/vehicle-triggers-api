@@ -18,7 +18,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/kms v1.28.1 // indirect
 	github.com/aws/smithy-go v1.20.0 // indirect
-	github.com/gofiber/fiber/v2 v2.52.0 // indirect
+	github.com/gofiber/fiber/v2 v2.52.5 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.17.6 // indirect
