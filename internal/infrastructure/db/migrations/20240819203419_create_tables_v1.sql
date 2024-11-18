@@ -12,12 +12,14 @@ CREATE TABLE IF NOT EXISTS developer_licenses (
       updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+
 CREATE TABLE IF NOT EXISTS events (
       id CHAR(27) NOT NULL,
-      event_name TEXT NOT NULL,
-      condition JSONB NOT NULL DEFAULT '{}'::JSONB,
+      service TEXT NOT NULL,
+      data TEXT NOT NULL,
+      trigger TEXT NOT NULL,
+      setup TEXT NOT NULL CHECK (setup IN ('Realtime', 'Hourly', 'Daily')),
       parameters JSONB DEFAULT '{}'::JSONB,
-      flow_type TEXT NOT NULL CHECK (flow_type IN ('Realtime', 'Batch')),
       target_uri TEXT NOT NULL,
       cooldown_period INTEGER NOT NULL DEFAULT 0,
       developer_license_address BYTEA NOT NULL,
@@ -29,6 +31,7 @@ CREATE TABLE IF NOT EXISTS events (
       CONSTRAINT fk_dev_license FOREIGN KEY (developer_license_address)
       REFERENCES developer_licenses (license_address) ON DELETE CASCADE
 );
+
 
 CREATE TABLE IF NOT EXISTS event_logs (
       id CHAR(27) NOT NULL,
