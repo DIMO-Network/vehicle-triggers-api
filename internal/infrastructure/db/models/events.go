@@ -19,23 +19,23 @@ import (
 	"github.com/volatiletech/sqlboiler/v4/queries"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"github.com/volatiletech/sqlboiler/v4/queries/qmhelper"
-	"github.com/volatiletech/sqlboiler/v4/types"
 	"github.com/volatiletech/strmangle"
 )
 
 // Event is an object representing the database table.
 type Event struct {
-	ID                      string     `boil:"id" json:"id" toml:"id" yaml:"id"`
-	EventName               string     `boil:"event_name" json:"event_name" toml:"event_name" yaml:"event_name"`
-	Condition               types.JSON `boil:"condition" json:"condition" toml:"condition" yaml:"condition"`
-	Parameters              null.JSON  `boil:"parameters" json:"parameters,omitempty" toml:"parameters" yaml:"parameters,omitempty"`
-	FlowType                string     `boil:"flow_type" json:"flow_type" toml:"flow_type" yaml:"flow_type"`
-	TargetURI               string     `boil:"target_uri" json:"target_uri" toml:"target_uri" yaml:"target_uri"`
-	CooldownPeriod          int        `boil:"cooldown_period" json:"cooldown_period" toml:"cooldown_period" yaml:"cooldown_period"`
-	DeveloperLicenseAddress []byte     `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
-	CreatedAt               time.Time  `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	UpdatedAt               time.Time  `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
-	Status                  string     `boil:"status" json:"status" toml:"status" yaml:"status"`
+	ID                      string    `boil:"id" json:"id" toml:"id" yaml:"id"`
+	Service                 string    `boil:"service" json:"service" toml:"service" yaml:"service"`
+	Data                    string    `boil:"data" json:"data" toml:"data" yaml:"data"`
+	Trigger                 string    `boil:"trigger" json:"trigger" toml:"trigger" yaml:"trigger"`
+	Setup                   string    `boil:"setup" json:"setup" toml:"setup" yaml:"setup"`
+	Parameters              null.JSON `boil:"parameters" json:"parameters,omitempty" toml:"parameters" yaml:"parameters,omitempty"`
+	TargetURI               string    `boil:"target_uri" json:"target_uri" toml:"target_uri" yaml:"target_uri"`
+	CooldownPeriod          int       `boil:"cooldown_period" json:"cooldown_period" toml:"cooldown_period" yaml:"cooldown_period"`
+	DeveloperLicenseAddress []byte    `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
+	CreatedAt               time.Time `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	UpdatedAt               time.Time `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	Status                  string    `boil:"status" json:"status" toml:"status" yaml:"status"`
 
 	R *eventR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L eventL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -43,10 +43,11 @@ type Event struct {
 
 var EventColumns = struct {
 	ID                      string
-	EventName               string
-	Condition               string
+	Service                 string
+	Data                    string
+	Trigger                 string
+	Setup                   string
 	Parameters              string
-	FlowType                string
 	TargetURI               string
 	CooldownPeriod          string
 	DeveloperLicenseAddress string
@@ -55,10 +56,11 @@ var EventColumns = struct {
 	Status                  string
 }{
 	ID:                      "id",
-	EventName:               "event_name",
-	Condition:               "condition",
+	Service:                 "service",
+	Data:                    "data",
+	Trigger:                 "trigger",
+	Setup:                   "setup",
 	Parameters:              "parameters",
-	FlowType:                "flow_type",
 	TargetURI:               "target_uri",
 	CooldownPeriod:          "cooldown_period",
 	DeveloperLicenseAddress: "developer_license_address",
@@ -69,10 +71,11 @@ var EventColumns = struct {
 
 var EventTableColumns = struct {
 	ID                      string
-	EventName               string
-	Condition               string
+	Service                 string
+	Data                    string
+	Trigger                 string
+	Setup                   string
 	Parameters              string
-	FlowType                string
 	TargetURI               string
 	CooldownPeriod          string
 	DeveloperLicenseAddress string
@@ -81,10 +84,11 @@ var EventTableColumns = struct {
 	Status                  string
 }{
 	ID:                      "events.id",
-	EventName:               "events.event_name",
-	Condition:               "events.condition",
+	Service:                 "events.service",
+	Data:                    "events.data",
+	Trigger:                 "events.trigger",
+	Setup:                   "events.setup",
 	Parameters:              "events.parameters",
-	FlowType:                "events.flow_type",
 	TargetURI:               "events.target_uri",
 	CooldownPeriod:          "events.cooldown_period",
 	DeveloperLicenseAddress: "events.developer_license_address",
@@ -120,10 +124,11 @@ func (w whereHelperint) NIN(slice []int) qm.QueryMod {
 
 var EventWhere = struct {
 	ID                      whereHelperstring
-	EventName               whereHelperstring
-	Condition               whereHelpertypes_JSON
+	Service                 whereHelperstring
+	Data                    whereHelperstring
+	Trigger                 whereHelperstring
+	Setup                   whereHelperstring
 	Parameters              whereHelpernull_JSON
-	FlowType                whereHelperstring
 	TargetURI               whereHelperstring
 	CooldownPeriod          whereHelperint
 	DeveloperLicenseAddress whereHelper__byte
@@ -132,10 +137,11 @@ var EventWhere = struct {
 	Status                  whereHelperstring
 }{
 	ID:                      whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"id\""},
-	EventName:               whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"event_name\""},
-	Condition:               whereHelpertypes_JSON{field: "\"vehicle_events_api\".\"events\".\"condition\""},
+	Service:                 whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"service\""},
+	Data:                    whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"data\""},
+	Trigger:                 whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"trigger\""},
+	Setup:                   whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"setup\""},
 	Parameters:              whereHelpernull_JSON{field: "\"vehicle_events_api\".\"events\".\"parameters\""},
-	FlowType:                whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"flow_type\""},
 	TargetURI:               whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"target_uri\""},
 	CooldownPeriod:          whereHelperint{field: "\"vehicle_events_api\".\"events\".\"cooldown_period\""},
 	DeveloperLicenseAddress: whereHelper__byte{field: "\"vehicle_events_api\".\"events\".\"developer_license_address\""},
@@ -192,9 +198,9 @@ func (r *eventR) GetEventVehicles() EventVehicleSlice {
 type eventL struct{}
 
 var (
-	eventAllColumns            = []string{"id", "event_name", "condition", "parameters", "flow_type", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status"}
-	eventColumnsWithoutDefault = []string{"id", "event_name", "flow_type", "target_uri", "developer_license_address", "status"}
-	eventColumnsWithDefault    = []string{"condition", "parameters", "cooldown_period", "created_at", "updated_at"}
+	eventAllColumns            = []string{"id", "service", "data", "trigger", "setup", "parameters", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status"}
+	eventColumnsWithoutDefault = []string{"id", "service", "data", "trigger", "setup", "target_uri", "developer_license_address", "status"}
+	eventColumnsWithDefault    = []string{"parameters", "cooldown_period", "created_at", "updated_at"}
 	eventPrimaryKeyColumns     = []string{"id"}
 	eventGeneratedColumns      = []string{}
 )
