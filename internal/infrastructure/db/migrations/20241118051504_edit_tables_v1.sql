@@ -15,12 +15,14 @@ CREATE TABLE IF NOT EXISTS developer_licenses (
 DROP TABLE IF EXISTS webhook_vehicles;
 
 ALTER TABLE events
-    RENAME COLUMN webhook_target_uri TO target_uri,
-    ADD COLUMN condition JSONB NOT NULL DEFAULT '{}'::JSONB,
+    ALTER COLUMN condition TYPE JSONB USING condition::JSONB,
     ADD COLUMN parameters JSONB DEFAULT '{}'::JSONB,
     ADD COLUMN developer_license_address BYTEA NOT NULL,
     ADD CONSTRAINT fk_dev_license FOREIGN KEY (developer_license_address)
     REFERENCES developer_licenses (license_address) ON DELETE CASCADE;
+
+ALTER TABLE events
+    RENAME COLUMN webhook_target_uri TO target_uri;
 
 ALTER TABLE event_logs
     ADD COLUMN event_type TEXT NOT NULL DEFAULT '',
@@ -54,10 +56,12 @@ ALTER TABLE event_logs
     DROP COLUMN IF EXISTS permission_status;
 
 ALTER TABLE events
-    RENAME COLUMN target_uri TO webhook_target_uri,
-    DROP COLUMN IF EXISTS condition,
+    ALTER COLUMN condition TYPE TEXT USING condition::TEXT,
     DROP COLUMN IF EXISTS parameters,
     DROP COLUMN IF EXISTS developer_license_address;
+
+ALTER TABLE events
+    RENAME COLUMN target_uri TO webhook_target_uri;
 
 DROP TABLE IF EXISTS developer_licenses;
 
