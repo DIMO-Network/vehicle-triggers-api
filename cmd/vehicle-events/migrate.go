@@ -10,7 +10,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-func migrateDatabase(ctx context.Context, logger zerolog.Logger, s *config.Settings, args []string) {
+func MigrateDatabase(ctx context.Context, logger zerolog.Logger, s *config.Settings, args []string) {
 	command := "up"
 	if len(args) > 2 {
 		command = args[2]
