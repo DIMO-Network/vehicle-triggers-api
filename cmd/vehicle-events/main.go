@@ -12,9 +12,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// @title           Vehicle Events API
+// @title           Vehicle Events Service API
 // @version         1.0
-// @description     API for managing vehicle events and webhooks.
+// @description     API for managing vehicle events and webhooks
 // @termsOfService  http://swagger.io/terms/
 
 // @contact.name   Support Team
@@ -57,6 +57,6 @@ func main() {
 
 	store.WaitForDB(logger)
 
-	api.Run(ctx, logger, &settings, store)
+	api.Run(ctx, logger, store)
 
 }

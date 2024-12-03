@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"github.com/DIMO-Network/shared/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/infrastructure/db/models"
@@ -90,13 +91,27 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 // @Tags         Webhooks
 // @Produce      json
 // @Success      200  {array}  object  "List of webhooks"
+// @Failure      401  "Unauthorized"
 // @Failure      500  "Internal server error"
 // @Router       /webhooks [get]
 func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
-	events, err := models.Events(qm.OrderBy("id")).All(c.Context(), w.store.DBS().Reader)
+	// Extract developer license address from the request context
+	devLicense, ok := c.Locals("developer_license_address").([]byte)
+	if !ok {
+		w.logger.Error().Msg("Developer license not found in request context")
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	// Query webhooks associated with the developer license
+	events, err := models.Events(
+		qm.Where("developer_license_address = ?", devLicense),
+		qm.OrderBy("id"),
+	).All(c.Context(), w.store.DBS().Reader)
 	if err != nil {
+		w.logger.Error().Err(err).Msg("Failed to retrieve webhooks")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve webhooks"})
 	}
+
 	return c.JSON(events)
 }
 
@@ -115,38 +130,54 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 // @Router       /webhooks/{id} [put]
 func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	id := c.Params("id")
-
-	event, err := models.FindEvent(c.Context(), w.store.DBS().Reader, id)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Webhook not found"})
+	devLicense, ok := c.Locals("developer_license_address").([]byte)
+	if !ok {
+		w.logger.Error().Msg("Developer license not found in request context")
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	var updates map[string]interface{}
-	if err := c.BodyParser(&updates); err != nil {
+	// Retrieve the webhook and make sure it belongs to the developer
+	event, err := models.Events(
+		qm.Where("id = ? AND developer_license_address = ?", id, devLicense),
+	).One(c.Context(), w.store.DBS().Reader)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Webhook not found"})
+		}
+		w.logger.Error().Err(err).Msg("Failed to retrieve webhook")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve webhook"})
+	}
+
+	// Parse the update payload
+	type RequestPayload struct {
+		Setup      string                 `json:"setup"`
+		TargetURI  string                 `json:"target_uri"`
+		Parameters map[string]interface{} `json:"parameters"`
+	}
+
+	var payload RequestPayload
+	if err := c.BodyParser(&payload); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
 	}
 
-	if service, ok := updates["service"].(string); ok {
-		event.Service = service
+	// Update the webhook
+	if payload.Setup != "" {
+		event.Setup = payload.Setup
 	}
-	if parameters, ok := updates["parameters"].(map[string]interface{}); ok {
-		parametersJSON, err := json.Marshal(parameters)
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to serialize parameters"})
-		}
-		event.Parameters = null.JSONFrom(parametersJSON) // Use null.JSONFrom
+	if payload.TargetURI != "" {
+		event.TargetURI = payload.TargetURI
+	}
+	if payload.Parameters != nil {
+		parametersJSON, _ := json.Marshal(payload.Parameters)
+		event.Parameters = null.JSONFrom(parametersJSON)
 	}
 
-	rowsAffected, err := event.Update(c.Context(), w.store.DBS().Writer, boil.Infer())
-	if err != nil {
+	if _, err := event.Update(c.Context(), w.store.DBS().Writer, boil.Infer()); err != nil {
+		w.logger.Error().Err(err).Msg("Failed to update webhook")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update webhook"})
 	}
 
-	if rowsAffected == 0 {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "No webhook was updated"})
-	}
-
-	return c.JSON(fiber.Map{"id": id, "message": "Webhook updated successfully"})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Webhook updated successfully"})
 }
 
 // DeleteWebhook godoc
@@ -161,15 +192,29 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 // @Router       /webhooks/{id} [delete]
 func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 	id := c.Params("id")
-
-	event, err := models.FindEvent(c.Context(), w.store.DBS().Reader, id)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Webhook not found"})
+	devLicense, ok := c.Locals("developer_license_address").([]byte)
+	if !ok {
+		w.logger.Error().Msg("Developer license not found in request context")
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
+	//Make sure the webhook belongs to the developer
+	event, err := models.Events(
+		qm.Where("id = ? AND developer_license_address = ?", id, devLicense),
+	).One(c.Context(), w.store.DBS().Reader)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Webhook not found"})
+		}
+		w.logger.Error().Err(err).Msg("Failed to retrieve webhook")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve webhook"})
+	}
+
+	// Delete the webhook
 	if _, err := event.Delete(c.Context(), w.store.DBS().Writer); err != nil {
+		w.logger.Error().Err(err).Msg("Failed to delete webhook")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete webhook"})
 	}
 
-	return c.JSON(fiber.Map{"id": id, "message": "Webhook deleted successfully"})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Webhook deleted successfully"})
 }
