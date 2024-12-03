@@ -21,7 +21,8 @@ type WebhookController struct {
 func generateShortID() string {
 	id, err := shortid.Generate()
 	if err != nil {
-		panic("Failed to generate short ID")
+		log.Printf("Failed to generate short ID: %v", err)
+		return ""
 	}
 	return id
 }
@@ -168,8 +169,12 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		event.TargetURI = payload.TargetURI
 	}
 	if payload.Parameters != nil {
-		parametersJSON, _ := json.Marshal(payload.Parameters)
+		parametersJSON, err := json.Marshal(payload.Parameters)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to serialize parameters"})
+		}
 		event.Parameters = null.JSONFrom(parametersJSON)
+
 	}
 
 	if _, err := event.Update(c.Context(), w.store.DBS().Writer, boil.Infer()); err != nil {
