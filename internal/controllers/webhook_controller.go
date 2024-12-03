@@ -6,6 +6,7 @@ import (
 	"github.com/DIMO-Network/vehicle-events-api/internal/infrastructure/db/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
+	"github.com/teris-io/shortid"
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
@@ -14,6 +15,14 @@ import (
 type WebhookController struct {
 	store  db.Store
 	logger zerolog.Logger
+}
+
+func generateShortID() string {
+	id, err := shortid.Generate()
+	if err != nil {
+		panic("Failed to generate short ID")
+	}
+	return id
 }
 
 func NewWebhookController(store db.Store, logger zerolog.Logger) *WebhookController {
@@ -56,13 +65,14 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	}
 
 	event := &models.Event{
+		ID:                      generateShortID(),
 		Service:                 payload.Service,
 		Data:                    payload.Data,
 		Trigger:                 payload.Trigger,
 		Setup:                   payload.Setup,
 		TargetURI:               payload.TargetURI,
 		Parameters:              null.JSONFrom(parametersJSON),
-		DeveloperLicenseAddress: []byte("mock_license"),
+		DeveloperLicenseAddress: []byte{0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef}, // Hex-decoded license address
 		Status:                  "Active",
 	}
 
