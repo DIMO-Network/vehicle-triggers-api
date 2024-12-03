@@ -18,10 +18,10 @@ type WebhookController struct {
 	logger zerolog.Logger
 }
 
-func generateShortID() string {
+func generateShortID(logger zerolog.Logger) string {
 	id, err := shortid.Generate()
 	if err != nil {
-		log.Printf("Failed to generate short ID: %v", err)
+		logger.Error().Err(err).Msg("Failed to generate short ID")
 		return ""
 	}
 	return id
