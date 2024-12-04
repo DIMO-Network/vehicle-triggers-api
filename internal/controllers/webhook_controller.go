@@ -67,7 +67,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	}
 
 	event := &models.Event{
-		ID:                      generateShortID(),
+		ID:                      generateShortID(w.logger),
 		Service:                 payload.Service,
 		Data:                    payload.Data,
 		Trigger:                 payload.Trigger,
@@ -96,23 +96,25 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 // @Failure      500  "Internal server error"
 // @Router       /webhooks [get]
 func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
-	// Extract developer license address from the request context
+	w.logger.Info().Msg("ListWebhooks endpoint hit")
+
 	devLicense, ok := c.Locals("developer_license_address").([]byte)
 	if !ok {
 		w.logger.Error().Msg("Developer license not found in request context")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	// Query webhooks associated with the developer license
 	events, err := models.Events(
 		qm.Where("developer_license_address = ?", devLicense),
 		qm.OrderBy("id"),
 	).All(c.Context(), w.store.DBS().Reader)
+
 	if err != nil {
 		w.logger.Error().Err(err).Msg("Failed to retrieve webhooks")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve webhooks"})
 	}
 
+	w.logger.Info().Int("event_count", len(events)).Msg("Returning webhooks")
 	return c.JSON(events)
 }
 
