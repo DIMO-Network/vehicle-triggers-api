@@ -3,6 +3,7 @@ package controllers
 import (
 	"database/sql"
 	"encoding/json"
+	"github.com/DIMO-Network/model-garage/pkg/schema"
 	"github.com/DIMO-Network/shared/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/infrastructure/db/models"
 	"github.com/gofiber/fiber/v2"
@@ -11,6 +12,7 @@ import (
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
+	"strings"
 )
 
 type WebhookController struct {
@@ -72,6 +74,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		Data:                    payload.Data,
 		Trigger:                 payload.Trigger,
 		Setup:                   payload.Setup,
+		Description:             null.StringFrom(payload.Description),
 		TargetURI:               payload.TargetURI,
 		Parameters:              null.JSONFrom(parametersJSON),
 		DeveloperLicenseAddress: []byte{0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef}, // Hex-decoded license address
@@ -153,9 +156,14 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 
 	// Parse the update payload
 	type RequestPayload struct {
-		Setup      string                 `json:"setup"`
-		TargetURI  string                 `json:"target_uri"`
-		Parameters map[string]interface{} `json:"parameters"`
+		Service     string                 `json:"service"`
+		Data        string                 `json:"data"`
+		Trigger     string                 `json:"trigger"`
+		Setup       string                 `json:"setup"`
+		TargetURI   string                 `json:"target_uri"`
+		Status      string                 `json:"status"`
+		Description string                 `json:"description"`
+		Parameters  map[string]interface{} `json:"parameters"`
 	}
 
 	var payload RequestPayload
@@ -163,12 +171,27 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
 	}
 
-	// Update the webhook
+	// Update the webhook fields if provided in the payload
+	if payload.Service != "" {
+		event.Service = payload.Service
+	}
+	if payload.Data != "" {
+		event.Data = payload.Data
+	}
+	if payload.Trigger != "" {
+		event.Trigger = payload.Trigger
+	}
 	if payload.Setup != "" {
 		event.Setup = payload.Setup
 	}
 	if payload.TargetURI != "" {
 		event.TargetURI = payload.TargetURI
+	}
+	if payload.Status != "" {
+		event.Status = payload.Status
+	}
+	if payload.Description != "" {
+		event.Description = null.StringFrom(payload.Description)
 	}
 	if payload.Parameters != nil {
 		parametersJSON, err := json.Marshal(payload.Parameters)
@@ -176,15 +199,18 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to serialize parameters"})
 		}
 		event.Parameters = null.JSONFrom(parametersJSON)
-
 	}
 
+	// Save updates to the database
 	if _, err := event.Update(c.Context(), w.store.DBS().Writer, boil.Infer()); err != nil {
 		w.logger.Error().Err(err).Msg("Failed to update webhook")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update webhook"})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Webhook updated successfully"})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Webhook updated successfully",
+		"id":      event.ID,
+	})
 }
 
 // DeleteWebhook godoc
@@ -224,4 +250,32 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Webhook deleted successfully"})
+}
+
+// GetSignalNames godoc
+// @Summary      Get signal names
+// @Description  Fetches the list of signal names available for the data field.
+// @Tags         Webhooks
+// @Produce      json
+// @Success      200  {array}  string  "List of signal names"
+// @Failure      500  "Internal server error"
+// @Router       /webhooks/signals [get]
+func (w *WebhookController) GetSignalNames(c *fiber.Ctx) error {
+	dimoVss := strings.NewReader(schema.VssRel42DIMO())
+
+	vssSignals, err := schema.LoadSignalsCSV(dimoVss)
+	if err != nil {
+		w.logger.Error().Err(err).Msg("Failed to load VSS signals")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to load signals"})
+	}
+
+	signalNames := make([]string, 0)
+	for _, vssSignal := range vssSignals {
+		if !vssSignal.Deprecated {
+			signalNames = append(signalNames, vssSignal.Name)
+		}
+	}
+
+	w.logger.Info().Int("signal_count", len(signalNames)).Msg("Returning signal names")
+	return c.JSON(signalNames)
 }

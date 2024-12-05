@@ -51,6 +51,7 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	app.Get("/webhooks", webhookController.ListWebhooks)
 	app.Put("/webhooks/:id", webhookController.UpdateWebhook)
 	app.Delete("/webhooks/:id", webhookController.DeleteWebhook)
+	app.Get("/webhooks/signals", webhookController.GetSignalNames)
 
 	// Catchall
 	app.Use(func(c *fiber.Ctx) error {
