@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"github.com/DIMO-Network/shared"
 	"github.com/DIMO-Network/shared/db"
+	"github.com/DIMO-Network/vehicle-events-api/internal/config"
 	"github.com/DIMO-Network/vehicle-events-api/internal/controllers"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -13,6 +15,11 @@ import (
 // Run sets up the API routes and starts the HTTP server.
 func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	logger.Info().Msg("Starting Vehicle Events API...")
+
+	settings, err := shared.LoadConfig[config.Settings]("settings.yaml")
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to load settings")
+	}
 	app := fiber.New()
 
 	app.Use(cors.New(cors.Config{
@@ -65,8 +72,8 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	})
 
 	// Start the server
-	logger.Info().Msg("Starting HTTP server on :3003...")
-	if err := app.Listen(":3003"); err != nil {
+	logger.Info().Msgf("Starting HTTP server on :%s...", settings.Port)
+	if err := app.Listen(":" + settings.Port); err != nil {
 		logger.Fatal().Err(err).Msg("Server failed to start")
 	}
 }
