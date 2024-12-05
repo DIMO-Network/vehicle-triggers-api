@@ -3,6 +3,7 @@ package controllers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"github.com/DIMO-Network/model-garage/pkg/schema"
 	"github.com/DIMO-Network/shared/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/infrastructure/db/models"
@@ -34,6 +35,17 @@ func NewWebhookController(store db.Store, logger zerolog.Logger) *WebhookControl
 		store:  store,
 		logger: logger,
 	}
+}
+
+type CelCondition struct {
+	Field    string `json:"field" validate:"required"`
+	Operator string `json:"operator" validate:"required"`
+	Value    string `json:"value" validate:"required"`
+}
+
+type CelRequestPayload struct {
+	Conditions []CelCondition `json:"conditions" validate:"required"`
+	Logic      string         `json:"logic" validate:"required"`
 }
 
 // RegisterWebhook godoc
@@ -278,4 +290,30 @@ func (w *WebhookController) GetSignalNames(c *fiber.Ctx) error {
 
 	w.logger.Info().Int("signal_count", len(signalNames)).Msg("Returning signal names")
 	return c.JSON(signalNames)
+}
+
+func (w *WebhookController) BuildCEL(c *fiber.Ctx) error {
+	var payload CelRequestPayload
+
+	if err := c.BodyParser(&payload); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
+	}
+
+	// Validate logic
+	if payload.Logic != "AND" && payload.Logic != "OR" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid logic. Must be AND or OR."})
+	}
+
+	// Generate CEL expression
+	conditions := []string{}
+	for _, condition := range payload.Conditions {
+		expr := fmt.Sprintf("event.%s %s %s", condition.Field, condition.Operator, condition.Value)
+		conditions = append(conditions, expr)
+	}
+	celExpression := strings.Join(conditions, fmt.Sprintf(" %s ", payload.Logic))
+
+	// Return the generated CEL expression
+	return c.JSON(fiber.Map{
+		"cel_expression": celExpression,
+	})
 }
