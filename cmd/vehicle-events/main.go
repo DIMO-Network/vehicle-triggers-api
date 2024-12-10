@@ -2,37 +2,45 @@ package main
 
 import (
 	"context"
-	"github.com/DIMO-Network/vehicle-events-api/internal/api"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/DIMO-Network/shared"
 	"github.com/DIMO-Network/shared/db"
+	"github.com/DIMO-Network/vehicle-events-api/internal/api"
 	"github.com/DIMO-Network/vehicle-events-api/internal/config"
+	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog"
 )
 
-// @title           Vehicle Events Service API
-// @version         1.0
-// @description     API for managing vehicle events and webhooks
-// @termsOfService  http://swagger.io/terms/
+func MigrateDatabase(ctx context.Context, logger zerolog.Logger, s *config.Settings, args []string) {
+	command := "up"
+	if len(args) > 2 {
+		command = args[2]
+		if command == "down-to" || command == "up-to" {
+			command = command + " " + args[3]
+		}
+	}
 
-// @contact.name   Support Team
-// @contact.url    http://www.swagger.io/support
-// @contact.email  support@swagger.io
+	sqlDb := db.NewDbConnectionFromSettings(ctx, &s.DB, true)
+	sqlDb.WaitForDB(logger)
 
-// @license.name   Apache 2.0
-// @license.url    http://www.apache.org/licenses/LICENSE-2.0.html
+	if command == "" {
+		command = "up"
+	}
 
-// @host      localhost:8080
-// @BasePath  /
-
-// @securityDefinitions.apikey  ApiKeyAuth
-// @in                          header
-// @name                        Authorization
+	_, err := sqlDb.DBS().Writer.Exec("CREATE SCHEMA IF NOT EXISTS vehicle_events_api;")
+	if err != nil {
+		logger.Fatal().Err(err).Msg("could not create schema:")
+	}
+	goose.SetTableName("vehicle_events_api.migrations")
+	if err := goose.RunContext(ctx, command, sqlDb.DBS().Writer.DB, "internal/infrastructure/db/migrations"); err != nil {
+		logger.Fatal().Err(err).Msg("failed to apply migrations")
+	}
+}
 
 func main() {
-
 	gitSha1 := os.Getenv("GIT_SHA1")
 	ctx := context.Background()
 
@@ -53,10 +61,17 @@ func main() {
 		Str("git-sha1", gitSha1).
 		Logger()
 
-	store := db.NewDbConnectionFromSettings(ctx, &settings.DB, true)
+	// Check if migration is requested
+	args := os.Args
+	if len(args) > 1 && strings.ToLower(args[1]) == "migrate" {
+		MigrateDatabase(ctx, logger, &settings, args)
+		return
+	}
 
+	// Create DB connection
+	store := db.NewDbConnectionFromSettings(ctx, &settings.DB, true)
 	store.WaitForDB(logger)
 
+	// Start API server
 	api.Run(ctx, logger, store)
-
 }
