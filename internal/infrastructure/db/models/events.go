@@ -24,18 +24,19 @@ import (
 
 // Event is an object representing the database table.
 type Event struct {
-	ID                      string    `boil:"id" json:"id" toml:"id" yaml:"id"`
-	Service                 string    `boil:"service" json:"service" toml:"service" yaml:"service"`
-	Data                    string    `boil:"data" json:"data" toml:"data" yaml:"data"`
-	Trigger                 string    `boil:"trigger" json:"trigger" toml:"trigger" yaml:"trigger"`
-	Setup                   string    `boil:"setup" json:"setup" toml:"setup" yaml:"setup"`
-	Parameters              null.JSON `boil:"parameters" json:"parameters,omitempty" toml:"parameters" yaml:"parameters,omitempty"`
-	TargetURI               string    `boil:"target_uri" json:"target_uri" toml:"target_uri" yaml:"target_uri"`
-	CooldownPeriod          int       `boil:"cooldown_period" json:"cooldown_period" toml:"cooldown_period" yaml:"cooldown_period"`
-	DeveloperLicenseAddress []byte    `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
-	CreatedAt               time.Time `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	UpdatedAt               time.Time `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
-	Status                  string    `boil:"status" json:"status" toml:"status" yaml:"status"`
+	ID                      string      `boil:"id" json:"id" toml:"id" yaml:"id"`
+	Service                 string      `boil:"service" json:"service" toml:"service" yaml:"service"`
+	Data                    string      `boil:"data" json:"data" toml:"data" yaml:"data"`
+	Trigger                 string      `boil:"trigger" json:"trigger" toml:"trigger" yaml:"trigger"`
+	Setup                   string      `boil:"setup" json:"setup" toml:"setup" yaml:"setup"`
+	Parameters              null.JSON   `boil:"parameters" json:"parameters,omitempty" toml:"parameters" yaml:"parameters,omitempty"`
+	TargetURI               string      `boil:"target_uri" json:"target_uri" toml:"target_uri" yaml:"target_uri"`
+	CooldownPeriod          int         `boil:"cooldown_period" json:"cooldown_period" toml:"cooldown_period" yaml:"cooldown_period"`
+	DeveloperLicenseAddress []byte      `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
+	CreatedAt               time.Time   `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	UpdatedAt               time.Time   `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	Status                  string      `boil:"status" json:"status" toml:"status" yaml:"status"`
+	Description             null.String `boil:"description" json:"description,omitempty" toml:"description" yaml:"description,omitempty"`
 
 	R *eventR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L eventL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -54,6 +55,7 @@ var EventColumns = struct {
 	CreatedAt               string
 	UpdatedAt               string
 	Status                  string
+	Description             string
 }{
 	ID:                      "id",
 	Service:                 "service",
@@ -67,6 +69,7 @@ var EventColumns = struct {
 	CreatedAt:               "created_at",
 	UpdatedAt:               "updated_at",
 	Status:                  "status",
+	Description:             "description",
 }
 
 var EventTableColumns = struct {
@@ -82,6 +85,7 @@ var EventTableColumns = struct {
 	CreatedAt               string
 	UpdatedAt               string
 	Status                  string
+	Description             string
 }{
 	ID:                      "events.id",
 	Service:                 "events.service",
@@ -95,6 +99,7 @@ var EventTableColumns = struct {
 	CreatedAt:               "events.created_at",
 	UpdatedAt:               "events.updated_at",
 	Status:                  "events.status",
+	Description:             "events.description",
 }
 
 // Generated where
@@ -122,6 +127,56 @@ func (w whereHelperint) NIN(slice []int) qm.QueryMod {
 	return qm.WhereNotIn(fmt.Sprintf("%s NOT IN ?", w.field), values...)
 }
 
+type whereHelpernull_String struct{ field string }
+
+func (w whereHelpernull_String) EQ(x null.String) qm.QueryMod {
+	return qmhelper.WhereNullEQ(w.field, false, x)
+}
+func (w whereHelpernull_String) NEQ(x null.String) qm.QueryMod {
+	return qmhelper.WhereNullEQ(w.field, true, x)
+}
+func (w whereHelpernull_String) LT(x null.String) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.LT, x)
+}
+func (w whereHelpernull_String) LTE(x null.String) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.LTE, x)
+}
+func (w whereHelpernull_String) GT(x null.String) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.GT, x)
+}
+func (w whereHelpernull_String) GTE(x null.String) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.GTE, x)
+}
+func (w whereHelpernull_String) LIKE(x null.String) qm.QueryMod {
+	return qm.Where(w.field+" LIKE ?", x)
+}
+func (w whereHelpernull_String) NLIKE(x null.String) qm.QueryMod {
+	return qm.Where(w.field+" NOT LIKE ?", x)
+}
+func (w whereHelpernull_String) ILIKE(x null.String) qm.QueryMod {
+	return qm.Where(w.field+" ILIKE ?", x)
+}
+func (w whereHelpernull_String) NILIKE(x null.String) qm.QueryMod {
+	return qm.Where(w.field+" NOT ILIKE ?", x)
+}
+func (w whereHelpernull_String) IN(slice []string) qm.QueryMod {
+	values := make([]interface{}, 0, len(slice))
+	for _, value := range slice {
+		values = append(values, value)
+	}
+	return qm.WhereIn(fmt.Sprintf("%s IN ?", w.field), values...)
+}
+func (w whereHelpernull_String) NIN(slice []string) qm.QueryMod {
+	values := make([]interface{}, 0, len(slice))
+	for _, value := range slice {
+		values = append(values, value)
+	}
+	return qm.WhereNotIn(fmt.Sprintf("%s NOT IN ?", w.field), values...)
+}
+
+func (w whereHelpernull_String) IsNull() qm.QueryMod    { return qmhelper.WhereIsNull(w.field) }
+func (w whereHelpernull_String) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
+
 var EventWhere = struct {
 	ID                      whereHelperstring
 	Service                 whereHelperstring
@@ -135,6 +190,7 @@ var EventWhere = struct {
 	CreatedAt               whereHelpertime_Time
 	UpdatedAt               whereHelpertime_Time
 	Status                  whereHelperstring
+	Description             whereHelpernull_String
 }{
 	ID:                      whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"id\""},
 	Service:                 whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"service\""},
@@ -148,6 +204,7 @@ var EventWhere = struct {
 	CreatedAt:               whereHelpertime_Time{field: "\"vehicle_events_api\".\"events\".\"created_at\""},
 	UpdatedAt:               whereHelpertime_Time{field: "\"vehicle_events_api\".\"events\".\"updated_at\""},
 	Status:                  whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"status\""},
+	Description:             whereHelpernull_String{field: "\"vehicle_events_api\".\"events\".\"description\""},
 }
 
 // EventRels is where relationship names are stored.
@@ -198,9 +255,9 @@ func (r *eventR) GetEventVehicles() EventVehicleSlice {
 type eventL struct{}
 
 var (
-	eventAllColumns            = []string{"id", "service", "data", "trigger", "setup", "parameters", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status"}
+	eventAllColumns            = []string{"id", "service", "data", "trigger", "setup", "parameters", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description"}
 	eventColumnsWithoutDefault = []string{"id", "service", "data", "trigger", "setup", "target_uri", "developer_license_address", "status"}
-	eventColumnsWithDefault    = []string{"parameters", "cooldown_period", "created_at", "updated_at"}
+	eventColumnsWithDefault    = []string{"parameters", "cooldown_period", "created_at", "updated_at", "description"}
 	eventPrimaryKeyColumns     = []string{"id"}
 	eventGeneratedColumns      = []string{}
 )

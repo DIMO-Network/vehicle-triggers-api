@@ -1,0 +1,15 @@
+# Sample settings.yaml file for Vehicle Events API
+
+ENVIRONMENT: "dev"            # Environment the service is running in (e.g., dev, staging, prod)
+PORT: "3003"                  # Port number for the HTTP server
+GRPC_PORT: "50051"            # Port number for the gRPC server
+LOG_LEVEL: "info"             # Logging level (e.g., debug, info, warn, error)
+SERVICE_NAME: "vehicle-events-api"  # Name of the service
+
+DB:                           # Database configuration
+  HOST: "localhost"           # Database host
+  PORT: "5432"                # Database port
+  USER: "postgres"            # Database user
+  PASSWORD: "password"        # Database password
+  NAME: "vehicle_events_db"   # Database name
+  SSL_MODE: "disable"         # SSL mode (e.g., disable, require)
