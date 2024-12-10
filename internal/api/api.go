@@ -59,6 +59,9 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	app.Put("/webhooks/:id", webhookController.UpdateWebhook)
 	app.Delete("/webhooks/:id", webhookController.DeleteWebhook)
 	app.Get("/webhooks/signals", webhookController.GetSignalNames)
+
+	// Endpoint to build a CEL (Common Expression Language) expression from user-defined conditions
+	// More info: https://github.com/google/cel-spec
 	app.Post("/build-cel", webhookController.BuildCEL)
 
 	// Catchall
