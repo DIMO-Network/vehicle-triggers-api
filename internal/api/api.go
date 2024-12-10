@@ -67,7 +67,7 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	// Register Vehicle Subscription routes
 	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger)
 
-	//app.Post("/subscriptions", vehicleSubscriptionController.AssignVehicleToWebhook)
+	app.Post("/subscriptions", vehicleSubscriptionController.AssignVehicleToWebhook)
 	app.Delete("/subscriptions", vehicleSubscriptionController.RemoveVehicleFromWebhook)
 
 	// Catchall
