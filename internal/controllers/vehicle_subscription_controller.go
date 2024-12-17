@@ -6,6 +6,7 @@ import (
 	"github.com/DIMO-Network/vehicle-events-api/internal/infrastructure/db/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
+	"github.com/shopspring/decimal"
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
@@ -34,17 +35,33 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		Value    string `json:"value"`
 	}
 	type RequestPayload struct {
-		VehicleTokenID types.Decimal `json:"vehicle_token_id" validate:"required"`
-		EventID        string        `json:"event_id" validate:"required"`
-		Conditions     []Condition   `json:"conditions"`
+		Conditions []Condition `json:"conditions"` // Optional
 	}
 
+	// Extract path parameters
+	vehicleTokenIDStr := c.Params("vehicleTokenID")
+	eventID := c.Params("eventID")
+
+	// Validate vehicleTokenID format
+	if vehicleTokenIDStr == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Vehicle token ID is required"})
+	}
+
+	// Convert vehicleTokenID to sqlboiler/types.Decimal
+	vehicleTokenIDDecimal := types.Decimal{}
+	if err := vehicleTokenIDDecimal.Scan(vehicleTokenIDStr); err != nil {
+		v.logger.Error().Err(err).Msg("Invalid vehicle token ID format")
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid vehicle token ID format"})
+	}
+
+	// Parse request payload for optional conditions
 	var payload RequestPayload
 	if err := c.BodyParser(&payload); err != nil {
 		v.logger.Error().Err(err).Msg("Invalid request payload")
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
 	}
 
+	// Retrieve developer license from context
 	devLicense, ok := c.Locals("developer_license_address").([]byte)
 	if !ok {
 		v.logger.Error().Msg("Developer license not found in request context")
@@ -62,13 +79,14 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		conditionsJSON = string(serializedConditions)
 	}
 
+	// Insert into the database
 	eventVehicle := &models.EventVehicle{
-		VehicleTokenID:          payload.VehicleTokenID,
-		EventID:                 payload.EventID,
+		VehicleTokenID:          vehicleTokenIDDecimal, // Correctly using types.Decimal
+		EventID:                 eventID,
 		DeveloperLicenseAddress: devLicense,
-		ConditionData:           null.JSONFrom([]byte(conditionsJSON)),
 		CreatedAt:               time.Now(),
 		UpdatedAt:               time.Now(),
+		ConditionData:           null.JSONFrom([]byte(conditionsJSON)),
 	}
 
 	if err := eventVehicle.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
@@ -81,25 +99,26 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 
 // RemoveVehicleFromWebhook removes a vehicle from a webhook
 func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) error {
-	type RequestPayload struct {
-		VehicleTokenID types.Decimal `json:"vehicle_token_id" validate:"required"`
-		EventID        string        `json:"event_id" validate:"required"`
+	// Extract path parameters
+	vehicleTokenIDStr := c.Params("vehicleTokenID")
+	eventID := c.Params("eventID")
+
+	vehicleTokenID, err := decimal.NewFromString(vehicleTokenIDStr)
+	if err != nil {
+		v.logger.Error().Err(err).Msg("Invalid vehicle token ID")
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid vehicle token ID"})
 	}
 
-	var payload RequestPayload
-	if err := c.BodyParser(&payload); err != nil {
-		v.logger.Error().Err(err).Msg("Invalid request payload")
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
-	}
-
+	// Hardcoded developer license for now
 	devLicense, ok := c.Locals("developer_license_address").([]byte)
 	if !ok {
 		v.logger.Error().Msg("Developer license not found in request context")
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	_, err := models.EventVehicles(
-		qm.Where("vehicle_token_id = ? AND event_id = ? AND developer_license_address = ?", payload.VehicleTokenID, payload.EventID, devLicense),
+	// Delete the record
+	_, err = models.EventVehicles(
+		qm.Where("vehicle_token_id = ? AND event_id = ? AND developer_license_address = ?", vehicleTokenID, eventID, devLicense),
 	).DeleteAll(c.Context(), v.store.DBS().Writer)
 	if err != nil {
 		v.logger.Error().Err(err).Msg("Failed to remove vehicle from webhook")
