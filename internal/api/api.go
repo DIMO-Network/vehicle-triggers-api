@@ -64,6 +64,13 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	// More info: https://github.com/google/cel-spec
 	app.Post("/build-cel", webhookController.BuildCEL)
 
+	// Register Vehicle Subscription routes
+	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger)
+
+	// New RESTful Routes
+	app.Post("/subscriptions/:vehicleTokenID/event/:eventID", vehicleSubscriptionController.AssignVehicleToWebhook)
+	app.Delete("/subscriptions/:vehicleTokenID/event/:eventID", vehicleSubscriptionController.RemoveVehicleFromWebhook)
+
 	// Catchall
 	app.Use(func(c *fiber.Ctx) error {
 		logger.Warn().
