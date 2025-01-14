@@ -54,10 +54,10 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	webhookController := controllers.NewWebhookController(store, logger)
 
 	logger.Info().Msg("Registering routes...")
-	app.Post("/webhooks", webhookController.RegisterWebhook)
-	app.Get("/webhooks", webhookController.ListWebhooks)
-	app.Put("/webhooks/:id", webhookController.UpdateWebhook)
-	app.Delete("/webhooks/:id", webhookController.DeleteWebhook)
+	app.Post("/webhooks", controllers.AuthMiddleware, webhookController.RegisterWebhook)
+	app.Get("/webhooks", controllers.AuthMiddleware, webhookController.ListWebhooks)
+	app.Put("/webhooks/:id", controllers.AuthMiddleware, webhookController.UpdateWebhook)
+	app.Delete("/webhooks/:id", controllers.AuthMiddleware, webhookController.DeleteWebhook)
 	app.Get("/webhooks/signals", webhookController.GetSignalNames)
 
 	// Endpoint to build a CEL (Common Expression Language) expression from user-defined conditions
@@ -68,8 +68,8 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger)
 
 	// New RESTful Routes
-	app.Post("/subscriptions/:vehicleTokenID/event/:eventID", vehicleSubscriptionController.AssignVehicleToWebhook)
-	app.Delete("/subscriptions/:vehicleTokenID/event/:eventID", vehicleSubscriptionController.RemoveVehicleFromWebhook)
+	app.Post("/subscriptions/:vehicleTokenID/event/:eventID", controllers.AuthMiddleware, vehicleSubscriptionController.AssignVehicleToWebhook)
+	app.Delete("/subscriptions/:vehicleTokenID/event/:eventID", controllers.AuthMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
 
 	// Catchall
 	app.Use(func(c *fiber.Ctx) error {
