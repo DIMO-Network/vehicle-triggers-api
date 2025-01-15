@@ -15,9 +15,6 @@ env:
   JWT_KEY_SET_URL: https://auth.dimo.zone/keys
   DEPLOYMENT_BASE_URL: https://vehicle-events-api.dimo.zone
   KAFKA_BROKERS: kafka-prod-dimo-kafka-kafka-brokers:9092
-  DEVICE_STATUS_TOPIC: topic.device.status
-  PRIVACY_FENCE_TOPIC: table.device.privacyfence
-  EVENTS_TOPIC: topic.event
 ingress:
   enabled: true
   className: nginx
