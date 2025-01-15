@@ -1,0 +1,54 @@
+replicaCount: 3
+image:
+  repository: dimozone/vehicle-events-api
+  pullPolicy: IfNotPresent
+  tag: 1.24.6
+env:
+  ENVIRONMENT: prod
+  PORT: '8080'
+  LOG_LEVEL: info
+  DB_PORT: '5432'
+  DB_NAME: vehicle_events_api
+  DB_MAX_OPEN_CONNECTIONS: '100'
+  DB_MAX_IDLE_CONNECTIONS: '30'
+  SERVICE_NAME: vehicle-events-api
+  JWT_KEY_SET_URL: https://auth.dimo.zone/keys
+  DEPLOYMENT_BASE_URL: https://vehicle-events-api.dimo.zone
+  KAFKA_BROKERS: kafka-prod-dimo-kafka-kafka-brokers:9092
+  DEVICE_STATUS_TOPIC: topic.device.status
+  PRIVACY_FENCE_TOPIC: table.device.privacyfence
+  EVENTS_TOPIC: topic.event
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/auth-tls-secret: ingress/cf-origin-ca
+    nginx.ingress.kubernetes.io/auth-tls-verify-client: 'on'
+    nginx.ingress.kubernetes.io/enable-cors: 'true'
+    nginx.ingress.kubernetes.io/cors-allow-origin: '*'
+    nginx.ingress.kubernetes.io/limit-rps: '9'
+    external-dns.alpha.kubernetes.io/hostname: vehicle-events-api.dimo.zone
+  hosts:
+    - host: vehicle-events-api.dimo.zone
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podDisruptionBudget:
+  minAvailable: 1
+
