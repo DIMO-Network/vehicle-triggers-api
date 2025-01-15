@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ include "vehicle-events-api.fullname" . }}
+  labels:
+    {{- include "vehicle-events-api.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+    {{- include "vehicle-events-api.selectorLabels" . | nindent 6 }}
+{{ toYaml .Values.podDisruptionBudget | indent 2 }}
