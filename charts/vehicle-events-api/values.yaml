@@ -20,8 +20,6 @@ securityContext:
   capabilities:
     drop:
       - all
-deployJob:
-  enabled: false
 env:
   ENVIRONMENT: dev
   PORT: '8080'
