@@ -10,8 +10,6 @@ ENV GOOS=linux
 ENV GOFLAGS=-mod=vendor
 
 RUN ls
-RUN go mod tidy
-RUN go mod vendor
 RUN make install
 
 FROM busybox AS package
