@@ -1,9 +1,9 @@
-FROM golang:1.21 AS build
+FROM golang:1.23 AS build
 
 RUN useradd -u 10001 dimo
 
-WORKDIR /go/src/github.com/DIMO-Network/vehicle-events/
-COPY . /go/src/github.com/DIMO-Network/vehicle-events/
+WORKDIR /go/src/github.com/DIMO-Network/vehicle-events-api/
+COPY . /go/src/github.com/DIMO-Network/vehicle-events-api/
 
 ENV CGO_ENABLED=0
 ENV GOOS=linux

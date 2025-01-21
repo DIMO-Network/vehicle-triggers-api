@@ -1,6 +1,6 @@
 module github.com/DIMO-Network/vehicle-events-api
 
-go 1.23.0
+go 1.23
 
 require (
 	github.com/DIMO-Network/model-garage v0.4.4
