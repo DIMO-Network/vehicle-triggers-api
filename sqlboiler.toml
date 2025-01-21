@@ -1,4 +1,4 @@
-output = "internal/infrastructure/db/models"
+output = "internal/db/models"
 no-tests = true
 
 [psql]

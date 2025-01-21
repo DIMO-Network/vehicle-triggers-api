@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/DIMO-Network/model-garage/pkg/schema"
 	"github.com/DIMO-Network/shared/db"
-	"github.com/DIMO-Network/vehicle-events-api/internal/infrastructure/db/models"
+	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 	"github.com/teris-io/shortid"

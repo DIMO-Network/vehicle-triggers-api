@@ -22,7 +22,7 @@ WORKDIR /
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /etc/passwd /etc/passwd
-COPY --from=build /go/src/github.com/DIMO-Network/vehicle-signal-decoding/internal/infrastructure/db/migrations ./internal/infrastructure/db/migrations
+COPY --from=build /go/src/github.com/DIMO-Network/vehicle-events-api/internal/db/migrations ./internal/db/migrations
 
 USER dimo
 
