@@ -26,7 +26,8 @@ LD_FLAGS   =
 GO_FLAGS   =
 DOCS_FLAGS =
 
-APPS = vehicle-events-apiall: $(APPS)
+APPS = vehicle-events-api
+all: $(APPS)
 
 install: $(APPS)
 	@mkdir -p bin
