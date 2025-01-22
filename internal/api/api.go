@@ -54,11 +54,11 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	webhookController := controllers.NewWebhookController(store, logger)
 
 	logger.Info().Msg("Registering routes...")
-	app.Post("/webhooks", webhookController.RegisterWebhook)
-	app.Get("/webhooks", webhookController.ListWebhooks)
-	app.Put("/webhooks/:id", webhookController.UpdateWebhook)
-	app.Delete("/webhooks/:id", webhookController.DeleteWebhook)
-	app.Get("/webhooks/signals", webhookController.GetSignalNames)
+	app.Post("/webhooks", controllers.JWTMiddleware, webhookController.RegisterWebhook)
+	app.Get("/webhooks", controllers.JWTMiddleware, webhookController.ListWebhooks)
+	app.Put("/webhooks/:id", controllers.JWTMiddleware, webhookController.UpdateWebhook)
+	app.Delete("/webhooks/:id", controllers.JWTMiddleware, webhookController.DeleteWebhook)
+	app.Get("/webhooks/signals", controllers.JWTMiddleware, webhookController.GetSignalNames)
 
 	// Endpoint to build a CEL (Common Expression Language) expression from user-defined conditions
 	// More info: https://github.com/google/cel-spec
