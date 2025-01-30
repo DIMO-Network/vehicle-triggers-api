@@ -27,7 +27,20 @@ func NewVehicleSubscriptionController(store db.Store, logger zerolog.Logger) *Ve
 	}
 }
 
-// AssignVehicleToWebhook assigns a vehicle to a webhook
+// AssignVehicleToWebhook godoc
+// @Summary      Assign a vehicle to a webhook
+// @Description  Associates a vehicle with a specific event webhook, optionally using conditions.
+// @Tags         Vehicle Subscriptions
+// @Accept       json
+// @Produce      json
+// @Param        vehicleTokenID path string true "Vehicle Token ID"
+// @Param        eventID path string true "Event ID"
+// @Param        request body object true "Request payload"
+// @Success      201 "Vehicle assigned to webhook successfully"
+// @Failure      400 "Invalid request payload or vehicle token ID"
+// @Failure      401 "Unauthorized"
+// @Failure      500 "Internal server error"
+// @Router       /subscriptions/{vehicleTokenID}/event/{eventID} [post]
 func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) error {
 	type Condition struct {
 		Field    string `json:"field"`
@@ -98,7 +111,18 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 	return c.Status(http.StatusCreated).JSON(fiber.Map{"message": "Vehicle assigned to webhook successfully"})
 }
 
-// RemoveVehicleFromWebhook removes a vehicle from a webhook
+// RemoveVehicleFromWebhook godoc
+// @Summary      Remove a vehicle from a webhook
+// @Description  Unlinks a vehicle from a specific event webhook.
+// @Tags         Vehicle Subscriptions
+// @Produce      json
+// @Param        vehicleTokenID path string true "Vehicle Token ID"
+// @Param        eventID path string true "Event ID"
+// @Success      200 "Vehicle removed from webhook successfully"
+// @Failure      400 "Invalid vehicle token ID"
+// @Failure      401 "Unauthorized"
+// @Failure      500 "Internal server error"
+// @Router       /subscriptions/{vehicleTokenID}/event/{eventID} [delete]
 func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) error {
 	// Extract path parameters
 	vehicleTokenIDStr := c.Params("vehicleTokenID")

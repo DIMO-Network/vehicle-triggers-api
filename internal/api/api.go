@@ -4,12 +4,14 @@ import (
 	"context"
 	"github.com/DIMO-Network/shared"
 	"github.com/DIMO-Network/shared/db"
+	_ "github.com/DIMO-Network/vehicle-events-api/docs" // Import Swagger docs
 	"github.com/DIMO-Network/vehicle-events-api/internal/config"
 	"github.com/DIMO-Network/vehicle-events-api/internal/controllers"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/rs/zerolog"
 	fiberSwagger "github.com/swaggo/fiber-swagger"
+	"path/filepath"
 )
 
 // Run sets up the API routes and starts the HTTP server.
@@ -41,11 +43,13 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 		return c.Next()
 	})
 
-	// Swagger setup
 	app.Get("/swagger/*", fiberSwagger.WrapHandler)
-	app.Get("/swagger.json", func(c *fiber.Ctx) error {
-		return c.SendFile("./docs/swagger.json")
+
+	app.Get("/doc.json", func(c *fiber.Ctx) error {
+		path, _ := filepath.Abs("./docs/swagger.json")
+		return c.SendFile(path)
 	})
+
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Welcome to the Vehicle Events API!")
 	})

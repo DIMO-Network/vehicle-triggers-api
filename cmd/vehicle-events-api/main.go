@@ -7,9 +7,11 @@ import (
 	"strings"
 
 	"github.com/DIMO-Network/shared"
-	"github.com/DIMO-Network/shared/db"
+	sharedDB "github.com/DIMO-Network/shared/db"
+
 	"github.com/DIMO-Network/vehicle-events-api/internal/api"
 	"github.com/DIMO-Network/vehicle-events-api/internal/config"
+	"github.com/DIMO-Network/vehicle-events-api/internal/db"
 	"github.com/rs/zerolog"
 )
 
@@ -37,12 +39,12 @@ func main() {
 	// Check if migration is requested
 	args := os.Args
 	if len(args) > 1 && strings.ToLower(args[1]) == "migrate" {
-		MigrateDatabase(ctx, logger, &settings, args)
+		db.MigrateDatabase(ctx, logger, &settings, args)
 		return
 	}
 
 	// Create DB connection
-	store := db.NewDbConnectionFromSettings(ctx, &settings.DB, true)
+	store := sharedDB.NewDbConnectionFromSettings(ctx, &settings.DB, true)
 	store.WaitForDB(logger)
 
 	// Start API server
