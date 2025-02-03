@@ -38,37 +38,39 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		Conditions []Condition `json:"conditions"` // Optional
 	}
 
-	// Extract path parameters
 	vehicleTokenIDStr := c.Params("vehicleTokenID")
 	eventID := c.Params("eventID")
 
-	// Validate vehicleTokenID format
 	if vehicleTokenIDStr == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Vehicle token ID is required"})
 	}
 
-	// Convert vehicleTokenID to sqlboiler/types.Decimal
 	vehicleTokenIDDecimal := types.Decimal{}
 	if err := vehicleTokenIDDecimal.Scan(vehicleTokenIDStr); err != nil {
 		v.logger.Error().Err(err).Msg("Invalid vehicle token ID format")
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid vehicle token ID format"})
 	}
 
-	// Parse request payload for optional conditions
 	var payload RequestPayload
 	if err := c.BodyParser(&payload); err != nil {
 		v.logger.Error().Err(err).Msg("Invalid request payload")
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
 	}
 
-	// Retrieve developer license from context
 	devLicense, ok := c.Locals("developer_license_address").([]byte)
 	if !ok {
 		v.logger.Error().Msg("Developer license not found in request context")
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	// Serialize conditions if provided
+	existingSubscription, err := models.EventVehicles(
+		qm.Where("vehicle_token_id = ? AND event_id = ? AND developer_license_address = ?", vehicleTokenIDDecimal, eventID, devLicense),
+	).One(c.Context(), v.store.DBS().Reader)
+
+	if err == nil && existingSubscription != nil {
+		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "You are already subscribed to this event."})
+	}
+
 	conditionsJSON := "{}"
 	if len(payload.Conditions) > 0 {
 		serializedConditions, err := json.Marshal(payload.Conditions)
@@ -79,9 +81,8 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		conditionsJSON = string(serializedConditions)
 	}
 
-	// Insert into the database
 	eventVehicle := &models.EventVehicle{
-		VehicleTokenID:          vehicleTokenIDDecimal, // Correctly using types.Decimal
+		VehicleTokenID:          vehicleTokenIDDecimal,
 		EventID:                 eventID,
 		DeveloperLicenseAddress: devLicense,
 		CreatedAt:               time.Now(),
