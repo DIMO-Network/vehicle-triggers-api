@@ -4,7 +4,7 @@ go 1.23.5
 
 require (
 	github.com/DIMO-Network/model-garage v0.4.4
-	github.com/DIMO-Network/shared v0.11.1
+	github.com/DIMO-Network/shared v0.12.9
 	github.com/friendsofgo/errors v0.9.2
 	github.com/gofiber/fiber/v2 v2.52.5
 	github.com/lib/pq v1.10.9
@@ -21,6 +21,7 @@ require (
 )
 
 require (
+	github.com/DIMO-Network/yaml v0.1.0 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/avast/retry-go/v4 v4.5.1 // indirect
@@ -31,12 +32,14 @@ require (
 	github.com/aws/smithy-go v1.20.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/ericlagergren/decimal v0.0.0-20190420051523-6335edbaa640 // indirect
+	github.com/ethereum/go-ethereum v1.14.11 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
 	github.com/go-openapi/spec v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/holiman/uint256 v1.3.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
@@ -56,14 +59,16 @@ require (
 	github.com/volatiletech/inflect v0.0.1 // indirect
 	github.com/volatiletech/randomize v0.0.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	golang.org/x/crypto v0.29.0 // indirect
 	golang.org/x/net v0.31.0 // indirect
 	golang.org/x/sync v0.9.0 // indirect
 	golang.org/x/sys v0.27.0 // indirect
 	golang.org/x/text v0.20.0 // indirect
+	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.27.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240826202546-f6391c0de4c7 // indirect
-	google.golang.org/grpc v1.65.0 // indirect
+	google.golang.org/grpc v1.66.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
