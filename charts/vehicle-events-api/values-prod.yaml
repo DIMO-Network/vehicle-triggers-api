@@ -4,6 +4,7 @@ image:
   pullPolicy: IfNotPresent
   tag: 1.24.6
 env:
+  DB_SSL_MODE: disable
   ENVIRONMENT: prod
   PORT: '8080'
   LOG_LEVEL: info

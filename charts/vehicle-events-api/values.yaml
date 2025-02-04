@@ -26,6 +26,7 @@ env:
   LOG_LEVEL: info
   DB_PORT: '5432'
   DB_NAME: vehicle_events_api
+  DB_SSL_MODE: require
   DB_MAX_OPEN_CONNECTIONS: '10'
   DB_MAX_IDLE_CONNECTIONS: '3'
   SERVICE_NAME: vehicle-events-api
