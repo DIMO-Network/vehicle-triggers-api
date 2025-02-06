@@ -40,6 +40,7 @@ func NewVehicleSubscriptionController(store db.Store, logger zerolog.Logger) *Ve
 // @Failure      400 "Invalid request payload or vehicle token ID"
 // @Failure      401 "Unauthorized"
 // @Failure      500 "Internal server error"
+// @Security     BearerAuth
 // @Router       /subscriptions/{vehicleTokenID}/event/{eventID} [post]
 func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) error {
 	type Condition struct {
@@ -122,6 +123,7 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 // @Failure      400 "Invalid vehicle token ID"
 // @Failure      401 "Unauthorized"
 // @Failure      500 "Internal server error"
+// @Security     BearerAuth
 // @Router       /subscriptions/{vehicleTokenID}/event/{eventID} [delete]
 func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) error {
 	// Extract path parameters

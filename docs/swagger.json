@@ -6,6 +6,11 @@
     "paths": {
         "/subscriptions/{vehicleTokenID}/event/{eventID}": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Associates a vehicle with a specific event webhook, optionally using conditions.",
                 "consumes": [
                     "application/json"
@@ -58,6 +63,11 @@
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Unlinks a vehicle from a specific event webhook.",
                 "produces": [
                     "application/json"

@@ -26,6 +26,8 @@ paths:
           description: Unauthorized
         "500":
           description: Internal server error
+      security:
+      - BearerAuth: []
       summary: Remove a vehicle from a webhook
       tags:
       - Vehicle Subscriptions
@@ -62,6 +64,8 @@ paths:
           description: Unauthorized
         "500":
           description: Internal server error
+      security:
+      - BearerAuth: []
       summary: Assign a vehicle to a webhook
       tags:
       - Vehicle Subscriptions
