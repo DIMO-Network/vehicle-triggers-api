@@ -1,6 +1,33 @@
 info:
   contact: {}
 paths:
+  /subscriptions/{vehicleTokenID}:
+    get:
+      description: Retrieves all webhook subscriptions for a given vehicle.
+      parameters:
+      - description: Vehicle Token ID
+        in: path
+        name: vehicleTokenID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of subscriptions
+          schema:
+            items:
+              type: object
+            type: array
+        "401":
+          description: Unauthorized
+        "500":
+          description: Internal server error
+      security:
+      - BearerAuth: []
+      summary: List subscriptions for a vehicle
+      tags:
+      - Vehicle Subscriptions
   /subscriptions/{vehicleTokenID}/event/{eventID}:
     delete:
       description: Unlinks a vehicle from a specific event webhook.

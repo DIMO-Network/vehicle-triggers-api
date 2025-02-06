@@ -76,6 +76,7 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	// New RESTful Routes
 	app.Post("/subscriptions/:vehicleTokenID/event/:eventID", controllers.JWTMiddleware, vehicleSubscriptionController.AssignVehicleToWebhook)
 	app.Delete("/subscriptions/:vehicleTokenID/event/:eventID", controllers.JWTMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
+	app.Get("/subscriptions/:vehicleTokenID", controllers.JWTMiddleware, vehicleSubscriptionController.ListSubscriptions)
 
 	// Catchall
 	app.Use(func(c *fiber.Ctx) error {
