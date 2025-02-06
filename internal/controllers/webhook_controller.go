@@ -58,6 +58,7 @@ type CelRequestPayload struct {
 // @Success      201      "Webhook registered successfully"
 // @Failure      400      "Invalid request payload"
 // @Failure      500      "Internal server error"
+// @Security     BearerAuth
 // @Router       /webhooks [post]
 func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	type RequestPayload struct {
@@ -105,16 +106,22 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to serialize parameters"})
 	}
 
+	devLicense, ok := c.Locals("developer_license_address").([]byte)
+	if !ok {
+		w.logger.Error().Msg("Developer license not found in request context")
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
 	event := &models.Event{
 		ID:                      generateShortID(w.logger),
 		Service:                 payload.Service,
 		Data:                    payload.Data,
-		Trigger:                 celExpression, // Store the generated CEL expression or provided Trigger
+		Trigger:                 celExpression,
 		Setup:                   payload.Setup,
 		Description:             null.StringFrom(payload.Description),
 		TargetURI:               payload.TargetURI,
 		Parameters:              null.JSONFrom(parametersJSON),
-		DeveloperLicenseAddress: []byte{0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef},
+		DeveloperLicenseAddress: devLicense,
 		Status:                  payload.Status,
 	}
 
@@ -135,6 +142,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 // @Success      200  {array}  object  "List of webhooks"
 // @Failure      401  "Unauthorized"
 // @Failure      500  "Internal server error"
+// @Security     BearerAuth
 // @Router       /webhooks [get]
 func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 	w.logger.Info().Msg("ListWebhooks endpoint hit")
@@ -171,6 +179,7 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 // @Failure      400      "Invalid request payload"
 // @Failure      404      "Webhook not found"
 // @Failure      500      "Internal server error"
+// @Security     BearerAuth
 // @Router       /webhooks/{id} [put]
 func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	id := c.Params("id")
@@ -278,6 +287,7 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 // @Success      204  "Webhook deleted successfully"
 // @Failure      404  "Webhook not found"
 // @Failure      500  "Internal server error"
+// @Security     BearerAuth
 // @Router       /webhooks/{id} [delete]
 func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 	id := c.Params("id")

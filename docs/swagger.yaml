@@ -81,6 +81,8 @@ paths:
           description: Unauthorized
         "500":
           description: Internal server error
+      security:
+      - BearerAuth: []
       summary: List all webhooks
       tags:
       - Webhooks
@@ -104,6 +106,8 @@ paths:
           description: Invalid request payload
         "500":
           description: Internal server error
+      security:
+      - BearerAuth: []
       summary: Register a new webhook
       tags:
       - Webhooks
@@ -125,6 +129,8 @@ paths:
           description: Webhook not found
         "500":
           description: Internal server error
+      security:
+      - BearerAuth: []
       summary: Delete a webhook
       tags:
       - Webhooks
@@ -155,6 +161,8 @@ paths:
           description: Webhook not found
         "500":
           description: Internal server error
+      security:
+      - BearerAuth: []
       summary: Update a webhook
       tags:
       - Webhooks
@@ -175,4 +183,9 @@ paths:
       summary: Get signal names
       tags:
       - Webhooks
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

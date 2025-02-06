@@ -100,6 +100,11 @@
         },
         "/webhooks": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Retrieves all registered webhooks for the developer.",
                 "produces": [
                     "application/json"
@@ -127,6 +132,11 @@
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Registers a new webhook with the specified configuration.",
                 "consumes": [
                     "application/json"
@@ -190,6 +200,11 @@
         },
         "/webhooks/{id}": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Updates the configuration of a webhook by its ID.",
                 "consumes": [
                     "application/json"
@@ -235,6 +250,11 @@
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Deletes a webhook by its ID.",
                 "produces": [
                     "application/json"
@@ -264,6 +284,13 @@
                     }
                 }
             }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }

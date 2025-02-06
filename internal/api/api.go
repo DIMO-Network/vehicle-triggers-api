@@ -31,17 +31,19 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 		//AllowCredentials: true,
 	}))
 
-	app.Use(func(c *fiber.Ctx) error {
-		logger.Info().
-			Str("method", c.Method()).
-			Str("path", c.Path()).
-			Msg("Middleware reached")
+	/*
+		app.Use(func(c *fiber.Ctx) error {
+			logger.Info().
+				Str("method", c.Method()).
+				Str("path", c.Path()).
+				Msg("Middleware reached")
 
-		// Hardcoded developer license for now
-		devLicense := []byte{0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef}
-		c.Locals("developer_license_address", devLicense)
-		return c.Next()
-	})
+			// Hardcoded developer license for now
+			devLicense := []byte{0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef}
+			c.Locals("developer_license_address", devLicense)
+			return c.Next()
+		})
+	*/
 
 	app.Get("/swagger/*", fiberSwagger.WrapHandler)
 
