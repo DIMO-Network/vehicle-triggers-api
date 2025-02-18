@@ -27,7 +27,29 @@ func NewVehicleSubscriptionController(store db.Store, logger zerolog.Logger) *Ve
 	}
 }
 
-// AssignVehicleToWebhook assigns a vehicle to a webhook
+type SubscriptionView struct {
+	EventID        string    `json:"event_id"`
+	VehicleTokenID string    `json:"vehicle_token_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	Description    string    `json:"description"`
+	//condition? todo?
+}
+
+// AssignVehicleToWebhook godoc
+// @Summary      Assign a vehicle to a webhook
+// @Description  Associates a vehicle with a specific event webhook, optionally using conditions.
+// @Tags         Vehicle Subscriptions
+// @Accept       json
+// @Produce      json
+// @Param        vehicleTokenID path string true "Vehicle Token ID"
+// @Param        eventID path string true "Event ID"
+// @Param        request body object true "Request payload"
+// @Success      201 "Vehicle assigned to webhook successfully"
+// @Failure      400 "Invalid request payload or vehicle token ID"
+// @Failure      401 "Unauthorized"
+// @Failure      500 "Internal server error"
+// @Security     BearerAuth
+// @Router       /subscriptions/{vehicleTokenID}/event/{eventID} [post]
 func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) error {
 	type Condition struct {
 		Field    string `json:"field"`
@@ -63,14 +85,6 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	existingSubscription, err := models.EventVehicles(
-		qm.Where("vehicle_token_id = ? AND event_id = ? AND developer_license_address = ?", vehicleTokenIDDecimal, eventID, devLicense),
-	).One(c.Context(), v.store.DBS().Reader)
-
-	if err == nil && existingSubscription != nil {
-		return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "You are already subscribed to this event."})
-	}
-
 	conditionsJSON := "{}"
 	if len(payload.Conditions) > 0 {
 		serializedConditions, err := json.Marshal(payload.Conditions)
@@ -98,9 +112,20 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 	return c.Status(http.StatusCreated).JSON(fiber.Map{"message": "Vehicle assigned to webhook successfully"})
 }
 
-// RemoveVehicleFromWebhook removes a vehicle from a webhook
+// RemoveVehicleFromWebhook godoc
+// @Summary      Remove a vehicle from a webhook
+// @Description  Unlinks a vehicle from a specific event webhook.
+// @Tags         Vehicle Subscriptions
+// @Produce      json
+// @Param        vehicleTokenID path string true "Vehicle Token ID"
+// @Param        eventID path string true "Event ID"
+// @Success      200 "Vehicle removed from webhook successfully"
+// @Failure      400 "Invalid vehicle token ID"
+// @Failure      401 "Unauthorized"
+// @Failure      500 "Internal server error"
+// @Security     BearerAuth
+// @Router       /subscriptions/{vehicleTokenID}/event/{eventID} [delete]
 func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) error {
-	// Extract path parameters
 	vehicleTokenIDStr := c.Params("vehicleTokenID")
 	eventID := c.Params("eventID")
 
@@ -110,14 +135,12 @@ func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) e
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid vehicle token ID"})
 	}
 
-	// Hardcoded developer license for now
 	devLicense, ok := c.Locals("developer_license_address").([]byte)
 	if !ok {
 		v.logger.Error().Msg("Developer license not found in request context")
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	// Delete the record
 	_, err = models.EventVehicles(
 		qm.Where("vehicle_token_id = ? AND event_id = ? AND developer_license_address = ?", vehicleTokenID, eventID, devLicense),
 	).DeleteAll(c.Context(), v.store.DBS().Writer)
@@ -127,4 +150,63 @@ func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) e
 	}
 
 	return c.Status(http.StatusOK).JSON(fiber.Map{"message": "Vehicle removed from webhook successfully"})
+}
+
+// ListSubscriptions godoc
+// @Summary      List subscriptions for a vehicle
+// @Description  Retrieves all webhook subscriptions for a given vehicle.
+// @Tags         Vehicle Subscriptions
+// @Produce      json
+// @Param        vehicleTokenID path string true "Vehicle Token ID"
+// @Success      200  {array}  object  "List of subscriptions"
+// @Failure      401  "Unauthorized"
+// @Failure      500  "Internal server error"
+// @Security     BearerAuth
+// @Router       /subscriptions/{vehicleTokenID} [get]
+func (v *VehicleSubscriptionController) ListSubscriptions(c *fiber.Ctx) error {
+	// Extract the vehicle token ID from the path
+	vehicleTokenIDStr := c.Params("vehicleTokenID")
+	if vehicleTokenIDStr == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Vehicle token ID is required"})
+	}
+
+	vehicleTokenID := types.Decimal{}
+	if err := vehicleTokenID.Scan(vehicleTokenIDStr); err != nil {
+		v.logger.Error().Err(err).Msg("Invalid vehicle token ID format")
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid vehicle token ID format"})
+	}
+
+	devLicense, ok := c.Locals("developer_license_address").([]byte)
+	if !ok {
+		v.logger.Error().Msg("Developer license not found in request context")
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	subscriptions, err := models.EventVehicles(
+		qm.Where("vehicle_token_id = ? AND developer_license_address = ?", vehicleTokenID, devLicense),
+		qm.Load(models.EventVehicleRels.Event), //eager load
+	).All(c.Context(), v.store.DBS().Reader)
+	if err != nil {
+		v.logger.Error().Err(err).Msg("Failed to retrieve subscriptions")
+		return c.Status(fiber.StatusOK).JSON([]models.EventVehicle{})
+	}
+
+	resp := make([]SubscriptionView, 0, len(subscriptions))
+	for _, sub := range subscriptions {
+		var desc string
+		if sub.R != nil && sub.R.Event != nil {
+			desc = sub.R.Event.Description.String
+		}
+
+		view := SubscriptionView{
+			EventID:        sub.EventID,
+			VehicleTokenID: sub.VehicleTokenID.String(),
+			CreatedAt:      sub.CreatedAt,
+			Description:    desc,
+		}
+
+		resp = append(resp, view)
+	}
+
+	return c.JSON(resp)
 }

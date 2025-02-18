@@ -1,25 +1,163 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "API for managing vehicle events and webhooks.",
-        "title": "Vehicle Events API",
-        "termsOfService": "http://swagger.io/terms/",
-        "contact": {
-            "name": "Support Team",
-            "url": "http://www.swagger.io/support",
-            "email": "support@swagger.io"
-        },
-        "license": {
-            "name": "Apache 2.0",
-            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
-        },
-        "version": "1.0"
+        "contact": {}
     },
-    "host": "localhost:8080",
-    "basePath": "/",
     "paths": {
+        "/subscriptions/{vehicleTokenID}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieves all webhook subscriptions for a given vehicle.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Vehicle Subscriptions"
+                ],
+                "summary": "List subscriptions for a vehicle",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Vehicle Token ID",
+                        "name": "vehicleTokenID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of subscriptions",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                }
+            }
+        },
+        "/subscriptions/{vehicleTokenID}/event/{eventID}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Associates a vehicle with a specific event webhook, optionally using conditions.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Vehicle Subscriptions"
+                ],
+                "summary": "Assign a vehicle to a webhook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Vehicle Token ID",
+                        "name": "vehicleTokenID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "eventID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Request payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Vehicle assigned to webhook successfully"
+                    },
+                    "400": {
+                        "description": "Invalid request payload or vehicle token ID"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Unlinks a vehicle from a specific event webhook.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Vehicle Subscriptions"
+                ],
+                "summary": "Remove a vehicle from a webhook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Vehicle Token ID",
+                        "name": "vehicleTokenID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "eventID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Vehicle removed from webhook successfully"
+                    },
+                    "400": {
+                        "description": "Invalid vehicle token ID"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                }
+            }
+        },
         "/webhooks": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Retrieves all registered webhooks for the developer.",
                 "produces": [
                     "application/json"
@@ -38,12 +176,20 @@
                             }
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
                     "500": {
                         "description": "Internal server error"
                     }
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Registers a new webhook with the specified configuration.",
                 "consumes": [
                     "application/json"
@@ -79,8 +225,39 @@
                 }
             }
         },
+        "/webhooks/signals": {
+            "get": {
+                "description": "Fetches the list of signal names available for the data field.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "Get signal names",
+                "responses": {
+                    "200": {
+                        "description": "List of signal names",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                }
+            }
+        },
         "/webhooks/{id}": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Updates the configuration of a webhook by its ID.",
                 "consumes": [
                     "application/json"
@@ -126,6 +303,11 @@
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Deletes a webhook by its ID.",
                 "produces": [
                     "application/json"
@@ -158,7 +340,7 @@
         }
     },
     "securityDefinitions": {
-        "ApiKeyAuth": {
+        "BearerAuth": {
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"

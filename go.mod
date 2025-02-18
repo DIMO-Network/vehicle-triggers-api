@@ -7,6 +7,7 @@ require (
 	github.com/DIMO-Network/shared v0.12.9
 	github.com/friendsofgo/errors v0.9.2
 	github.com/gofiber/fiber/v2 v2.52.5
+	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/lib/pq v1.10.9
 	github.com/pressly/goose/v3 v3.22.1
 	github.com/rs/zerolog v1.33.0

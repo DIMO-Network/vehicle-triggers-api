@@ -1,8 +1,8 @@
-package main
+package db
 
 import (
 	"context"
-	"github.com/DIMO-Network/shared/db"
+	sharedDB "github.com/DIMO-Network/shared/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/config"
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
@@ -18,7 +18,7 @@ func MigrateDatabase(ctx context.Context, logger zerolog.Logger, s *config.Setti
 		}
 	}
 
-	sqlDb := db.NewDbConnectionFromSettings(ctx, &s.DB, true)
+	sqlDb := sharedDB.NewDbConnectionFromSettings(ctx, &s.DB, true)
 	sqlDb.WaitForDB(logger)
 
 	if command == "" {

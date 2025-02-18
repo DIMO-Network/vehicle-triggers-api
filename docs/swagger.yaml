@@ -1,18 +1,101 @@
-basePath: /
-host: localhost:8080
 info:
-  contact:
-    email: support@swagger.io
-    name: Support Team
-    url: http://www.swagger.io/support
-  description: API for managing vehicle events and webhooks.
-  license:
-    name: Apache 2.0
-    url: http://www.apache.org/licenses/LICENSE-2.0.html
-  termsOfService: http://swagger.io/terms/
-  title: Vehicle Events API
-  version: "1.0"
+  contact: {}
 paths:
+  /subscriptions/{vehicleTokenID}:
+    get:
+      description: Retrieves all webhook subscriptions for a given vehicle.
+      parameters:
+      - description: Vehicle Token ID
+        in: path
+        name: vehicleTokenID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of subscriptions
+          schema:
+            items:
+              type: object
+            type: array
+        "401":
+          description: Unauthorized
+        "500":
+          description: Internal server error
+      security:
+      - BearerAuth: []
+      summary: List subscriptions for a vehicle
+      tags:
+      - Vehicle Subscriptions
+  /subscriptions/{vehicleTokenID}/event/{eventID}:
+    delete:
+      description: Unlinks a vehicle from a specific event webhook.
+      parameters:
+      - description: Vehicle Token ID
+        in: path
+        name: vehicleTokenID
+        required: true
+        type: string
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Vehicle removed from webhook successfully
+        "400":
+          description: Invalid vehicle token ID
+        "401":
+          description: Unauthorized
+        "500":
+          description: Internal server error
+      security:
+      - BearerAuth: []
+      summary: Remove a vehicle from a webhook
+      tags:
+      - Vehicle Subscriptions
+    post:
+      consumes:
+      - application/json
+      description: Associates a vehicle with a specific event webhook, optionally
+        using conditions.
+      parameters:
+      - description: Vehicle Token ID
+        in: path
+        name: vehicleTokenID
+        required: true
+        type: string
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Request payload
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Vehicle assigned to webhook successfully
+        "400":
+          description: Invalid request payload or vehicle token ID
+        "401":
+          description: Unauthorized
+        "500":
+          description: Internal server error
+      security:
+      - BearerAuth: []
+      summary: Assign a vehicle to a webhook
+      tags:
+      - Vehicle Subscriptions
   /webhooks:
     get:
       description: Retrieves all registered webhooks for the developer.
@@ -25,8 +108,12 @@ paths:
             items:
               type: object
             type: array
+        "401":
+          description: Unauthorized
         "500":
           description: Internal server error
+      security:
+      - BearerAuth: []
       summary: List all webhooks
       tags:
       - Webhooks
@@ -50,6 +137,8 @@ paths:
           description: Invalid request payload
         "500":
           description: Internal server error
+      security:
+      - BearerAuth: []
       summary: Register a new webhook
       tags:
       - Webhooks
@@ -71,6 +160,8 @@ paths:
           description: Webhook not found
         "500":
           description: Internal server error
+      security:
+      - BearerAuth: []
       summary: Delete a webhook
       tags:
       - Webhooks
@@ -101,11 +192,30 @@ paths:
           description: Webhook not found
         "500":
           description: Internal server error
+      security:
+      - BearerAuth: []
       summary: Update a webhook
       tags:
       - Webhooks
+  /webhooks/signals:
+    get:
+      description: Fetches the list of signal names available for the data field.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of signal names
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Internal server error
+      summary: Get signal names
+      tags:
+      - Webhooks
 securityDefinitions:
-  ApiKeyAuth:
+  BearerAuth:
     in: header
     name: Authorization
     type: apiKey
