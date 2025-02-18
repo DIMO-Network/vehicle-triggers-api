@@ -6,12 +6,13 @@ import (
 
 // Settings contains the application config
 type Settings struct {
-	Environment string      `yaml:"ENVIRONMENT"`
-	Port        string      `yaml:"PORT"`
-	GRPCPort    string      `yaml:"GRPC_PORT"`
-	LogLevel    string      `yaml:"LOG_LEVEL"`
-	ServiceName string      `yaml:"SERVICE_NAME"`
-	DB          db.Settings `yaml:"DB"`
+	Environment    string      `yaml:"ENVIRONMENT"`
+	Port           string      `yaml:"PORT"`
+	GRPCPort       string      `yaml:"GRPC_PORT"`
+	LogLevel       string      `yaml:"LOG_LEVEL"`
+	ServiceName    string      `yaml:"SERVICE_NAME"`
+	IdentityAPIURL string      `yaml:"IdentityAPIURL"`
+	DB             db.Settings `yaml:"DB"`
 }
 
 func (s *Settings) IsProduction() bool {
