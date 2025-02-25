@@ -28,22 +28,7 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 		AllowOrigins: "*",
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
 		AllowHeaders: "*",
-		//AllowCredentials: true,
 	}))
-
-	/*
-		app.Use(func(c *fiber.Ctx) error {
-			logger.Info().
-				Str("method", c.Method()).
-				Str("path", c.Path()).
-				Msg("Middleware reached")
-
-			// Hardcoded developer license for now
-			devLicense := []byte{0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef}
-			c.Locals("developer_license_address", devLicense)
-			return c.Next()
-		})
-	*/
 
 	app.Get("/swagger/*", fiberSwagger.WrapHandler)
 
@@ -56,39 +41,39 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 		return c.SendString("Welcome to the Vehicle Events API!")
 	})
 
-	// Register Webhook routes
+	// Create a JWT middleware that verifies developer licenses.
+	// settings.IdentityAPIURL is loaded from your settings.yaml.
+	jwtMiddleware := controllers.JWTMiddleware(store, settings.IdentityAPIURL, logger)
+
+	// Register Webhook routes.
 	webhookController := controllers.NewWebhookController(store, logger)
 
 	logger.Info().Msg("Registering routes...")
-	app.Post("/webhooks", controllers.JWTMiddleware, webhookController.RegisterWebhook)
-	app.Get("/webhooks", controllers.JWTMiddleware, webhookController.ListWebhooks)
-	app.Put("/webhooks/:id", controllers.JWTMiddleware, webhookController.UpdateWebhook)
-	app.Delete("/webhooks/:id", controllers.JWTMiddleware, webhookController.DeleteWebhook)
-	app.Get("/webhooks/signals", controllers.JWTMiddleware, webhookController.GetSignalNames)
+	app.Post("/webhooks", jwtMiddleware, webhookController.RegisterWebhook)
+	app.Get("/webhooks", jwtMiddleware, webhookController.ListWebhooks)
+	app.Put("/webhooks/:id", jwtMiddleware, webhookController.UpdateWebhook)
+	app.Delete("/webhooks/:id", jwtMiddleware, webhookController.DeleteWebhook)
+	app.Get("/webhooks/signals", jwtMiddleware, webhookController.GetSignalNames)
 
-	// Endpoint to build a CEL (Common Expression Language) expression from user-defined conditions
-	// More info: https://github.com/google/cel-spec
+	// Endpoint to build a CEL expression from user-defined conditions.
 	app.Post("/build-cel", webhookController.BuildCEL)
 
-	// Register Vehicle Subscription routes
+	// Register Vehicle Subscription routes.
 	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger)
+	app.Post("/subscriptions/:vehicleTokenID/event/:eventID", jwtMiddleware, vehicleSubscriptionController.AssignVehicleToWebhook)
+	app.Delete("/subscriptions/:vehicleTokenID/event/:eventID", jwtMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
+	app.Get("/subscriptions/:vehicleTokenID", jwtMiddleware, vehicleSubscriptionController.ListSubscriptions)
 
-	// New RESTful Routes
-	app.Post("/subscriptions/:vehicleTokenID/event/:eventID", controllers.JWTMiddleware, vehicleSubscriptionController.AssignVehicleToWebhook)
-	app.Delete("/subscriptions/:vehicleTokenID/event/:eventID", controllers.JWTMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
-	app.Get("/subscriptions/:vehicleTokenID", controllers.JWTMiddleware, vehicleSubscriptionController.ListSubscriptions)
-
-	// Catchall
+	// Catchall route.
 	app.Use(func(c *fiber.Ctx) error {
 		logger.Warn().
 			Str("method", c.Method()).
 			Str("path", c.Path()).
 			Msg("404 Not Found")
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Not Found"})
-
 	})
 
-	// Start the server
+	// Start the server.
 	logger.Info().Msgf("Starting HTTP server on :%s...", settings.Port)
 	if err := app.Listen(":" + settings.Port); err != nil {
 		logger.Fatal().Err(err).Msg("Server failed to start")
