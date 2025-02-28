@@ -8,7 +8,6 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -85,10 +84,9 @@ func (l *VehicleEventListener) processMessage(msg *message.Message) error {
 // evaluateCEL evaluates the expression "odometer > 100" using CEL.
 func (l *VehicleEventListener) evaluateCEL(odometer int) (bool, error) {
 	env, err := cel.NewEnv(
-		cel.Declarations(
-			decls.NewVar("odometer", decls.Int),
-		),
+		cel.Variable("odometer", cel.IntType),
 	)
+
 	if err != nil {
 		return false, errors.Wrap(err, "failed to create CEL environment")
 	}
