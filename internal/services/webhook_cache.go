@@ -1,23 +1,26 @@
 package services
 
+import (
+	"sync"
+)
+
 // Webhook represents a single webhook registration for a particular tokenId and signal name
 type Webhook struct {
 	URL       string
 	Condition string
 }
 
-// WebhookCache is an in-memory map of:
-//
-//	tokenId -> map[signalName] -> []Webhook
+// WebhookCache is an in-memory map of: tokenId -> map[signalName] -> []Webhook
 type WebhookCache struct {
+	mu       sync.RWMutex
 	webhooks map[uint32]map[string][]Webhook
 }
 
-// NewWebhookCache returns a cache with some demo data. TODO: what would the real data be?
+// NewWebhookCache returns a cache with some demo data. TODO: what will the real data look like?
 func NewWebhookCache() *WebhookCache {
 	return &WebhookCache{
 		webhooks: map[uint32]map[string][]Webhook{
-			//this is just an example for now!
+			// Example
 			123: {
 				"odometer": {
 					{
@@ -30,11 +33,27 @@ func NewWebhookCache() *WebhookCache {
 	}
 }
 
-// GetWebhooks returns the list of webhooks for a given tokenId and signal name
+// GetWebhooks returns the list of webhooks for a given tokenId and signal name.
 func (wc *WebhookCache) GetWebhooks(tokenId uint32, signalName string) []Webhook {
+	wc.mu.RLock()
+	defer wc.mu.RUnlock()
+
 	byToken, ok := wc.webhooks[tokenId]
 	if !ok {
 		return nil
 	}
 	return byToken[signalName]
+}
+
+func (wc *WebhookCache) SetWebhooks(tokenId uint32, signalName string, hooks []Webhook) {
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+
+	if wc.webhooks == nil {
+		wc.webhooks = make(map[uint32]map[string][]Webhook)
+	}
+	if wc.webhooks[tokenId] == nil {
+		wc.webhooks[tokenId] = make(map[string][]Webhook)
+	}
+	wc.webhooks[tokenId][signalName] = hooks
 }
