@@ -13,7 +13,7 @@ type Settings struct {
 	ServiceName        string `yaml:"SERVICE_NAME"`
 	IdentityAPIURL     string `yaml:"IdentityAPIURL"`
 	KafkaBrokers       string `yaml:"KAFKA_BROKERS"`
-	VehicleEventsTopic string `yaml:"VEHICLE_EVENTS_TOPIC"`
+	DeviceSignalsTopic string `yaml:"DEVICE_SIGNALS_TOPIC"`
 
 	DB db.Settings `yaml:"DB"`
 }
