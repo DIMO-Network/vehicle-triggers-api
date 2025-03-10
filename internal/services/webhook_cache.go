@@ -18,6 +18,7 @@ type WebhookCache struct {
 
 // NewWebhookCache returns a cache with some demo data. TODO: what will the real data look like?
 func NewWebhookCache() *WebhookCache {
+	// todo: call populate cache
 	return &WebhookCache{
 		webhooks: map[uint32]map[string][]Webhook{
 			// Example
@@ -31,6 +32,15 @@ func NewWebhookCache() *WebhookCache {
 			},
 		},
 	}
+}
+
+// todo: add new function that populates cache from the database
+func (wc *WebhookCache) PopulateCache() {
+	// mutex
+	// connect to db table
+	// clear the cache
+	// iterate
+	// put stuff in the cache
 }
 
 // GetWebhooks returns the list of webhooks for a given tokenId and signal name.
