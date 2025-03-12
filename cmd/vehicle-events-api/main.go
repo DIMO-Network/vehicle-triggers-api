@@ -47,13 +47,13 @@ func main() {
 	store := sharedDB.NewDbConnectionFromSettings(ctx, &settings.DB, true)
 	store.WaitForDB(logger)
 
-	startVehicleEventsConsumer(ctx, logger, &settings)
+	startDeviceSignalsConsumer(ctx, logger, &settings)
 
 	api.Run(ctx, logger, store)
 }
 
-// startVehicleEventsConsumer sets up and starts the Kafka consumer.
-func startVehicleEventsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings) {
+// startDeviceSignalsConsumer sets up and starts the Kafka consumer for topic.device.signals
+func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings) {
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
@@ -61,19 +61,20 @@ func startVehicleEventsConsumer(ctx context.Context, logger zerolog.Logger, sett
 	consumerConfig := &kafka.Config{
 		ClusterConfig:   clusterConfig,
 		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
-		Topic:           settings.VehicleEventsTopic,
+		Topic:           settings.DeviceSignalsTopic,
 		GroupID:         "vehicle-events",
 		MaxInFlight:     1,
 	}
 
 	consumer, err := kafka.NewConsumer(consumerConfig, &logger)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not create vehicle events consumer")
+		logger.Fatal().Err(err).Msg("Could not create device signals consumer")
 	}
 
-	vehicleEventListener := services.NewVehicleEventListener(logger)
+	// Initialize the in-memory webhook cache.
+	webhookCache := services.NewWebhookCache()
+	signalListener := services.NewSignalListener(logger, webhookCache)
+	consumer.Start(ctx, signalListener.ProcessSignals)
 
-	consumer.Start(ctx, vehicleEventListener.ProcessVehicleEvents)
-
-	logger.Info().Msgf("Vehicle events consumer started on topic: %s", settings.VehicleEventsTopic)
+	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)
 }

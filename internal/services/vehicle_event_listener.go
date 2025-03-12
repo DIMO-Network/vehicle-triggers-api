@@ -13,119 +13,140 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type CloudEvent[T any] struct {
-	ID          string    `json:"id"`
-	Source      string    `json:"source"`
-	Subject     string    `json:"subject"`
-	SpecVersion string    `json:"specversion"`
-	Time        time.Time `json:"time"`
-	Type        string    `json:"type"`
-	Data        T         `json:"data"`
+// Signal represents the Kafka message payload from topic.device.signals.
+type Signal struct {
+	TokenID      uint32    `json:"tokenId"`
+	Timestamp    time.Time `json:"timestamp"`
+	Name         string    `json:"name"`
+	ValueNumber  float64   `json:"valueNumber"`
+	ValueString  string    `json:"valueString"`
+	Source       string    `json:"source"`
+	Producer     string    `json:"producer"`
+	CloudEventID string    `json:"cloudEventId"`
 }
 
-type VehicleEventData struct {
-	VehicleID string `json:"vehicleId"`
-	Odometer  int    `json:"odometer"`
-	// More fields later
+// SignalListener consumes signals from Kafka and processes them
+type SignalListener struct {
+	log          zerolog.Logger
+	webhookCache *WebhookCache
 }
 
-type VehicleEventListener struct {
-	log zerolog.Logger
-}
-
-func NewVehicleEventListener(logger zerolog.Logger) *VehicleEventListener {
-	return &VehicleEventListener{
-		log: logger,
+// NewSignalListener initializes a listener with a logger and an in-memory cache of webhooks
+func NewSignalListener(logger zerolog.Logger, wc *WebhookCache) *SignalListener {
+	return &SignalListener{
+		log:          logger,
+		webhookCache: wc,
 	}
 }
 
-func (l *VehicleEventListener) ProcessVehicleEvents(messages <-chan *message.Message) {
+// ProcessSignals is the entry point for Watermill. It loops over incoming messages
+func (l *SignalListener) ProcessSignals(messages <-chan *message.Message) {
 	for msg := range messages {
 		if err := l.processMessage(msg); err != nil {
-			l.log.Err(err).Msg("error processing vehicle event message")
+			l.log.Err(err).Msg("error processing signal message")
 		}
 		msg.Ack()
 	}
 }
 
-func (l *VehicleEventListener) processMessage(msg *message.Message) error {
+// processMessage parses the Signal, looks up matching webhooks, and evaluates conditions
+func (l *SignalListener) processMessage(msg *message.Message) error {
 	l.log.Info().
 		Str("message_id", msg.UUID).
 		Msgf("Received payload: %s", string(msg.Payload))
 
-	var evt CloudEvent[VehicleEventData]
-	if err := json.Unmarshal(msg.Payload, &evt); err != nil {
-		return errors.Wrap(err, "failed to parse vehicle event JSON")
+	var signal Signal
+	if err := json.Unmarshal(msg.Payload, &signal); err != nil {
+		return errors.Wrap(err, "failed to parse vehicle signal JSON")
 	}
 
 	l.log.Info().
-		Str("cloud_event_id", evt.ID).
-		Str("vehicle_id", evt.Data.VehicleID).
-		Int("odometer", evt.Data.Odometer).
-		Msg("Parsed VehicleEventData")
+		Uint32("token_id", signal.TokenID).
+		Str("signal_name", signal.Name).
+		Float64("value_number", signal.ValueNumber).
+		Str("value_string", signal.ValueString).
+		Msg("Parsed Signal")
 
-	shouldTrigger, err := l.evaluateCEL(evt.Data.Odometer)
-	if err != nil {
-		return errors.Wrap(err, "CEL evaluation failed")
+	webhooks := l.webhookCache.GetWebhooks(signal.TokenID, signal.Name)
+	if len(webhooks) == 0 {
+		return nil
 	}
-	if shouldTrigger {
-		l.log.Info().Msg("CEL condition met (odometer > 100): Webhook should be fired")
-		// Simulate a webhook call to a local endpoint.
-		if err := l.sendWebhookNotification(evt); err != nil {
-			l.log.Err(err).Msg("failed to send webhook notification")
+
+	for _, wh := range webhooks {
+		shouldFire, err := l.evaluateCondition(wh.Condition, &signal)
+		if err != nil {
+			l.log.Error().Err(err).Msg("failed to evaluate CEL condition")
+			continue
 		}
-	} else {
-		l.log.Info().Msg("CEL condition not met: No webhook triggered")
+		if shouldFire {
+			l.log.Info().
+				Str("webhook_url", wh.URL).
+				Str("condition", wh.Condition).
+				Msg("Webhook triggered.")
+			if err := l.sendWebhookNotification(wh.URL, &signal); err != nil {
+				l.log.Error().Err(err).Msg("failed to send webhook")
+			}
+		} else {
+			l.log.Debug().
+				Str("webhook_url", wh.URL).
+				Str("condition", wh.Condition).
+				Msg("Condition not met; skipping webhook.")
+		}
 	}
-
 	return nil
 }
 
-// evaluateCEL evaluates the expression "odometer > 100" using CEL.
-func (l *VehicleEventListener) evaluateCEL(odometer int) (bool, error) {
-	env, err := cel.NewEnv(
-		cel.Variable("odometer", cel.IntType),
-	)
-
-	if err != nil {
-		return false, errors.Wrap(err, "failed to create CEL environment")
+// evaluateCondition uses CEL to check if the condition is satisfied by the given signal
+func (l *SignalListener) evaluateCondition(cond string, signal *Signal) (bool, error) {
+	if cond == "" {
+		return true, nil // always fire
 	}
 
-	ast, issues := env.Compile("odometer > 100")
+	env, err := cel.NewEnv(
+		cel.Variable("valueNumber", cel.DoubleType),
+		cel.Variable("valueString", cel.StringType),
+		cel.Variable("tokenId", cel.IntType),
+	)
+	if err != nil {
+		return false, err
+	}
+
+	ast, issues := env.Compile(cond)
 	if issues != nil && issues.Err() != nil {
-		return false, errors.Wrap(issues.Err(), "failed to compile CEL expression")
+		return false, issues.Err()
 	}
 
 	prg, err := env.Program(ast)
 	if err != nil {
-		return false, errors.Wrap(err, "failed to create CEL program")
+		return false, err
 	}
 
-	out, _, err := prg.Eval(map[string]interface{}{"odometer": odometer})
+	vars := map[string]interface{}{
+		"valueNumber": signal.ValueNumber,
+		"valueString": signal.ValueString,
+		"tokenId":     int64(signal.TokenID),
+	}
+	out, _, err := prg.Eval(vars)
 	if err != nil {
-		return false, errors.Wrap(err, "failed to evaluate CEL program")
+		return false, err
 	}
 
-	if out == types.True {
-		return true, nil
-	}
-	return false, nil
+	return out == types.True, nil
 }
 
-func (l *VehicleEventListener) sendWebhookNotification(evt CloudEvent[VehicleEventData]) error {
-	url := "http://localhost:8081/webhook"
-	payload, err := json.Marshal(evt)
+// sendWebhookNotification posts the signal to the given URL
+func (l *SignalListener) sendWebhookNotification(url string, signal *Signal) error {
+	body, err := json.Marshal(signal)
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal webhook payload")
+		return errors.Wrap(err, "failed to marshal signal for webhook")
 	}
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
 	if err != nil {
-		return errors.Wrap(err, "failed to send POST request to webhook endpoint")
+		return errors.Wrap(err, "failed to POST to webhook")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return errors.Errorf("webhook endpoint returned status code %d", resp.StatusCode)
+		return errors.Errorf("webhook returned status code %d", resp.StatusCode)
 	}
-	l.log.Info().Msg("Webhook notification sent successfully")
 	return nil
 }

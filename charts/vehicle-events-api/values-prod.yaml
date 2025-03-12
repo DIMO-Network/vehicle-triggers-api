@@ -15,6 +15,7 @@ env:
   JWT_KEY_SET_URL: https://auth.dimo.zone/keys
   DEPLOYMENT_BASE_URL: https://vehicle-events-api.dimo.zone
   KAFKA_BROKERS: kafka-prod-dimo-kafka-kafka-brokers:9092
+  DEVICE_SIGNALS_TOPIC: topic.device.signals
 ingress:
   enabled: true
   className: nginx
@@ -33,11 +34,11 @@ ingress:
   tls: []
 resources:
   limits:
-    cpu: 500m
-    memory: 512Mi
+    cpu: 1
+    memory: 1024Mi
   requests:
-    cpu: 100m
-    memory: 128Mi
+    cpu: 500m
+    memory: 256Mi
 autoscaling:
   enabled: false
   minReplicas: 1
