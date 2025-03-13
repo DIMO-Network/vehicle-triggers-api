@@ -10,6 +10,8 @@ import (
 	"sync"
 )
 
+var FetchWebhooksFromDBFunc = fetchWebhooksFromDB
+
 // Webhook represents a single webhook registration for a particular tokenId and signal name
 type Webhook struct {
 	URL       string
@@ -35,7 +37,7 @@ func NewWebhookCache() *WebhookCache {
 }
 
 func (wc *WebhookCache) PopulateCache(ctx context.Context, exec boil.ContextExecutor) error {
-	newData, err := fetchWebhooksFromDB(ctx, exec)
+	newData, err := FetchWebhooksFromDBFunc(ctx, exec)
 	if err != nil {
 		return err
 	}
