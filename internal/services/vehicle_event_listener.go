@@ -51,9 +51,6 @@ func (l *SignalListener) ProcessSignals(messages <-chan *message.Message) {
 
 // processMessage parses the Signal, looks up matching webhooks, and evaluates conditions
 func (l *SignalListener) processMessage(msg *message.Message) error {
-	l.log.Info().
-		Str("message_id", msg.UUID).
-		Msgf("Received payload: %s", string(msg.Payload))
 
 	var signal Signal
 	if err := json.Unmarshal(msg.Payload, &signal); err != nil {
