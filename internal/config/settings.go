@@ -11,7 +11,7 @@ type Settings struct {
 	GRPCPort           string `yaml:"GRPC_PORT"`
 	LogLevel           string `yaml:"LOG_LEVEL"`
 	ServiceName        string `yaml:"SERVICE_NAME"`
-	IdentityAPIURL     string `yaml:"IdentityAPIURL"`
+	IdentityAPIURL     string `yaml:"IDENTITY_API_URL"`
 	KafkaBrokers       string `yaml:"KAFKA_BROKERS"`
 	DeviceSignalsTopic string `yaml:"DEVICE_SIGNALS_TOPIC"`
 

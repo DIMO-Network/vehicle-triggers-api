@@ -2,8 +2,6 @@
 -- +goose StatementBegin
 SELECT 'up SQL query';
 
-SET search_path = events_api, public;
-
 CREATE TABLE IF NOT EXISTS developer_licenses (
       license_address BYTEA PRIMARY KEY,
       developer_id CHAR(27) NOT NULL,
