@@ -73,7 +73,10 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 
 	// Initialize the in-memory webhook cache.
 	webhookCache := services.NewWebhookCache()
-	signalListener := services.NewSignalListener(logger, webhookCache)
+
+	store := sharedDB.NewDbConnectionFromSettings(ctx, &settings.DB, true)
+	store.WaitForDB(logger)
+	signalListener := services.NewSignalListener(logger, webhookCache, store)
 	consumer.Start(ctx, signalListener.ProcessSignals)
 
 	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)

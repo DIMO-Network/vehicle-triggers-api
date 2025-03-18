@@ -2,7 +2,12 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"github.com/teris-io/shortid"
+	"github.com/volatiletech/null/v8"
+	"github.com/volatiletech/sqlboiler/v4/boil"
+	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"net/http"
 	"time"
 
@@ -11,6 +16,9 @@ import (
 	"github.com/google/cel-go/common/types"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+
+	"github.com/DIMO-Network/shared/db" // your store interface
+	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
 )
 
 // Signal represents the Kafka message payload from topic.device.signals.
@@ -25,21 +33,29 @@ type Signal struct {
 	CloudEventID string    `json:"cloudEventId"`
 }
 
-// SignalListener consumes signals from Kafka and processes them
+func generateShortID(logger zerolog.Logger) string {
+	id, err := shortid.Generate()
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to generate short ID")
+		return ""
+	}
+	return id
+}
+
 type SignalListener struct {
 	log          zerolog.Logger
 	webhookCache *WebhookCache
+	store        db.Store
 }
 
-// NewSignalListener initializes a listener with a logger and an in-memory cache of webhooks
-func NewSignalListener(logger zerolog.Logger, wc *WebhookCache) *SignalListener {
+func NewSignalListener(logger zerolog.Logger, wc *WebhookCache, store db.Store) *SignalListener {
 	return &SignalListener{
 		log:          logger,
 		webhookCache: wc,
+		store:        store,
 	}
 }
 
-// ProcessSignals is the entry point for Watermill. It loops over incoming messages
 func (l *SignalListener) ProcessSignals(messages <-chan *message.Message) {
 	for msg := range messages {
 		if err := l.processMessage(msg); err != nil {
@@ -49,9 +65,7 @@ func (l *SignalListener) ProcessSignals(messages <-chan *message.Message) {
 	}
 }
 
-// processMessage parses the Signal, looks up matching webhooks, and evaluates conditions
 func (l *SignalListener) processMessage(msg *message.Message) error {
-
 	var signal Signal
 	if err := json.Unmarshal(msg.Payload, &signal); err != nil {
 		return errors.Wrap(err, "failed to parse vehicle signal JSON")
@@ -70,6 +84,17 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 	}
 
 	for _, wh := range webhooks {
+		// Check if cooldown has elapsed before evaluating condition
+		cooldownPassed, err := l.checkCooldown(wh)
+		if err != nil {
+			l.log.Error().Err(err).Msg("failed to check cooldown")
+			continue
+		}
+		if !cooldownPassed {
+			l.log.Info().Str("webhook_url", wh.URL).Msg("Cooldown period not elapsed; skipping webhook.")
+			continue
+		}
+
 		shouldFire, err := l.evaluateCondition(wh.Condition, &signal)
 		if err != nil {
 			l.log.Error().Err(err).Msg("failed to evaluate CEL condition")
@@ -82,6 +107,10 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 				Msg("Webhook triggered.")
 			if err := l.sendWebhookNotification(wh.URL, &signal); err != nil {
 				l.log.Error().Err(err).Msg("failed to send webhook")
+			} else {
+				if err := l.logWebhookTrigger(wh.ID); err != nil {
+					l.log.Error().Err(err).Msg("failed to log webhook trigger")
+				}
 			}
 		} else {
 			l.log.Debug().
@@ -96,7 +125,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 // evaluateCondition uses CEL to check if the condition is satisfied by the given signal
 func (l *SignalListener) evaluateCondition(cond string, signal *Signal) (bool, error) {
 	if cond == "" {
-		return true, nil // always fire
+		return true, nil
 	}
 
 	env, err := cel.NewEnv(
@@ -131,7 +160,6 @@ func (l *SignalListener) evaluateCondition(cond string, signal *Signal) (bool, e
 	return out == types.True, nil
 }
 
-// sendWebhookNotification posts the signal to the given URL
 func (l *SignalListener) sendWebhookNotification(url string, signal *Signal) error {
 	body, err := json.Marshal(signal)
 	if err != nil {
@@ -146,4 +174,40 @@ func (l *SignalListener) sendWebhookNotification(url string, signal *Signal) err
 		return errors.Errorf("webhook returned status code %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func (l *SignalListener) checkCooldown(webhook Webhook) (bool, error) {
+	// Query the event_logs table for the most recent trigger record for this webhook
+	logs, err := models.EventLogs(
+		qm.Where("event_id = ?", webhook.ID),
+		qm.OrderBy("last_triggered_at DESC"),
+		qm.Limit(1),
+	).All(context.Background(), l.store.DBS().Reader)
+	if err != nil {
+		return false, err
+	}
+	if len(logs) == 0 {
+		return true, nil
+	}
+	lastTriggered := logs[0].LastTriggeredAt
+	if time.Since(lastTriggered) >= time.Duration(webhook.CooldownPeriod)*time.Second {
+		return true, nil
+	}
+	return false, nil
+}
+
+// logWebhookTrigger inserts a record into the event_logs table to mark that the webhook was triggered
+func (l *SignalListener) logWebhookTrigger(eventID string) error {
+	eventLog := &models.EventLog{
+		ID:               generateShortID(l.log),
+		EventID:          eventID,
+		SnapshotData:     []byte("{}"),
+		HTTPResponseCode: null.IntFrom(200),
+		LastTriggeredAt:  time.Now(),
+		ConditionData:    null.JSONFrom([]byte("{}")),
+		EventType:        "vehicle.signal",
+		PermissionStatus: "Granted",
+		CreatedAt:        time.Now(),
+	}
+	return eventLog.Insert(context.Background(), l.store.DBS().Writer, boil.Infer())
 }

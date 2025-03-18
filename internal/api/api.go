@@ -64,6 +64,10 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	app.Delete("/subscriptions/:vehicleTokenID/event/:eventID", jwtMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
 	app.Get("/subscriptions/:vehicleTokenID", jwtMiddleware, vehicleSubscriptionController.ListSubscriptions)
 
+	app.Get("/healthz", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"status": "ok"})
+	})
+
 	// Catchall route.
 	app.Use(func(c *fiber.Ctx) error {
 		logger.Warn().
