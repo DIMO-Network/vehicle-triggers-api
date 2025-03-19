@@ -14,6 +14,7 @@ type Settings struct {
 	IdentityAPIURL     string `yaml:"IDENTITY_API_URL"`
 	KafkaBrokers       string `yaml:"KAFKA_BROKERS"`
 	DeviceSignalsTopic string `yaml:"DEVICE_SIGNALS_TOPIC"`
+	MonitoringPort     string `yaml:"MONITORING_PORT"`
 
 	DB db.Settings `yaml:"DB"`
 }

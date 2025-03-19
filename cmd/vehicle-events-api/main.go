@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"log"
 	"os"
 	"strings"
@@ -15,8 +17,8 @@ import (
 	"github.com/DIMO-Network/vehicle-events-api/internal/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/kafka"
 	"github.com/DIMO-Network/vehicle-events-api/internal/services"
-
 	"github.com/IBM/sarama"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -46,6 +48,14 @@ func main() {
 
 	store := sharedDB.NewDbConnectionFromSettings(ctx, &settings.DB, true)
 	store.WaitForDB(logger)
+
+	monApp := createMonitoringServer()
+	go func() {
+		monPort := settings.MonitoringPort
+		if err := monApp.Listen(":" + monPort); err != nil {
+			logger.Error().Err(err).Msg("Monitoring server failed")
+		}
+	}()
 
 	startDeviceSignalsConsumer(ctx, logger, &settings)
 
@@ -80,4 +90,13 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 	consumer.Start(ctx, signalListener.ProcessSignals)
 
 	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)
+}
+
+func createMonitoringServer() *fiber.App {
+	monApp := fiber.New(fiber.Config{DisableStartupMessage: true})
+
+	monApp.Get("/", func(*fiber.Ctx) error { return nil })
+	monApp.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
+
+	return monApp
 }
