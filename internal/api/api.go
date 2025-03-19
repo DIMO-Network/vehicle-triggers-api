@@ -14,6 +14,13 @@ import (
 	"path/filepath"
 )
 
+func healthCheck(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{
+		"code":    200,
+		"message": "server is up",
+	})
+}
+
 // Run sets up the API routes and starts the HTTP server.
 func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	logger.Info().Msg("Starting Vehicle Events API...")
@@ -64,9 +71,7 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	app.Delete("/subscriptions/:vehicleTokenID/event/:eventID", jwtMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
 	app.Get("/subscriptions/:vehicleTokenID", jwtMiddleware, vehicleSubscriptionController.ListSubscriptions)
 
-	app.Get("/healthz", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"status": "ok"})
-	})
+	app.Get("/health", healthCheck)
 
 	// Catchall route.
 	app.Use(func(c *fiber.Ctx) error {
