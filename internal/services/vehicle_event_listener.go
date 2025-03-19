@@ -71,12 +71,16 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		return errors.Wrap(err, "failed to parse vehicle signal JSON")
 	}
 
-	l.log.Debug().
-		Uint32("token_id", signal.TokenID).
-		Str("signal_name", signal.Name).
-		Float64("value_number", signal.ValueNumber).
-		Str("value_string", signal.ValueString).
-		Msg("Parsed Signal")
+	/*
+
+		l.log.Debug().
+			Uint32("token_id", signal.TokenID).
+			Str("signal_name", signal.Name).
+			Float64("value_number", signal.ValueNumber).
+			Str("value_string", signal.ValueString).
+			Msg("Parsed Signal")
+
+	*/
 
 	webhooks := l.webhookCache.GetWebhooks(signal.TokenID, signal.Name)
 	if len(webhooks) == 0 {
