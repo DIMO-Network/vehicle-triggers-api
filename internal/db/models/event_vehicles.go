@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/friendsofgo/errors"
-	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
@@ -30,7 +29,6 @@ type EventVehicle struct {
 	DeveloperLicenseAddress []byte        `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
 	CreatedAt               time.Time     `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
 	UpdatedAt               time.Time     `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
-	ConditionData           null.JSON     `boil:"condition_data" json:"condition_data,omitempty" toml:"condition_data" yaml:"condition_data,omitempty"`
 
 	R *eventVehicleR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L eventVehicleL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -42,14 +40,12 @@ var EventVehicleColumns = struct {
 	DeveloperLicenseAddress string
 	CreatedAt               string
 	UpdatedAt               string
-	ConditionData           string
 }{
 	VehicleTokenID:          "vehicle_token_id",
 	EventID:                 "event_id",
 	DeveloperLicenseAddress: "developer_license_address",
 	CreatedAt:               "created_at",
 	UpdatedAt:               "updated_at",
-	ConditionData:           "condition_data",
 }
 
 var EventVehicleTableColumns = struct {
@@ -58,14 +54,12 @@ var EventVehicleTableColumns = struct {
 	DeveloperLicenseAddress string
 	CreatedAt               string
 	UpdatedAt               string
-	ConditionData           string
 }{
 	VehicleTokenID:          "event_vehicles.vehicle_token_id",
 	EventID:                 "event_vehicles.event_id",
 	DeveloperLicenseAddress: "event_vehicles.developer_license_address",
 	CreatedAt:               "event_vehicles.created_at",
 	UpdatedAt:               "event_vehicles.updated_at",
-	ConditionData:           "event_vehicles.condition_data",
 }
 
 // Generated where
@@ -76,14 +70,12 @@ var EventVehicleWhere = struct {
 	DeveloperLicenseAddress whereHelper__byte
 	CreatedAt               whereHelpertime_Time
 	UpdatedAt               whereHelpertime_Time
-	ConditionData           whereHelpernull_JSON
 }{
 	VehicleTokenID:          whereHelpertypes_Decimal{field: "\"vehicle_events_api\".\"event_vehicles\".\"vehicle_token_id\""},
 	EventID:                 whereHelperstring{field: "\"vehicle_events_api\".\"event_vehicles\".\"event_id\""},
 	DeveloperLicenseAddress: whereHelper__byte{field: "\"vehicle_events_api\".\"event_vehicles\".\"developer_license_address\""},
 	CreatedAt:               whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_vehicles\".\"created_at\""},
 	UpdatedAt:               whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_vehicles\".\"updated_at\""},
-	ConditionData:           whereHelpernull_JSON{field: "\"vehicle_events_api\".\"event_vehicles\".\"condition_data\""},
 }
 
 // EventVehicleRels is where relationship names are stored.
@@ -124,9 +116,9 @@ func (r *eventVehicleR) GetDeveloperLicenseAddressDeveloperLicense() *DeveloperL
 type eventVehicleL struct{}
 
 var (
-	eventVehicleAllColumns            = []string{"vehicle_token_id", "event_id", "developer_license_address", "created_at", "updated_at", "condition_data"}
+	eventVehicleAllColumns            = []string{"vehicle_token_id", "event_id", "developer_license_address", "created_at", "updated_at"}
 	eventVehicleColumnsWithoutDefault = []string{"vehicle_token_id", "event_id", "developer_license_address"}
-	eventVehicleColumnsWithDefault    = []string{"created_at", "updated_at", "condition_data"}
+	eventVehicleColumnsWithDefault    = []string{"created_at", "updated_at"}
 	eventVehiclePrimaryKeyColumns     = []string{"vehicle_token_id", "event_id", "developer_license_address"}
 	eventVehicleGeneratedColumns      = []string{}
 )

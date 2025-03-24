@@ -9,16 +9,15 @@ import (
 )
 
 func TestPopulateCache(t *testing.T) {
-	// Override the dependency injection func
 	origFunc := FetchWebhooksFromDBFunc
 	defer func() { FetchWebhooksFromDBFunc = origFunc }()
 
-	// fake implementation
+	// Fake implementation
 	FetchWebhooksFromDBFunc = func(ctx context.Context, exec boil.ContextExecutor) (map[uint32]map[string][]Webhook, error) {
 		return map[uint32]map[string][]Webhook{
 			10: {
 				"temperature": {
-					{URL: "http://example.com/webhook", Condition: "valueNumber > 50"},
+					{URL: "http://example.com/webhook", Trigger: "valueNumber > 50", Data: "temperature"},
 				},
 			},
 		}, nil

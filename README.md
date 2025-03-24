@@ -28,4 +28,7 @@ Add a migrations:
 `$ goose -dir internal/db/migrations create <migration_name> sql`
 
 Migrate DB to latest:
-`$ go run ./cmd/vehicle-events migrate`
+`$ go run cmd/vehicle-events-api/main.go migrate`
+
+To regenerate models:
+`$  sqlboiler psql`

@@ -2,31 +2,27 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
+	"github.com/volatiletech/sqlboiler/v4/types"
 )
 
-// FetchWebhooksFromDBFunc is a package-level variable used for dependency injection in tests
-var FetchWebhooksFromDBFunc = fetchWebhooksFromDB
-
+// Webhook represents a webhook configuration.
 type Webhook struct {
 	ID             string
 	URL            string
-	Condition      string
+	Trigger        string
 	CooldownPeriod int
+	Data           string
 }
 
-type WebhookParameters struct {
-	TokenID    uint32 `json:"tokenId"`
-	SignalName string `json:"signalName"`
-}
-
-// WebhookCache is an in-memory map of: tokenId -> map[signalName] -> []Webhook.
+// WebhookCache is an in-memory map: vehicleTokenID -> telemetry identifier -> []Webhook.
 type WebhookCache struct {
 	mu       sync.RWMutex
 	webhooks map[uint32]map[string][]Webhook
@@ -38,6 +34,9 @@ func NewWebhookCache() *WebhookCache {
 	}
 }
 
+var FetchWebhooksFromDBFunc = fetchEventVehicleWebhooks
+
+// PopulateCache builds the cache from the database
 func (wc *WebhookCache) PopulateCache(ctx context.Context, exec boil.ContextExecutor) error {
 	newData, err := FetchWebhooksFromDBFunc(ctx, exec)
 	if err != nil {
@@ -47,25 +46,13 @@ func (wc *WebhookCache) PopulateCache(ctx context.Context, exec boil.ContextExec
 	return nil
 }
 
-func (wc *WebhookCache) GetWebhooks(tokenId uint32, signalName string) []Webhook {
+func (wc *WebhookCache) GetWebhooks(vehicleTokenID uint32, telemetry string) []Webhook {
 	wc.mu.RLock()
 	defer wc.mu.RUnlock()
-	if byToken, ok := wc.webhooks[tokenId]; ok {
-		return byToken[signalName]
+	if byVehicle, ok := wc.webhooks[vehicleTokenID]; ok {
+		return byVehicle[telemetry]
 	}
 	return nil
-}
-
-func (wc *WebhookCache) SetWebhooks(tokenId uint32, signalName string, hooks []Webhook) {
-	wc.mu.Lock()
-	defer wc.mu.Unlock()
-	if wc.webhooks == nil {
-		wc.webhooks = make(map[uint32]map[string][]Webhook)
-	}
-	if wc.webhooks[tokenId] == nil {
-		wc.webhooks[tokenId] = make(map[string][]Webhook)
-	}
-	wc.webhooks[tokenId][signalName] = hooks
 }
 
 func (wc *WebhookCache) Update(newData map[uint32]map[string][]Webhook) {
@@ -74,45 +61,53 @@ func (wc *WebhookCache) Update(newData map[uint32]map[string][]Webhook) {
 	wc.webhooks = newData
 }
 
-// fetchWebhooksFromDB queries the events table and builds a nested map keyed by tokenId and signalName
-func fetchWebhooksFromDB(ctx context.Context, exec boil.ContextExecutor) (map[uint32]map[string][]Webhook, error) {
-	events, err := models.Events(
-		qm.OrderBy("id"),
+// fetchEventVehicleWebhooks queries the EventVehicles table (with joined Event) and builds the cache
+// It uses Event.Data as the telemetry identifier
+func fetchEventVehicleWebhooks(ctx context.Context, exec boil.ContextExecutor) (map[uint32]map[string][]Webhook, error) {
+	evVehicles, err := models.EventVehicles(
+		qm.Load(models.EventVehicleRels.Event),
 	).All(ctx, exec)
 	if err != nil {
 		return nil, err
 	}
 
 	newData := make(map[uint32]map[string][]Webhook)
-	for _, ev := range events {
-		if !ev.Parameters.Valid {
-			continue
-		}
-		var params WebhookParameters
-		b, err := ev.Parameters.MarshalJSON()
+	for _, evv := range evVehicles {
+		vehicleTokenID, err := decimalToUint32(evv.VehicleTokenID)
 		if err != nil {
 			continue
 		}
-		if err := json.Unmarshal(b, &params); err != nil {
+		if evv.R == nil || evv.R.Event == nil {
 			continue
 		}
-		if params.TokenID == 0 || params.SignalName == "" {
+		event := evv.R.Event
+		telemetry := strings.TrimSpace(event.Data)
+		if telemetry == "" {
 			continue
 		}
-		if newData[params.TokenID] == nil {
-			newData[params.TokenID] = make(map[string][]Webhook)
+		if newData[vehicleTokenID] == nil {
+			newData[vehicleTokenID] = make(map[string][]Webhook)
 		}
-		webhook := Webhook{
-			ID:             ev.ID,
-			URL:            ev.TargetURI,
-			Condition:      ev.Trigger,
-			CooldownPeriod: ev.CooldownPeriod,
+		wh := Webhook{
+			ID:             event.ID,
+			URL:            event.TargetURI,
+			Trigger:        event.Trigger,
+			CooldownPeriod: event.CooldownPeriod,
+			Data:           telemetry,
 		}
-		newData[params.TokenID][params.SignalName] = append(newData[params.TokenID][params.SignalName], webhook)
+		newData[vehicleTokenID][telemetry] = append(newData[vehicleTokenID][telemetry], wh)
 	}
-
 	if len(newData) == 0 {
 		return nil, errors.New("no webhook configurations found in the database")
 	}
 	return newData, nil
+}
+
+func decimalToUint32(d types.Decimal) (uint32, error) {
+	s := d.String()
+	val, err := strconv.ParseUint(s, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(val), nil
 }

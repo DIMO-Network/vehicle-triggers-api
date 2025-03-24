@@ -1,13 +1,11 @@
 package controllers
 
 import (
-	"encoding/json"
 	"github.com/DIMO-Network/shared/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 	"github.com/shopspring/decimal"
-	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"github.com/volatiletech/sqlboiler/v4/types"
@@ -51,15 +49,6 @@ type SubscriptionView struct {
 // @Security     BearerAuth
 // @Router       /subscriptions/{vehicleTokenID}/event/{eventID} [post]
 func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) error {
-	type Condition struct {
-		Field    string `json:"field"`
-		Operator string `json:"operator"`
-		Value    string `json:"value"`
-	}
-	type RequestPayload struct {
-		Conditions []Condition `json:"conditions"` // Optional
-	}
-
 	vehicleTokenIDStr := c.Params("vehicleTokenID")
 	eventID := c.Params("eventID")
 
@@ -73,7 +62,8 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid vehicle token ID format"})
 	}
 
-	var payload RequestPayload
+	var payload struct {
+	}
 	if err := c.BodyParser(&payload); err != nil {
 		v.logger.Error().Err(err).Msg("Invalid request payload")
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
@@ -85,23 +75,12 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	conditionsJSON := "{}"
-	if len(payload.Conditions) > 0 {
-		serializedConditions, err := json.Marshal(payload.Conditions)
-		if err != nil {
-			v.logger.Error().Err(err).Msg("Failed to serialize conditions")
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to process conditions"})
-		}
-		conditionsJSON = string(serializedConditions)
-	}
-
 	eventVehicle := &models.EventVehicle{
 		VehicleTokenID:          vehicleTokenIDDecimal,
 		EventID:                 eventID,
 		DeveloperLicenseAddress: devLicense,
 		CreatedAt:               time.Now(),
 		UpdatedAt:               time.Now(),
-		ConditionData:           null.JSONFrom([]byte(conditionsJSON)),
 	}
 
 	if err := eventVehicle.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {

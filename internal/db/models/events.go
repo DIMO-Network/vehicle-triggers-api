@@ -29,7 +29,6 @@ type Event struct {
 	Data                    string      `boil:"data" json:"data" toml:"data" yaml:"data"`
 	Trigger                 string      `boil:"trigger" json:"trigger" toml:"trigger" yaml:"trigger"`
 	Setup                   string      `boil:"setup" json:"setup" toml:"setup" yaml:"setup"`
-	Parameters              null.JSON   `boil:"parameters" json:"parameters,omitempty" toml:"parameters" yaml:"parameters,omitempty"`
 	TargetURI               string      `boil:"target_uri" json:"target_uri" toml:"target_uri" yaml:"target_uri"`
 	CooldownPeriod          int         `boil:"cooldown_period" json:"cooldown_period" toml:"cooldown_period" yaml:"cooldown_period"`
 	DeveloperLicenseAddress []byte      `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
@@ -48,7 +47,6 @@ var EventColumns = struct {
 	Data                    string
 	Trigger                 string
 	Setup                   string
-	Parameters              string
 	TargetURI               string
 	CooldownPeriod          string
 	DeveloperLicenseAddress string
@@ -62,7 +60,6 @@ var EventColumns = struct {
 	Data:                    "data",
 	Trigger:                 "trigger",
 	Setup:                   "setup",
-	Parameters:              "parameters",
 	TargetURI:               "target_uri",
 	CooldownPeriod:          "cooldown_period",
 	DeveloperLicenseAddress: "developer_license_address",
@@ -78,7 +75,6 @@ var EventTableColumns = struct {
 	Data                    string
 	Trigger                 string
 	Setup                   string
-	Parameters              string
 	TargetURI               string
 	CooldownPeriod          string
 	DeveloperLicenseAddress string
@@ -92,7 +88,6 @@ var EventTableColumns = struct {
 	Data:                    "events.data",
 	Trigger:                 "events.trigger",
 	Setup:                   "events.setup",
-	Parameters:              "events.parameters",
 	TargetURI:               "events.target_uri",
 	CooldownPeriod:          "events.cooldown_period",
 	DeveloperLicenseAddress: "events.developer_license_address",
@@ -183,7 +178,6 @@ var EventWhere = struct {
 	Data                    whereHelperstring
 	Trigger                 whereHelperstring
 	Setup                   whereHelperstring
-	Parameters              whereHelpernull_JSON
 	TargetURI               whereHelperstring
 	CooldownPeriod          whereHelperint
 	DeveloperLicenseAddress whereHelper__byte
@@ -197,7 +191,6 @@ var EventWhere = struct {
 	Data:                    whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"data\""},
 	Trigger:                 whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"trigger\""},
 	Setup:                   whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"setup\""},
-	Parameters:              whereHelpernull_JSON{field: "\"vehicle_events_api\".\"events\".\"parameters\""},
 	TargetURI:               whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"target_uri\""},
 	CooldownPeriod:          whereHelperint{field: "\"vehicle_events_api\".\"events\".\"cooldown_period\""},
 	DeveloperLicenseAddress: whereHelper__byte{field: "\"vehicle_events_api\".\"events\".\"developer_license_address\""},
@@ -255,9 +248,9 @@ func (r *eventR) GetEventVehicles() EventVehicleSlice {
 type eventL struct{}
 
 var (
-	eventAllColumns            = []string{"id", "service", "data", "trigger", "setup", "parameters", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description"}
+	eventAllColumns            = []string{"id", "service", "data", "trigger", "setup", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description"}
 	eventColumnsWithoutDefault = []string{"id", "service", "data", "trigger", "setup", "target_uri", "developer_license_address", "status"}
-	eventColumnsWithDefault    = []string{"parameters", "cooldown_period", "created_at", "updated_at", "description"}
+	eventColumnsWithDefault    = []string{"cooldown_period", "created_at", "updated_at", "description"}
 	eventPrimaryKeyColumns     = []string{"id"}
 	eventGeneratedColumns      = []string{}
 )

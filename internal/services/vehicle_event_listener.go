@@ -17,11 +17,19 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
-	"github.com/DIMO-Network/shared/db" // your store interface
+	"github.com/DIMO-Network/shared/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
 )
 
-// Signal represents the Kafka message payload from topic.device.signals.
+func generateShortID(logger zerolog.Logger) string {
+	id, err := shortid.Generate()
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to generate short ID")
+		return ""
+	}
+	return id
+}
+
 type Signal struct {
 	TokenID      uint32    `json:"tokenId"`
 	Timestamp    time.Time `json:"timestamp"`
@@ -31,15 +39,6 @@ type Signal struct {
 	Source       string    `json:"source"`
 	Producer     string    `json:"producer"`
 	CloudEventID string    `json:"cloudEventId"`
-}
-
-func generateShortID(logger zerolog.Logger) string {
-	id, err := shortid.Generate()
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to generate short ID")
-		return ""
-	}
-	return id
 }
 
 type SignalListener struct {
@@ -71,16 +70,12 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		return errors.Wrap(err, "failed to parse vehicle signal JSON")
 	}
 
-	/*
-
-		l.log.Debug().
-			Uint32("token_id", signal.TokenID).
-			Str("signal_name", signal.Name).
-			Float64("value_number", signal.ValueNumber).
-			Str("value_string", signal.ValueString).
-			Msg("Parsed Signal")
-
-	*/
+	l.log.Debug().
+		Uint32("token_id", signal.TokenID).
+		Str("signal_name", signal.Name).
+		Float64("value_number", signal.ValueNumber).
+		Str("value_string", signal.ValueString).
+		Msg("Parsed Signal")
 
 	webhooks := l.webhookCache.GetWebhooks(signal.TokenID, signal.Name)
 	if len(webhooks) == 0 {
@@ -88,7 +83,6 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 	}
 
 	for _, wh := range webhooks {
-		// Check if cooldown has elapsed before evaluating condition
 		cooldownPassed, err := l.checkCooldown(wh)
 		if err != nil {
 			l.log.Error().Err(err).Msg("failed to check cooldown")
@@ -99,7 +93,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 			continue
 		}
 
-		shouldFire, err := l.evaluateCondition(wh.Condition, &signal)
+		shouldFire, err := l.evaluateCondition(wh.Trigger, &signal)
 		if err != nil {
 			l.log.Error().Err(err).Msg("failed to evaluate CEL condition")
 			continue
@@ -107,7 +101,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		if shouldFire {
 			l.log.Info().
 				Str("webhook_url", wh.URL).
-				Str("condition", wh.Condition).
+				Str("trigger", wh.Trigger).
 				Msg("Webhook triggered.")
 			if err := l.sendWebhookNotification(wh.URL, &signal); err != nil {
 				l.log.Error().Err(err).Msg("failed to send webhook")
@@ -119,16 +113,15 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		} else {
 			l.log.Debug().
 				Str("webhook_url", wh.URL).
-				Str("condition", wh.Condition).
+				Str("trigger", wh.Trigger).
 				Msg("Condition not met; skipping webhook.")
 		}
 	}
 	return nil
 }
 
-// evaluateCondition uses CEL to check if the condition is satisfied by the given signal
-func (l *SignalListener) evaluateCondition(cond string, signal *Signal) (bool, error) {
-	if cond == "" {
+func (l *SignalListener) evaluateCondition(trigger string, signal *Signal) (bool, error) {
+	if trigger == "" {
 		return true, nil
 	}
 
@@ -141,7 +134,7 @@ func (l *SignalListener) evaluateCondition(cond string, signal *Signal) (bool, e
 		return false, err
 	}
 
-	ast, issues := env.Compile(cond)
+	ast, issues := env.Compile(trigger)
 	if issues != nil && issues.Err() != nil {
 		return false, issues.Err()
 	}
@@ -160,7 +153,6 @@ func (l *SignalListener) evaluateCondition(cond string, signal *Signal) (bool, e
 	if err != nil {
 		return false, err
 	}
-
 	return out == types.True, nil
 }
 
@@ -181,7 +173,6 @@ func (l *SignalListener) sendWebhookNotification(url string, signal *Signal) err
 }
 
 func (l *SignalListener) checkCooldown(webhook Webhook) (bool, error) {
-	// Query the event_logs table for the most recent trigger record for this webhook
 	logs, err := models.EventLogs(
 		qm.Where("event_id = ?", webhook.ID),
 		qm.OrderBy("last_triggered_at DESC"),
@@ -200,15 +191,13 @@ func (l *SignalListener) checkCooldown(webhook Webhook) (bool, error) {
 	return false, nil
 }
 
-// logWebhookTrigger inserts a record into the event_logs table to mark that the webhook was triggered
 func (l *SignalListener) logWebhookTrigger(eventID string) error {
 	eventLog := &models.EventLog{
 		ID:               generateShortID(l.log),
 		EventID:          eventID,
 		SnapshotData:     []byte("{}"),
-		HTTPResponseCode: null.IntFrom(200),
+		HTTPResponseCode: null.IntFrom(0),
 		LastTriggeredAt:  time.Now(),
-		ConditionData:    null.JSONFrom([]byte("{}")),
 		EventType:        "vehicle.signal",
 		PermissionStatus: "Granted",
 		CreatedAt:        time.Now(),

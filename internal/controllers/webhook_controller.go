@@ -2,8 +2,9 @@ package controllers
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/DIMO-Network/model-garage/pkg/schema"
 	"github.com/DIMO-Network/shared/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
@@ -13,7 +14,6 @@ import (
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
-	"strings"
 )
 
 type WebhookController struct {
@@ -62,66 +62,29 @@ type CelRequestPayload struct {
 // @Router       /webhooks [post]
 func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	type RequestPayload struct {
-		Service     string                 `json:"service" validate:"required"`
-		Data        string                 `json:"data" validate:"required"`
-		Conditions  []CelCondition         `json:"conditions"`
-		Logic       string                 `json:"logic"`
-		Trigger     string                 `json:"trigger"`
-		Setup       string                 `json:"setup" validate:"required"`
-		Description string                 `json:"description"`
-		TargetURI   string                 `json:"target_uri" validate:"required"`
-		Status      string                 `json:"status"`
-		Parameters  map[string]interface{} `json:"parameters"`
+		Service     string `json:"service" validate:"required"`
+		Data        string `json:"data" validate:"required"`
+		Trigger     string `json:"trigger" validate:"required"`
+		Setup       string `json:"setup" validate:"required"`
+		Description string `json:"description"`
+		TargetURI   string `json:"target_uri" validate:"required"`
+		Status      string `json:"status"`
 	}
-
 	var payload RequestPayload
 	if err := c.BodyParser(&payload); err != nil {
 		w.logger.Error().Err(err).Msg("Invalid request payload")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
 	}
 
-	// Generate CEL expression if conditions and logic are provided
-	var celExpression string
-	if len(payload.Conditions) > 0 && payload.Logic != "" {
-		// Validate logic
-		if payload.Logic != "AND" && payload.Logic != "OR" {
-			w.logger.Error().Msg("Invalid logic. Must be AND or OR.")
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid logic. Must be AND or OR."})
-		}
-
-		// Generate CEL
-		conditions := []string{}
-		for _, condition := range payload.Conditions {
-			expr := fmt.Sprintf("event.%s %s %s", condition.Field, condition.Operator, condition.Value)
-			conditions = append(conditions, expr)
-		}
-		celExpression = strings.Join(conditions, fmt.Sprintf(" %s ", payload.Logic))
-	} else {
-		celExpression = payload.Trigger
-	}
-
-	parametersJSON, err := json.Marshal(payload.Parameters)
-	if err != nil {
-		w.logger.Error().Err(err).Msg("Failed to serialize parameters")
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to serialize parameters"})
-	}
-
-	devLicense, ok := c.Locals("developer_license_address").([]byte)
-	if !ok {
-		w.logger.Error().Msg("Developer license not found in request context")
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
-	}
-
 	event := &models.Event{
 		ID:                      generateShortID(w.logger),
 		Service:                 payload.Service,
-		Data:                    payload.Data,
-		Trigger:                 celExpression,
+		Data:                    strings.TrimSpace(payload.Data),
+		Trigger:                 payload.Trigger,
 		Setup:                   payload.Setup,
 		Description:             null.StringFrom(payload.Description),
 		TargetURI:               payload.TargetURI,
-		Parameters:              null.JSONFrom(parametersJSON),
-		DeveloperLicenseAddress: devLicense,
+		DeveloperLicenseAddress: c.Locals("developer_license_address").([]byte),
 		Status:                  payload.Status,
 	}
 
@@ -157,7 +120,6 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 		qm.Where("developer_license_address = ?", devLicense),
 		qm.OrderBy("id"),
 	).All(c.Context(), w.store.DBS().Reader)
-
 	if err != nil {
 		w.logger.Error().Err(err).Msg("Failed to retrieve webhooks")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve webhooks"})
@@ -189,7 +151,6 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	// Retrieve the webhook and make sure it belongs to the developer
 	event, err := models.Events(
 		qm.Where("id = ? AND developer_license_address = ?", id, devLicense),
 	).One(c.Context(), w.store.DBS().Reader)
@@ -202,16 +163,13 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	}
 
 	type RequestPayload struct {
-		Service     string                 `json:"service"`
-		Data        string                 `json:"data"`
-		Conditions  []CelCondition         `json:"conditions"`
-		Logic       string                 `json:"logic"`
-		Trigger     string                 `json:"trigger"`
-		Setup       string                 `json:"setup"`
-		TargetURI   string                 `json:"target_uri"`
-		Status      string                 `json:"status"`
-		Description string                 `json:"description"`
-		Parameters  map[string]interface{} `json:"parameters"`
+		Service     string `json:"service"`
+		Data        string `json:"data"`
+		Trigger     string `json:"trigger"`
+		Setup       string `json:"setup"`
+		TargetURI   string `json:"target_uri"`
+		Status      string `json:"status"`
+		Description string `json:"description"`
 	}
 
 	var payload RequestPayload
@@ -219,24 +177,6 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
 	}
 
-	// Build CEL expression if conditions and logic are provided
-	if len(payload.Conditions) > 0 && payload.Logic != "" {
-		// Validate logic
-		if payload.Logic != "AND" && payload.Logic != "OR" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid logic. Must be AND or OR."})
-		}
-
-		// Generate CEL
-		conditions := []string{}
-		for _, condition := range payload.Conditions {
-			expr := fmt.Sprintf("event.%s %s %s", condition.Field, condition.Operator, condition.Value)
-			conditions = append(conditions, expr)
-		}
-		celExpression := strings.Join(conditions, fmt.Sprintf(" %s ", payload.Logic))
-		event.Trigger = celExpression // Update the trigger with the CEL expression
-	}
-
-	// Update the webhook fields if provided in the payload
 	if payload.Service != "" {
 		event.Service = payload.Service
 	}
@@ -255,16 +195,8 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	if payload.Trigger != "" {
 		event.Trigger = payload.Trigger
 	}
-
 	if payload.Description != "" {
 		event.Description = null.StringFrom(payload.Description)
-	}
-	if payload.Parameters != nil {
-		parametersJSON, err := json.Marshal(payload.Parameters)
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to serialize parameters"})
-		}
-		event.Parameters = null.JSONFrom(parametersJSON)
 	}
 
 	if _, err := event.Update(c.Context(), w.store.DBS().Writer, boil.Infer()); err != nil {
@@ -272,10 +204,7 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update webhook"})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Webhook updated successfully",
-		"id":      event.ID,
-	})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Webhook updated successfully", "id": event.ID})
 }
 
 // DeleteWebhook godoc
@@ -297,7 +226,6 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	//Make sure the webhook belongs to the developer
 	event, err := models.Events(
 		qm.Where("id = ? AND developer_license_address = ?", id, devLicense),
 	).One(c.Context(), w.store.DBS().Reader)
@@ -309,7 +237,6 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve webhook"})
 	}
 
-	// Delete the webhook
 	if _, err := event.Delete(c.Context(), w.store.DBS().Writer); err != nil {
 		w.logger.Error().Err(err).Msg("Failed to delete webhook")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete webhook"})
@@ -357,20 +284,16 @@ func (w *WebhookController) BuildCEL(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid logic. Must be AND or OR."})
 	}
 
-	// Generate CEL
 	conditions := []string{}
 	for _, condition := range payload.Conditions {
 		service := c.Query("service")
 		if service == "" {
 			service = "event"
 		}
-
 		expr := fmt.Sprintf("%s.%s %s %s", service, condition.Field, condition.Operator, condition.Value)
 		conditions = append(conditions, expr)
 	}
 	celExpression := strings.Join(conditions, fmt.Sprintf(" %s ", payload.Logic))
 
-	return c.JSON(fiber.Map{
-		"cel_expression": celExpression,
-	})
+	return c.JSON(fiber.Map{"cel_expression": celExpression})
 }

@@ -31,7 +31,6 @@ type EventLog struct {
 	SnapshotData     types.JSON    `boil:"snapshot_data" json:"snapshot_data" toml:"snapshot_data" yaml:"snapshot_data"`
 	HTTPResponseCode null.Int      `boil:"http_response_code" json:"http_response_code,omitempty" toml:"http_response_code" yaml:"http_response_code,omitempty"`
 	LastTriggeredAt  time.Time     `boil:"last_triggered_at" json:"last_triggered_at" toml:"last_triggered_at" yaml:"last_triggered_at"`
-	ConditionData    null.JSON     `boil:"condition_data" json:"condition_data,omitempty" toml:"condition_data" yaml:"condition_data,omitempty"`
 	EventType        string        `boil:"event_type" json:"event_type" toml:"event_type" yaml:"event_type"`
 	PermissionStatus string        `boil:"permission_status" json:"permission_status" toml:"permission_status" yaml:"permission_status"`
 	CreatedAt        time.Time     `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
@@ -47,7 +46,6 @@ var EventLogColumns = struct {
 	SnapshotData     string
 	HTTPResponseCode string
 	LastTriggeredAt  string
-	ConditionData    string
 	EventType        string
 	PermissionStatus string
 	CreatedAt        string
@@ -58,7 +56,6 @@ var EventLogColumns = struct {
 	SnapshotData:     "snapshot_data",
 	HTTPResponseCode: "http_response_code",
 	LastTriggeredAt:  "last_triggered_at",
-	ConditionData:    "condition_data",
 	EventType:        "event_type",
 	PermissionStatus: "permission_status",
 	CreatedAt:        "created_at",
@@ -71,7 +68,6 @@ var EventLogTableColumns = struct {
 	SnapshotData     string
 	HTTPResponseCode string
 	LastTriggeredAt  string
-	ConditionData    string
 	EventType        string
 	PermissionStatus string
 	CreatedAt        string
@@ -82,7 +78,6 @@ var EventLogTableColumns = struct {
 	SnapshotData:     "event_logs.snapshot_data",
 	HTTPResponseCode: "event_logs.http_response_code",
 	LastTriggeredAt:  "event_logs.last_triggered_at",
-	ConditionData:    "event_logs.condition_data",
 	EventType:        "event_logs.event_type",
 	PermissionStatus: "event_logs.permission_status",
 	CreatedAt:        "event_logs.created_at",
@@ -170,30 +165,6 @@ func (w whereHelpernull_Int) NIN(slice []int) qm.QueryMod {
 func (w whereHelpernull_Int) IsNull() qm.QueryMod    { return qmhelper.WhereIsNull(w.field) }
 func (w whereHelpernull_Int) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
 
-type whereHelpernull_JSON struct{ field string }
-
-func (w whereHelpernull_JSON) EQ(x null.JSON) qm.QueryMod {
-	return qmhelper.WhereNullEQ(w.field, false, x)
-}
-func (w whereHelpernull_JSON) NEQ(x null.JSON) qm.QueryMod {
-	return qmhelper.WhereNullEQ(w.field, true, x)
-}
-func (w whereHelpernull_JSON) LT(x null.JSON) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.LT, x)
-}
-func (w whereHelpernull_JSON) LTE(x null.JSON) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.LTE, x)
-}
-func (w whereHelpernull_JSON) GT(x null.JSON) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.GT, x)
-}
-func (w whereHelpernull_JSON) GTE(x null.JSON) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.GTE, x)
-}
-
-func (w whereHelpernull_JSON) IsNull() qm.QueryMod    { return qmhelper.WhereIsNull(w.field) }
-func (w whereHelpernull_JSON) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
-
 var EventLogWhere = struct {
 	ID               whereHelperstring
 	VehicleTokenID   whereHelpertypes_Decimal
@@ -201,7 +172,6 @@ var EventLogWhere = struct {
 	SnapshotData     whereHelpertypes_JSON
 	HTTPResponseCode whereHelpernull_Int
 	LastTriggeredAt  whereHelpertime_Time
-	ConditionData    whereHelpernull_JSON
 	EventType        whereHelperstring
 	PermissionStatus whereHelperstring
 	CreatedAt        whereHelpertime_Time
@@ -212,7 +182,6 @@ var EventLogWhere = struct {
 	SnapshotData:     whereHelpertypes_JSON{field: "\"vehicle_events_api\".\"event_logs\".\"snapshot_data\""},
 	HTTPResponseCode: whereHelpernull_Int{field: "\"vehicle_events_api\".\"event_logs\".\"http_response_code\""},
 	LastTriggeredAt:  whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_logs\".\"last_triggered_at\""},
-	ConditionData:    whereHelpernull_JSON{field: "\"vehicle_events_api\".\"event_logs\".\"condition_data\""},
 	EventType:        whereHelperstring{field: "\"vehicle_events_api\".\"event_logs\".\"event_type\""},
 	PermissionStatus: whereHelperstring{field: "\"vehicle_events_api\".\"event_logs\".\"permission_status\""},
 	CreatedAt:        whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_logs\".\"created_at\""},
@@ -246,9 +215,9 @@ func (r *eventLogR) GetEvent() *Event {
 type eventLogL struct{}
 
 var (
-	eventLogAllColumns            = []string{"id", "vehicle_token_id", "event_id", "snapshot_data", "http_response_code", "last_triggered_at", "condition_data", "event_type", "permission_status", "created_at"}
+	eventLogAllColumns            = []string{"id", "vehicle_token_id", "event_id", "snapshot_data", "http_response_code", "last_triggered_at", "event_type", "permission_status", "created_at"}
 	eventLogColumnsWithoutDefault = []string{"id", "vehicle_token_id", "event_id", "snapshot_data", "last_triggered_at"}
-	eventLogColumnsWithDefault    = []string{"http_response_code", "condition_data", "event_type", "permission_status", "created_at"}
+	eventLogColumnsWithDefault    = []string{"http_response_code", "event_type", "permission_status", "created_at"}
 	eventLogPrimaryKeyColumns     = []string{"id"}
 	eventLogGeneratedColumns      = []string{}
 )
