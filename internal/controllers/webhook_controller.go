@@ -162,9 +162,14 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 		qm.Where("developer_license_address = ?", devLicense),
 		qm.OrderBy("id"),
 	).All(c.Context(), w.store.DBS().Reader)
+
 	if err != nil {
 		w.logger.Error().Err(err).Msg("Failed to retrieve webhooks")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve webhooks"})
+	}
+
+	if events == nil {
+		events = make([]*models.Event, 0)
 	}
 
 	w.logger.Info().Int("event_count", len(events)).Msg("Returning webhooks")

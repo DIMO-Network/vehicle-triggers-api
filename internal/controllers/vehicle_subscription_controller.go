@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"github.com/DIMO-Network/shared/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
 	"github.com/gofiber/fiber/v2"
@@ -188,4 +189,50 @@ func (v *VehicleSubscriptionController) ListSubscriptions(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(resp)
+}
+
+// SubscribeAllVehiclesToWebhook subscribes all vehicles shared with the developer to a given webhook
+func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.Ctx) error {
+	eventID := c.Params("eventID")
+	if eventID == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Event ID is required"})
+	}
+
+	devLicense, ok := c.Locals("developer_license_address").([]byte)
+	if !ok {
+		v.logger.Error().Msg("Developer license not found in request context")
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	vehicles, err := GetSharedVehicles(devLicense, v.logger)
+	if err != nil {
+		v.logger.Error().Err(err).Msg("Failed to retrieve shared vehicles")
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve shared vehicles"})
+	}
+
+	var successCount int
+	for _, veh := range vehicles {
+		tokenDecimal := types.Decimal{}
+		if err := tokenDecimal.Scan(veh.TokenID); err != nil {
+			v.logger.Error().Err(err).Msgf("Invalid tokenId format for vehicle %v", veh.TokenID)
+			continue
+		}
+
+		eventVehicle := &models.EventVehicle{
+			VehicleTokenID:          tokenDecimal,
+			EventID:                 eventID,
+			DeveloperLicenseAddress: devLicense,
+			CreatedAt:               time.Now(),
+			UpdatedAt:               time.Now(),
+		}
+		if err := eventVehicle.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
+			v.logger.Error().Err(err).Msgf("Failed to subscribe vehicle %v to webhook", veh.TokenID)
+			continue
+		}
+		successCount++
+	}
+
+	return c.Status(http.StatusCreated).JSON(fiber.Map{
+		"message": fmt.Sprintf("Successfully subscribed %d vehicles to the webhook", successCount),
+	})
 }
