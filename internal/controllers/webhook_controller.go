@@ -3,7 +3,11 @@ package controllers
 import (
 	"database/sql"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/DIMO-Network/model-garage/pkg/schema"
 	"github.com/DIMO-Network/shared/db"
@@ -50,31 +54,69 @@ type CelRequestPayload struct {
 
 // RegisterWebhook godoc
 // @Summary      Register a new webhook
-// @Description  Registers a new webhook with the specified configuration.
+// @Description  Registers a new webhook with the specified configuration. The target URI is validated to ensure it is a valid URL, responds with 200 within a timeout, and returns a verification token.
 // @Tags         Webhooks
 // @Accept       json
 // @Produce      json
 // @Param        request  body      object  true  "Request payload"
 // @Success      201      "Webhook registered successfully"
-// @Failure      400      "Invalid request payload"
+// @Failure      400      "Invalid request payload or target URI"
 // @Failure      500      "Internal server error"
 // @Security     BearerAuth
 // @Router       /webhooks [post]
 func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	type RequestPayload struct {
-		Service     string `json:"service" validate:"required"`
-		Data        string `json:"data" validate:"required"`
-		Trigger     string `json:"trigger" validate:"required"`
-		Setup       string `json:"setup" validate:"required"`
-		Description string `json:"description"`
-		TargetURI   string `json:"target_uri" validate:"required"`
-		Status      string `json:"status"`
+		Service           string `json:"service" validate:"required"`
+		Data              string `json:"data" validate:"required"`
+		Trigger           string `json:"trigger" validate:"required"`
+		Setup             string `json:"setup" validate:"required"`
+		Description       string `json:"description"`
+		TargetURI         string `json:"target_uri" validate:"required"`
+		Status            string `json:"status"`
+		VerificationToken string `json:"verification_token" validate:"required"`
 	}
 	var payload RequestPayload
 	if err := c.BodyParser(&payload); err != nil {
 		w.logger.Error().Err(err).Msg("Invalid request payload")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
 	}
+
+	// --- Begin URI Validation ---
+
+	// 1. Validate the target URI is a well-formed URL
+	parsedURL, err := url.ParseRequestURI(payload.TargetURI)
+	if err != nil {
+		w.logger.Error().Err(err).Msg("Invalid target URI")
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid target URI"})
+	}
+
+	// 2. Test the target URI with an HTTP GET request with a timeout
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	resp, err := client.Get(parsedURL.String())
+	if err != nil {
+		w.logger.Error().Err(err).Msg("Failed to reach target URI")
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Target URI unreachable"})
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		w.logger.Error().Msgf("Target URI responded with status %d", resp.StatusCode)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": fmt.Sprintf("Target URI did not return status 200 (got %d)", resp.StatusCode)})
+	}
+
+	// 3. Verify that the target URI returns the expected verification token
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		w.logger.Error().Err(err).Msg("Failed to read response from target URI")
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to verify target URI"})
+	}
+	responseToken := strings.TrimSpace(string(bodyBytes))
+	if responseToken != payload.VerificationToken {
+		w.logger.Error().Msgf("Verification token mismatch. Expected '%s', got '%s'", payload.VerificationToken, responseToken)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Target URI verification failed: token mismatch"})
+	}
+	// --- End URI Validation ---
 
 	event := &models.Event{
 		ID:                      generateShortID(w.logger),
