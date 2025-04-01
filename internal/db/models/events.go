@@ -36,6 +36,7 @@ type Event struct {
 	UpdatedAt               time.Time   `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
 	Status                  string      `boil:"status" json:"status" toml:"status" yaml:"status"`
 	Description             null.String `boil:"description" json:"description,omitempty" toml:"description" yaml:"description,omitempty"`
+	FailureCount            int         `boil:"failure_count" json:"failure_count" toml:"failure_count" yaml:"failure_count"`
 
 	R *eventR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L eventL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -54,6 +55,7 @@ var EventColumns = struct {
 	UpdatedAt               string
 	Status                  string
 	Description             string
+	FailureCount            string
 }{
 	ID:                      "id",
 	Service:                 "service",
@@ -67,6 +69,7 @@ var EventColumns = struct {
 	UpdatedAt:               "updated_at",
 	Status:                  "status",
 	Description:             "description",
+	FailureCount:            "failure_count",
 }
 
 var EventTableColumns = struct {
@@ -82,6 +85,7 @@ var EventTableColumns = struct {
 	UpdatedAt               string
 	Status                  string
 	Description             string
+	FailureCount            string
 }{
 	ID:                      "events.id",
 	Service:                 "events.service",
@@ -95,6 +99,7 @@ var EventTableColumns = struct {
 	UpdatedAt:               "events.updated_at",
 	Status:                  "events.status",
 	Description:             "events.description",
+	FailureCount:            "events.failure_count",
 }
 
 // Generated where
@@ -185,6 +190,7 @@ var EventWhere = struct {
 	UpdatedAt               whereHelpertime_Time
 	Status                  whereHelperstring
 	Description             whereHelpernull_String
+	FailureCount            whereHelperint
 }{
 	ID:                      whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"id\""},
 	Service:                 whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"service\""},
@@ -198,6 +204,7 @@ var EventWhere = struct {
 	UpdatedAt:               whereHelpertime_Time{field: "\"vehicle_events_api\".\"events\".\"updated_at\""},
 	Status:                  whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"status\""},
 	Description:             whereHelpernull_String{field: "\"vehicle_events_api\".\"events\".\"description\""},
+	FailureCount:            whereHelperint{field: "\"vehicle_events_api\".\"events\".\"failure_count\""},
 }
 
 // EventRels is where relationship names are stored.
@@ -248,9 +255,9 @@ func (r *eventR) GetEventVehicles() EventVehicleSlice {
 type eventL struct{}
 
 var (
-	eventAllColumns            = []string{"id", "service", "data", "trigger", "setup", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description"}
+	eventAllColumns            = []string{"id", "service", "data", "trigger", "setup", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description", "failure_count"}
 	eventColumnsWithoutDefault = []string{"id", "service", "data", "trigger", "setup", "target_uri", "developer_license_address", "status"}
-	eventColumnsWithDefault    = []string{"cooldown_period", "created_at", "updated_at", "description"}
+	eventColumnsWithDefault    = []string{"cooldown_period", "created_at", "updated_at", "description", "failure_count"}
 	eventPrimaryKeyColumns     = []string{"id"}
 	eventGeneratedColumns      = []string{}
 )
