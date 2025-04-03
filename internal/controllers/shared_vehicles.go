@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/DIMO-Network/vehicle-events-api/internal/config"
 	"io"
 	"net/http"
 
@@ -18,7 +19,7 @@ type Vehicle struct {
 func GetSharedVehicles(devLicense []byte, logger zerolog.Logger) ([]Vehicle, error) {
 	ethAddress := fmt.Sprintf("0x%x", devLicense)
 
-	identityAPIURL := settings.IdentityAPIURL
+	identityAPIURL := config.GetSettings().IdentityAPIURL
 
 	query := `
 		query($eth: String!) {
