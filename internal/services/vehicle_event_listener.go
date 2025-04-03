@@ -8,6 +8,7 @@ import (
 	"github.com/teris-io/shortid"
 	"github.com/volatiletech/null/v8"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -28,7 +29,7 @@ func generateShortID(logger zerolog.Logger) string {
 		logger.Error().Err(err).Msg("Failed to generate short ID")
 		return ""
 	}
-	return id
+	return strings.TrimSpace(id)
 }
 
 type Signal struct {

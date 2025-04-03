@@ -31,7 +31,7 @@ func generateShortID(logger zerolog.Logger) string {
 		logger.Error().Err(err).Msg("Failed to generate short ID")
 		return ""
 	}
-	return id
+	return strings.TrimSpace(id)
 }
 
 func NewWebhookController(store db.Store, logger zerolog.Logger) *WebhookController {
