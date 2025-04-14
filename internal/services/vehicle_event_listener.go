@@ -34,14 +34,14 @@ func generateShortID(logger zerolog.Logger) string {
 }
 
 type Signal struct {
-	TokenID      uint32    `json:"tokenId"`
-	Timestamp    time.Time `json:"timestamp"`
-	Name         string    `json:"name"`
-	ValueNumber  float64   `json:"valueNumber"`
-	ValueString  string    `json:"valueString"`
+	TokenID      uint32    `json:"token_id"`
+	Timestamp    time.Time `json:"time"`
+	Name         string    `json:"signal_name"`
+	ValueNumber  float64   `json:"value_number"`
+	ValueString  string    `json:"value_string"`
 	Source       string    `json:"source"`
 	Producer     string    `json:"producer"`
-	CloudEventID string    `json:"cloudEventId"`
+	CloudEventID string    `json:"cloud_event_id"`
 }
 
 type SignalListener struct {
@@ -127,9 +127,18 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 	if trigger == "" {
 		return true, nil
 	}
+	var varType *cel.Type
+	var varValue interface{}
+	if strings.ToLower(telemetry) == "value_string" {
+		varType = cel.StringType
+		varValue = signal.ValueString
+	} else {
+		varType = cel.DoubleType
+		varValue = signal.ValueNumber
+	}
 
 	env, err := cel.NewEnv(
-		cel.Variable(telemetry, cel.DoubleType),
+		cel.Variable(telemetry, varType),
 		cel.Variable("tokenId", cel.IntType),
 	)
 	if err != nil {
@@ -146,19 +155,14 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 		return false, err
 	}
 
-	// Log the variables passed to CEL evaluation
 	vars := map[string]interface{}{
-		telemetry: signal.ValueNumber,
+		telemetry: varValue,
 		"tokenId": int64(signal.TokenID),
 	}
-	l.log.Debug().Msgf("Evaluating CEL with vars: %v", vars)
-
 	out, _, err := prg.Eval(vars)
 	if err != nil {
-		l.log.Error().Err(err).Msg("Error during CEL evaluation")
 		return false, err
 	}
-	l.log.Debug().Msgf("CEL evaluation result: %v", out)
 	return out == types.True, nil
 }
 
