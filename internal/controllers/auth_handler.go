@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/DIMO-Network/shared/db"
-	"github.com/DIMO-Network/vehicle-events-api/internal/auth" // Import the license verifier
+	"github.com/DIMO-Network/vehicle-events-api/internal/auth"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/rs/zerolog"

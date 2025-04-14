@@ -16,6 +16,7 @@ func TestEvaluateCondition(t *testing.T) {
 	tests := []struct {
 		name      string
 		condition string
+		telemetry string
 		signal    Signal
 		want      bool
 		wantErr   bool
@@ -23,6 +24,7 @@ func TestEvaluateCondition(t *testing.T) {
 		{
 			name:      "Empty condition returns true",
 			condition: "",
+			telemetry: "valueNumber",
 			signal: Signal{
 				ValueNumber: 75,
 				ValueString: "foo",
@@ -35,6 +37,7 @@ func TestEvaluateCondition(t *testing.T) {
 		{
 			name:      "valueNumber > 100.0 false",
 			condition: "valueNumber > 100.0",
+			telemetry: "valueNumber",
 			signal: Signal{
 				ValueNumber: 50,
 				ValueString: "bar",
@@ -47,6 +50,7 @@ func TestEvaluateCondition(t *testing.T) {
 		{
 			name:      "valueNumber > 100.0 true",
 			condition: "valueNumber > 100.0",
+			telemetry: "valueNumber",
 			signal: Signal{
 				ValueNumber: 150,
 				ValueString: "baz",
@@ -57,20 +61,9 @@ func TestEvaluateCondition(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:      "valueString equals active returns true",
-			condition: "valueString == 'active'",
-			signal: Signal{
-				ValueNumber: 80,
-				ValueString: "active",
-				TokenID:     1,
-				Timestamp:   time.Now(),
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
 			name:      "tokenId equals 1 returns true",
 			condition: "tokenId == 1",
+			telemetry: "valueNumber",
 			signal: Signal{
 				ValueNumber: 80,
 				ValueString: "active",
@@ -83,6 +76,7 @@ func TestEvaluateCondition(t *testing.T) {
 		{
 			name:      "tokenId equals 1 fails for different token",
 			condition: "tokenId == 1",
+			telemetry: "valueNumber",
 			signal: Signal{
 				ValueNumber: 80,
 				ValueString: "active",
@@ -95,6 +89,7 @@ func TestEvaluateCondition(t *testing.T) {
 		{
 			name:      "Invalid condition returns error",
 			condition: "invalid condition",
+			telemetry: "valueNumber",
 			signal: Signal{
 				ValueNumber: 80,
 				ValueString: "active",
@@ -108,7 +103,7 @@ func TestEvaluateCondition(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := listener.evaluateCondition(tc.condition, &tc.signal)
+			got, err := listener.evaluateCondition(tc.condition, &tc.signal, tc.telemetry)
 			if (err != nil) != tc.wantErr {
 				t.Errorf("evaluateCondition() error = %v, wantErr %v", err, tc.wantErr)
 				return

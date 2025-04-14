@@ -22,3 +22,9 @@ type Settings struct {
 func (s *Settings) IsProduction() bool {
 	return s.Environment == "prod" // this string is set in the helm chart values-prod.yaml
 }
+
+var CurrentSettings *Settings
+
+func GetSettings() *Settings {
+	return CurrentSettings
+}
