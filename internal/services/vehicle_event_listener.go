@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/teris-io/shortid"
 	"github.com/volatiletech/null/v8"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -145,14 +146,19 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 		return false, err
 	}
 
+	// Log the variables passed to CEL evaluation
 	vars := map[string]interface{}{
 		telemetry: signal.ValueNumber,
 		"tokenId": int64(signal.TokenID),
 	}
+	l.log.Debug().Msgf("Evaluating CEL with vars: %v", vars)
+
 	out, _, err := prg.Eval(vars)
 	if err != nil {
+		l.log.Error().Err(err).Msg("Error during CEL evaluation")
 		return false, err
 	}
+	l.log.Debug().Msgf("CEL evaluation result: %v", out)
 	return out == types.True, nil
 }
 
@@ -166,15 +172,18 @@ func (l *SignalListener) sendWebhookNotification(wh Webhook, signal *Signal) err
 	}
 	resp, err := client.Post(wh.URL, "application/json", bytes.NewBuffer(body))
 	if err != nil {
+		l.log.Error().Msgf("HTTP POST error for URL %s: %v", wh.URL, err)
 		l.handleWebhookFailure(wh.ID)
 		return errors.Wrap(err, "failed to POST to webhook")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		l.log.Error().Msgf("Received non-200 response from %s: status %d, body: %s", wh.URL, resp.StatusCode, string(respBody))
 		l.handleWebhookFailure(wh.ID)
 		return fmt.Errorf("webhook returned status code %d", resp.StatusCode)
 	}
-
+	l.log.Debug().Msgf("Webhook notification sent successfully to %s", wh.URL)
 	l.resetWebhookFailure(wh.ID)
 	return nil
 }
@@ -186,13 +195,17 @@ func (l *SignalListener) checkCooldown(webhook Webhook) (bool, error) {
 		qm.Limit(1),
 	).All(context.Background(), l.store.DBS().Reader)
 	if err != nil {
+		l.log.Error().Err(err).Msg("Error retrieving EventLogs")
 		return false, err
 	}
 	if len(logs) == 0 {
+		l.log.Debug().Msg("No previous EventLog found; cooldown passed")
 		return true, nil
 	}
 	lastTriggered := logs[0].LastTriggeredAt
-	if time.Since(lastTriggered) >= time.Duration(webhook.CooldownPeriod)*time.Second {
+	diff := time.Since(lastTriggered)
+	l.log.Debug().Msgf("Last triggered %v ago, required cooldown: %vs", diff.Seconds(), webhook.CooldownPeriod)
+	if diff >= time.Duration(webhook.CooldownPeriod)*time.Second {
 		return true, nil
 	}
 	return false, nil
@@ -209,7 +222,12 @@ func (l *SignalListener) logWebhookTrigger(eventID string) error {
 		PermissionStatus: "Granted",
 		CreatedAt:        time.Now(),
 	}
-	return eventLog.Insert(context.Background(), l.store.DBS().Writer, boil.Infer())
+	if err := eventLog.Insert(context.Background(), l.store.DBS().Writer, boil.Infer()); err != nil {
+		l.log.Error().Err(err).Msg("Error inserting EventLog")
+		return err
+	}
+	l.log.Debug().Msgf("Logged webhook trigger for event %s", eventID)
+	return nil
 }
 
 func (l *SignalListener) handleWebhookFailure(webhookID string) {
@@ -219,14 +237,13 @@ func (l *SignalListener) handleWebhookFailure(webhookID string) {
 		l.log.Error().Err(err).Msg("handleWebhookFailure: could not fetch event")
 		return
 	}
-
 	event.FailureCount += 1
+	l.log.Debug().Msgf("Incremented FailureCount for webhook %s to %d", webhookID, event.FailureCount)
 
 	if event.FailureCount >= 5 {
 		event.Status = "Disabled"
 		l.log.Info().Msgf("Webhook %s disabled due to excessive failures", webhookID)
 	}
-
 	if _, err := event.Update(ctx, l.store.DBS().Writer, boil.Infer()); err != nil {
 		l.log.Error().Err(err).Msg("handleWebhookFailure: failed to update event failure count")
 	}
@@ -239,9 +256,8 @@ func (l *SignalListener) resetWebhookFailure(webhookID string) {
 		l.log.Error().Err(err).Msg("resetWebhookFailure: could not fetch event")
 		return
 	}
-
 	event.FailureCount = 0
-
+	l.log.Debug().Msgf("Reset FailureCount for webhook %s", webhookID)
 	if _, err := event.Update(ctx, l.store.DBS().Writer, boil.Infer()); err != nil {
 		l.log.Error().Err(err).Msg("resetWebhookFailure: failed to reset event failure count")
 	}
