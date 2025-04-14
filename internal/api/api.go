@@ -70,6 +70,8 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	app.Post("/subscriptions/:vehicleTokenID/event/:eventID", jwtMiddleware, vehicleSubscriptionController.AssignVehicleToWebhook)
 	app.Delete("/subscriptions/:vehicleTokenID/event/:eventID", jwtMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
 	app.Get("/subscriptions/:vehicleTokenID", jwtMiddleware, vehicleSubscriptionController.ListSubscriptions)
+	app.Post("/subscriptions/all/event/:eventID", vehicleSubscriptionController.SubscribeAllVehiclesToWebhook)
+	app.Post("/subscriptions/:eventID", vehicleSubscriptionController.SubscribeMultipleVehiclesToWebhook)
 
 	app.Get("/health", healthCheck)
 
