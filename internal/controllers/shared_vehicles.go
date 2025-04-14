@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/DIMO-Network/vehicle-events-api/internal/config"
+	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"net/http"
 
@@ -17,7 +18,7 @@ type Vehicle struct {
 }
 
 func GetSharedVehicles(devLicense []byte, logger zerolog.Logger) ([]Vehicle, error) {
-	ethAddress := fmt.Sprintf("0x%x", devLicense)
+	ethAddress := common.BytesToAddress(devLicense).Hex()
 
 	identityAPIURL := config.GetSettings().IdentityAPIURL
 
@@ -55,9 +56,7 @@ func GetSharedVehicles(devLicense []byte, logger zerolog.Logger) ([]Vehicle, err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		errMsg := fmt.Sprintf("identity API returned non-2xx status: %d", resp.StatusCode)
-		logger.Error().Msg(errMsg)
-		return nil, errors.New(errMsg)
+		return nil, fmt.Errorf("identity API returned non-2xx status: %d", resp.StatusCode)
 	}
 
 	var result struct {

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	"io"
@@ -81,22 +82,19 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
 	}
 
-	// --- Begin URI Validation ---
-
-	// 1. Validate the target URI is a well-formed URL
 	parsedURL, err := url.ParseRequestURI(payload.TargetURI)
 	if err != nil {
 		w.logger.Error().Err(err).Msg("Invalid target URI")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid target URI"})
 	}
 
-	// 2. Test the target URI with an HTTP GET request with a timeout
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-	resp, err := client.Get(parsedURL.String())
+	// --- Begin URI Validation ---
+	// Instead of a GET request, we perform a POST with a dummy payload.
+	dummyPayload := []byte(`{"verification": "test"}`)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(parsedURL.String(), "application/json", bytes.NewBuffer(dummyPayload))
 	if err != nil {
-		w.logger.Error().Err(err).Msg("Failed to reach target URI")
+		w.logger.Error().Err(err).Msg("Failed to call target URI")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Target URI unreachable"})
 	}
 	defer resp.Body.Close()
@@ -105,7 +103,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": fmt.Sprintf("Target URI did not return status 200 (got %d)", resp.StatusCode)})
 	}
 
-	// 3. Verify that the target URI returns the expected verification token
+	// 3. Verify that the target URI returns the expected verification token.
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		w.logger.Error().Err(err).Msg("Failed to read response from target URI")
