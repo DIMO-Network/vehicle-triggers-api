@@ -67,11 +67,11 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 
 	// Register Vehicle Subscription routes.
 	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger)
-	app.Post("/subscriptions/:vehicleTokenID/event/:eventID", jwtMiddleware, vehicleSubscriptionController.AssignVehicleToWebhook)
-	app.Delete("/subscriptions/:vehicleTokenID/event/:eventID", jwtMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
 	app.Get("/subscriptions/:vehicleTokenID", jwtMiddleware, vehicleSubscriptionController.ListSubscriptions)
-	app.Post("/subscriptions/all/event/:eventID", vehicleSubscriptionController.SubscribeAllVehiclesToWebhook)
-	app.Post("/subscriptions/:eventID", vehicleSubscriptionController.SubscribeMultipleVehiclesToWebhook)
+	app.Post("/subscriptions/event/:eventID/subscribe", jwtMiddleware, vehicleSubscriptionController.AssignVehicleToWebhook)
+	app.Delete("/subscriptions/event/:eventID/subscribe", jwtMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
+	app.Post("/subscriptions/event/:eventID/subscribe/all", jwtMiddleware, vehicleSubscriptionController.SubscribeAllVehiclesToWebhook)
+	app.Post("/subscriptions/event/:eventID", jwtMiddleware, vehicleSubscriptionController.SubscribeMultipleVehiclesToWebhook)
 
 	app.Get("/health", healthCheck)
 
