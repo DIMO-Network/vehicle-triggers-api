@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,7 +14,6 @@ import (
 	"github.com/volatiletech/sqlboiler/v4/types"
 )
 
-// Webhook represents a webhook configuration.
 type Webhook struct {
 	ID             string
 	URL            string
@@ -59,6 +59,13 @@ func (wc *WebhookCache) Update(newData map[uint32]map[string][]Webhook) {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
 	wc.webhooks = newData
+	var total int
+	for _, m := range newData {
+		for _, hooks := range m {
+			total += len(hooks)
+		}
+	}
+	fmt.Printf("Webhook cache updated: %d webhook configurations loaded\n", total)
 }
 
 // fetchEventVehicleWebhooks queries the EventVehicles table (with joined Event) and builds the cache
