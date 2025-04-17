@@ -11,6 +11,7 @@ import (
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"github.com/volatiletech/sqlboiler/v4/types"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -233,6 +234,76 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 	}
 
 	return c.Status(http.StatusCreated).JSON(fiber.Map{
+		"message": fmt.Sprintf("Successfully subscribed %d vehicles to the webhook", successCount),
+	})
+}
+
+// SubscribeMultipleVehiclesToWebhook subscribes one or more vehicles to a given webhook
+// @Summary      Subscribe multiple vehicles to a webhook
+// @Description  Takes a JSON array of vehicleTokenIDs in the request body and subscribes each to the event.
+// @Tags         Vehicle Subscriptions
+// @Accept       json
+// @Produce      json
+// @Param        eventID           path      string   true  "Event ID"
+// @Param        vehicleTokenIDs   body      []string true  "List of Vehicle Token IDs"
+// @Success      201               {object}  map[string]string  "Summary message"
+// @Failure      400               {object}  map[string]string  "Invalid request payload or missing IDs"
+// @Failure      401               {object}  map[string]string  "Unauthorized"
+// @Failure      500               {object}  map[string]string  "Internal server error"
+// @Security     BearerAuth
+// @Router       /subscriptions/{eventID} [post]
+func (v *VehicleSubscriptionController) SubscribeMultipleVehiclesToWebhook(c *fiber.Ctx) error {
+	eventID := c.Params("eventID")
+	if eventID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Event ID is required"})
+	}
+	var req struct {
+		VehicleTokenIDs []string `json:"vehicleTokenIDs"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		v.logger.Error().Err(err).Msg("Invalid request payload for SubscribeMultipleVehiclesToWebhook")
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
+	}
+	if len(req.VehicleTokenIDs) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "vehicleTokenIDs field is required"})
+	}
+
+	devLicense, ok := c.Locals("developer_license_address").([]byte)
+	if !ok {
+		v.logger.Error().Msg("Developer license not found in request context")
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	var successCount int
+	for _, idStr := range req.VehicleTokenIDs {
+		trimmed := strings.TrimSpace(idStr)
+		tokenDecimal := types.Decimal{}
+		if err := tokenDecimal.Scan(trimmed); err != nil {
+			v.logger.Error().
+				Err(err).
+				Str("vehicleTokenID", trimmed).
+				Msg("Invalid vehicleTokenID format")
+			continue
+		}
+
+		ev := &models.EventVehicle{
+			VehicleTokenID:          tokenDecimal,
+			EventID:                 eventID,
+			DeveloperLicenseAddress: devLicense,
+			CreatedAt:               time.Now(),
+			UpdatedAt:               time.Now(),
+		}
+		if err := ev.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
+			v.logger.Error().
+				Err(err).
+				Str("vehicleTokenID", trimmed).
+				Msg("Failed to subscribe vehicle to webhook")
+			continue
+		}
+		successCount++
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": fmt.Sprintf("Successfully subscribed %d vehicles to the webhook", successCount),
 	})
 }

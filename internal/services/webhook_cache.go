@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
+	"github.com/rs/zerolog/log"
 	"strconv"
 	"strings"
 	"sync"
@@ -65,7 +65,9 @@ func (wc *WebhookCache) Update(newData map[uint32]map[string][]Webhook) {
 			total += len(hooks)
 		}
 	}
-	fmt.Printf("Webhook cache updated: %d webhook configurations loaded\n", total)
+	log.Info().
+		Int("webhook_config_count", total).
+		Msg("Webhook cache updated")
 }
 
 // fetchEventVehicleWebhooks queries the EventVehicles table (with joined Event) and builds the cache
