@@ -162,32 +162,6 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 	return out == types.True, nil
 }
 
-func (l *SignalListener) sendWebhookNotification(wh Webhook, signal *Signal) error {
-	body, err := json.Marshal(signal)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal signal for webhook")
-	}
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-	resp, err := client.Post(wh.URL, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		l.log.Error().Msgf("HTTP POST error for URL %s: %v", wh.URL, err)
-		l.handleWebhookFailure(wh.ID)
-		return errors.Wrap(err, "failed to POST to webhook")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		respBody, _ := io.ReadAll(resp.Body)
-		l.log.Error().Msgf("Received non-200 response from %s: status %d, body: %s", wh.URL, resp.StatusCode, string(respBody))
-		l.handleWebhookFailure(wh.ID)
-		return fmt.Errorf("webhook returned status code %d", resp.StatusCode)
-	}
-	l.log.Debug().Msgf("Webhook notification sent successfully to %s", wh.URL)
-	l.resetWebhookFailure(wh.ID)
-	return nil
-}
-
 func (l *SignalListener) checkCooldown(webhook Webhook) (bool, error) {
 	logs, err := models.EventLogs(
 		qm.Where("event_id = ?", webhook.ID),
@@ -230,7 +204,46 @@ func (l *SignalListener) logWebhookTrigger(eventID string) error {
 	return nil
 }
 
+func (l *SignalListener) sendWebhookNotification(wh Webhook, signal *Signal) error {
+	body, err := json.Marshal(signal)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal signal for webhook")
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(wh.URL, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		l.log.Error().Msgf("HTTP POST error for URL %s: %v", wh.URL, err)
+		// if wh.ID is non‑empty, count it as a failure
+		if wh.ID != "" {
+			l.handleWebhookFailure(wh.ID)
+		}
+		return errors.Wrap(err, "failed to POST to webhook")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		l.log.Error().Msgf("Received non‑200 response from %s: status %d, body: %s",
+			wh.URL, resp.StatusCode, string(respBody))
+		if wh.ID != "" {
+			l.handleWebhookFailure(wh.ID)
+		}
+		return fmt.Errorf("webhook returned status code %d", resp.StatusCode)
+	}
+
+	l.log.Debug().Msgf("Webhook notification sent successfully to %s", wh.URL)
+	// only reset if we have a real webhook ID
+	if wh.ID != "" {
+		l.resetWebhookFailure(wh.ID)
+	}
+	return nil
+}
+
 func (l *SignalListener) handleWebhookFailure(webhookID string) {
+	if webhookID == "" {
+		l.log.Debug().Msg("handleWebhookFailure: empty webhookID, skipping")
+		return
+	}
 	ctx := context.Background()
 	event, err := models.FindEvent(ctx, l.store.DBS().Reader, webhookID)
 	if err != nil {
@@ -250,6 +263,10 @@ func (l *SignalListener) handleWebhookFailure(webhookID string) {
 }
 
 func (l *SignalListener) resetWebhookFailure(webhookID string) {
+	if webhookID == "" {
+		l.log.Debug().Msg("resetWebhookFailure: empty webhookID, skipping")
+		return
+	}
 	ctx := context.Background()
 	event, err := models.FindEvent(ctx, l.store.DBS().Reader, webhookID)
 	if err != nil {

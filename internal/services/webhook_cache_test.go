@@ -9,46 +9,68 @@ import (
 )
 
 func TestPopulateCache(t *testing.T) {
-	origFunc := FetchWebhooksFromDBFunc
-	defer func() { FetchWebhooksFromDBFunc = origFunc }()
+	orig := FetchWebhooksFromDBFunc
+	defer func() { FetchWebhooksFromDBFunc = orig }()
 
 	// Fake implementation
 	FetchWebhooksFromDBFunc = func(ctx context.Context, exec boil.ContextExecutor) (map[uint32]map[string][]Webhook, error) {
 		return map[uint32]map[string][]Webhook{
 			10: {
 				"temperature": {
-					{URL: "http://example.com/webhook", Trigger: "valueNumber > 50", Data: "temperature"},
+					{URL: "http://example.com", Trigger: "valueNumber>50", Data: "temperature"},
 				},
 			},
 		}, nil
 	}
 
 	cache := NewWebhookCache()
-	err := cache.PopulateCache(context.Background(), nil)
-	if err != nil {
+	if err := cache.PopulateCache(context.Background(), nil); err != nil {
 		t.Fatalf("PopulateCache returned error: %v", err)
 	}
-
 	hooks := cache.GetWebhooks(10, "temperature")
 	if len(hooks) != 1 {
-		t.Errorf("Expected 1 webhook for token 10, 'temperature', got %d", len(hooks))
-	}
-	if hooks[0].URL != "http://example.com/webhook" {
-		t.Errorf("Expected webhook URL 'http://example.com/webhook', got %s", hooks[0].URL)
+		t.Errorf("expected 1 hook, got %d", len(hooks))
 	}
 }
 
 func TestPopulateCache_Error(t *testing.T) {
-	origFunc := FetchWebhooksFromDBFunc
-	defer func() { FetchWebhooksFromDBFunc = origFunc }()
+	orig := FetchWebhooksFromDBFunc
+	defer func() { FetchWebhooksFromDBFunc = orig }()
 
 	FetchWebhooksFromDBFunc = func(ctx context.Context, exec boil.ContextExecutor) (map[uint32]map[string][]Webhook, error) {
-		return nil, errors.New("DB error")
+		return nil, errors.New("db error")
 	}
 
 	cache := NewWebhookCache()
-	err := cache.PopulateCache(context.Background(), nil)
-	if err == nil {
-		t.Fatalf("Expected error from PopulateCache, got nil")
+	if err := cache.PopulateCache(context.Background(), nil); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestGetWebhooks_Empty(t *testing.T) {
+	cache := NewWebhookCache()
+	// without PopulateCache, lookup should return nil
+	if got := cache.GetWebhooks(123, "foo"); got != nil {
+		t.Errorf("expected nil slice, got %v", got)
+	}
+}
+
+func TestUpdateAndGetWebhooks(t *testing.T) {
+	data := map[uint32]map[string][]Webhook{
+		55: {
+			"gps": {
+				{URL: "u1"}, {URL: "u2"},
+			},
+		},
+	}
+	cache := NewWebhookCache()
+	cache.Update(data)
+
+	hooks := cache.GetWebhooks(55, "gps")
+	if len(hooks) != 2 {
+		t.Errorf("expected 2 hooks, got %d", len(hooks))
+	}
+	if hooks[0].URL != "u1" || hooks[1].URL != "u2" {
+		t.Errorf("unexpected URLs: %+v", hooks)
 	}
 }

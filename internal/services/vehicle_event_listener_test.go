@@ -1,6 +1,9 @@
 package services
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -112,5 +115,55 @@ func TestEvaluateCondition(t *testing.T) {
 				t.Errorf("evaluateCondition() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestSendWebhookNotification_Success(t *testing.T) {
+	// start a test server that always returns 200
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// verify we get the JSON payload
+		var sig Signal
+		if err := json.NewDecoder(r.Body).Decode(&sig); err != nil {
+			t.Errorf("unexpected body decode error: %v", err)
+		}
+		w.WriteHeader(200)
+	}))
+	defer ts.Close()
+
+	listener := &SignalListener{log: zerolog.Nop()}
+	wh := Webhook{URL: ts.URL}
+	err := listener.sendWebhookNotification(wh, &Signal{
+		TokenID:     42,
+		Timestamp:   time.Now(),
+		Name:        "foo",
+		ValueNumber: 1.23,
+		ValueString: "bar",
+	})
+	if err != nil {
+		t.Errorf("expected no error on 200, got %v", err)
+	}
+}
+
+func TestSendWebhookNotification_Non200(t *testing.T) {
+	// server that always returns 500
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "oops", 500)
+	}))
+	defer ts.Close()
+
+	listener := &SignalListener{log: zerolog.Nop()}
+	wh := Webhook{URL: ts.URL}
+	err := listener.sendWebhookNotification(wh, &Signal{})
+	if err == nil {
+		t.Error("expected error on 500 status, got nil")
+	}
+}
+
+func TestSendWebhookNotification_BadURL(t *testing.T) {
+	listener := &SignalListener{log: zerolog.Nop()}
+	wh := Webhook{URL: "http://invalid.localhost:0"}
+	err := listener.sendWebhookNotification(wh, &Signal{})
+	if err == nil {
+		t.Error("expected error on invalid URL, got nil")
 	}
 }
