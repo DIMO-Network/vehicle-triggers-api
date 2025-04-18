@@ -35,6 +35,15 @@ type SubscriptionView struct {
 	//condition? todo?
 }
 
+func getDevLicense(c *fiber.Ctx, logger zerolog.Logger) ([]byte, error) {
+	devLicense, ok := c.Locals("developer_license_address").([]byte)
+	if !ok {
+		logger.Error().Msg("Developer license not found in request context")
+		return nil, fmt.Errorf("unauthorized")
+	}
+	return devLicense, nil
+}
+
 // AssignVehicleToWebhook godoc
 // @Summary      Assign a vehicle to a webhook
 // @Description  Associates a vehicle with a specific event webhook, optionally using conditions.
@@ -71,9 +80,8 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
 	}
 
-	devLicense, ok := c.Locals("developer_license_address").([]byte)
-	if !ok {
-		v.logger.Error().Msg("Developer license not found in request context")
+	devLicense, err := getDevLicense(c, v.logger)
+	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
@@ -116,9 +124,8 @@ func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) e
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid vehicle token ID"})
 	}
 
-	devLicense, ok := c.Locals("developer_license_address").([]byte)
-	if !ok {
-		v.logger.Error().Msg("Developer license not found in request context")
+	devLicense, err := getDevLicense(c, v.logger)
+	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
@@ -157,9 +164,8 @@ func (v *VehicleSubscriptionController) ListSubscriptions(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid vehicle token ID format"})
 	}
 
-	devLicense, ok := c.Locals("developer_license_address").([]byte)
-	if !ok {
-		v.logger.Error().Msg("Developer license not found in request context")
+	devLicense, err := getDevLicense(c, v.logger)
+	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
@@ -199,9 +205,8 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Event ID is required"})
 	}
 
-	devLicense, ok := c.Locals("developer_license_address").([]byte)
-	if !ok {
-		v.logger.Error().Msg("Developer license not found in request context")
+	devLicense, err := getDevLicense(c, v.logger)
+	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
@@ -268,10 +273,9 @@ func (v *VehicleSubscriptionController) SubscribeMultipleVehiclesToWebhook(c *fi
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "vehicleTokenIDs field is required"})
 	}
 
-	devLicense, ok := c.Locals("developer_license_address").([]byte)
-	if !ok {
-		v.logger.Error().Msg("Developer license not found in request context")
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	devLicense, err := getDevLicense(c, v.logger)
+	if err != nil {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
 	var successCount int

@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -86,6 +87,23 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 
 	store := sharedDB.NewDbConnectionFromSettings(ctx, &settings.DB, true)
 	store.WaitForDB(logger)
+
+	//load all existing webhooks into memory** so GetWebhooks() won't be empty
+	if err := webhookCache.PopulateCache(ctx, store.DBS().Reader); err != nil {
+		logger.Fatal().Err(err).Msg("Unable to populate webhook cache at startup")
+	}
+
+	// Periodically refresh the cache so new/updated webhooks show up without a restart
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := webhookCache.PopulateCache(ctx, store.DBS().Reader); err != nil {
+				logger.Error().Err(err).Msg("Periodic cache refresh failed")
+			}
+		}
+	}()
+
 	signalListener := services.NewSignalListener(logger, webhookCache, store)
 	consumer.Start(ctx, signalListener.ProcessSignals)
 

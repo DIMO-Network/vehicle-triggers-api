@@ -81,6 +81,11 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		Msg("Parsed Signal")
 
 	webhooks := l.webhookCache.GetWebhooks(signal.TokenID, signal.Name)
+	l.log.Debug().
+		Uint32("token_id", signal.TokenID).
+		Str("signal_name", signal.Name).
+		Int("cached_hooks", len(webhooks)).
+		Msg("cache lookup")
 	if len(webhooks) == 0 {
 		return nil
 	}
