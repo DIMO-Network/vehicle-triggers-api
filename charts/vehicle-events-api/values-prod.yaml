@@ -2,7 +2,7 @@ replicaCount: 3
 image:
   repository: dimozone/vehicle-events-api
   pullPolicy: IfNotPresent
-  tag: 1.0.2
+  tag: 1.0.3
 env:
   ENVIRONMENT: prod
   PORT: '8080'
