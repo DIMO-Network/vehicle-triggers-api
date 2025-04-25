@@ -134,7 +134,9 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 	}
 
 	env, err := cel.NewEnv(
-		cel.Variable(telemetry, cel.DoubleType),
+		cel.Variable(telemetry, cel.DoubleType), // e.g. "speed"
+		cel.Variable("valueNumber", cel.DoubleType),
+		cel.Variable("valueString", cel.StringType),
 		cel.Variable("tokenId", cel.IntType),
 	)
 	if err != nil {
@@ -145,25 +147,21 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 	if issues != nil && issues.Err() != nil {
 		return false, issues.Err()
 	}
-
 	prg, err := env.Program(ast)
 	if err != nil {
 		return false, err
 	}
 
-	// Log the variables passed to CEL evaluation
 	vars := map[string]interface{}{
-		telemetry: signal.ValueNumber,
-		"tokenId": int64(signal.TokenID),
+		telemetry:     signal.ValueNumber,
+		"valueNumber": signal.ValueNumber,
+		"valueString": signal.ValueString,
+		"tokenId":     int64(signal.TokenID),
 	}
-	l.log.Debug().Msgf("Evaluating CEL with vars: %v", vars)
-
 	out, _, err := prg.Eval(vars)
 	if err != nil {
-		l.log.Error().Err(err).Msg("Error during CEL evaluation")
 		return false, err
 	}
-	l.log.Debug().Msgf("CEL evaluation result: %v", out)
 	return out == types.True, nil
 }
 
