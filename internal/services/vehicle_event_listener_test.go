@@ -118,6 +118,79 @@ func TestEvaluateCondition(t *testing.T) {
 	}
 }
 
+func TestEvaluateCondition_StringComparisons(t *testing.T) {
+	logger := zerolog.Nop()
+	listener := &SignalListener{log: logger}
+
+	tests := []struct {
+		name      string
+		condition string
+		telemetry string
+		signal    Signal
+		want      bool
+		wantErr   bool
+	}{
+		{
+			name:      "valueString == 'Active' true",
+			condition: `valueString == 'Active'`,
+			telemetry: "valueString",
+			signal: Signal{
+				ValueNumber: 42,
+				ValueString: "Active",
+				TokenID:     1,
+				Timestamp:   time.Now(),
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:      "valueString == 'Active' false",
+			condition: `valueString == 'Active'`,
+			telemetry: "valueString",
+			signal: Signal{
+				ValueString: "Inactive",
+				TokenID:     1,
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name:      "mismatched types error",
+			condition: `valueString > 'foo'`,
+			telemetry: "valueString",
+			signal: Signal{
+				ValueString: "bar",
+				TokenID:     1,
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name:      "unknown variable in expr",
+			condition: `foo == 1`,
+			telemetry: "valueNumber",
+			signal: Signal{
+				ValueNumber: 1,
+				TokenID:     1,
+			},
+			want:    false,
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := listener.evaluateCondition(tc.condition, &tc.signal, tc.telemetry)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("evaluateCondition() error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Errorf("evaluateCondition() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestSendWebhookNotification_Success(t *testing.T) {
 	// start a test server that always returns 200
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

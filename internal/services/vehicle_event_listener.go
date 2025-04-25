@@ -133,12 +133,16 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 		return true, nil
 	}
 
-	env, err := cel.NewEnv(
-		cel.Variable(telemetry, cel.DoubleType), // e.g. "speed"
+	opts := []cel.EnvOption{
 		cel.Variable("valueNumber", cel.DoubleType),
 		cel.Variable("valueString", cel.StringType),
 		cel.Variable("tokenId", cel.IntType),
-	)
+	}
+	if telemetry != "valueNumber" && telemetry != "valueString" {
+		opts = append(opts, cel.Variable(telemetry, cel.DoubleType))
+	}
+
+	env, err := cel.NewEnv(opts...)
 	if err != nil {
 		return false, err
 	}
@@ -147,19 +151,24 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 	if issues != nil && issues.Err() != nil {
 		return false, issues.Err()
 	}
+
 	prg, err := env.Program(ast)
 	if err != nil {
 		return false, err
 	}
 
 	vars := map[string]interface{}{
-		telemetry:     signal.ValueNumber,
 		"valueNumber": signal.ValueNumber,
 		"valueString": signal.ValueString,
 		"tokenId":     int64(signal.TokenID),
 	}
+	if telemetry != "valueNumber" && telemetry != "valueString" {
+		vars[telemetry] = signal.ValueNumber
+	}
+
 	out, _, err := prg.Eval(vars)
 	if err != nil {
+		l.log.Error().Err(err).Msg("Error during CEL evaluation")
 		return false, err
 	}
 	return out == types.True, nil
