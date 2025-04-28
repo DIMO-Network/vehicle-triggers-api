@@ -32,7 +32,6 @@ type SubscriptionView struct {
 	VehicleTokenID string    `json:"vehicle_token_id"`
 	CreatedAt      time.Time `json:"created_at"`
 	Description    string    `json:"description"`
-	//condition? todo?
 }
 
 func getDevLicense(c *fiber.Ctx, logger zerolog.Logger) ([]byte, error) {
@@ -255,6 +254,39 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 	})
 }
 
+// UnsubscribeAllVehiclesFromWebhook godoc
+// @Summary      Unsubscribe all shared vehicles from a webhook
+// @Description  Removes subscription for every vehicle shared with the developer from the specified event.
+// @Tags         Vehicle Subscriptions
+// @Produce      json
+// @Param        eventID  path   string true "Event ID"
+// @Success      200      {object} map[string]string
+// @Failure      400      {object} map[string]string
+// @Failure      401      {object} map[string]string
+// @Failure      500      {object} map[string]string
+// @Security     BearerAuth
+// @Router       /subscriptions/event/{eventID}/subscribe/all [delete]
+func (v *VehicleSubscriptionController) UnsubscribeAllVehiclesFromWebhook(c *fiber.Ctx) error {
+	eventID := c.Params("eventID")
+	if eventID == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Event ID is required"})
+	}
+	devLicense, err := getDevLicense(c, v.logger)
+	if err != nil {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	// Bulk delete in one query:
+	_, err = models.EventVehicles(
+		qm.Where("event_id = ? AND developer_license_address = ?", eventID, devLicense),
+	).DeleteAll(c.Context(), v.store.DBS().Writer)
+	if err != nil {
+		v.logger.Error().Err(err).Msg("Failed to unsubscribe all vehicles")
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to unsubscribe vehicles"})
+	}
+	return c.Status(http.StatusOK).JSON(fiber.Map{"message": "All vehicles unsubscribed successfully"})
+}
+
 // SubscribeMultipleVehiclesToWebhook subscribes one or more vehicles to a given webhook
 // @Summary      Subscribe multiple vehicles to a webhook
 // @Description  Takes a JSON array of vehicleTokenIDs in the request body and subscribes each to the event.
@@ -322,4 +354,102 @@ func (v *VehicleSubscriptionController) SubscribeMultipleVehiclesToWebhook(c *fi
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": fmt.Sprintf("Successfully subscribed %d vehicles to the webhook", successCount),
 	})
+}
+
+// UnsubscribeMultipleVehiclesFromWebhook godoc
+// @Summary      Unsubscribe multiple vehicles from a webhook
+// @Description  Takes a JSON array of vehicleTokenIDs and unsubscribes each from the event.
+// @Tags         Vehicle Subscriptions
+// @Accept       json
+// @Produce      json
+// @Param        eventID           path   string   true "Event ID"
+// @Param        vehicleTokenIDs   body   []string true "List of Vehicle Token IDs"
+// @Success      200               {object} map[string]string
+// @Failure      400               {object} map[string]string
+// @Failure      401               {object} map[string]string
+// @Failure      500               {object} map[string]string
+// @Security     BearerAuth
+// @Router       /subscriptions/event/{eventID}/subscribe [delete]
+func (v *VehicleSubscriptionController) UnsubscribeMultipleVehiclesFromWebhook(c *fiber.Ctx) error {
+	eventID := c.Params("eventID")
+	if eventID == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Event ID is required"})
+	}
+	var req struct {
+		VehicleTokenIDs []string `json:"vehicleTokenIDs"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		v.logger.Error().Err(err).Msg("Invalid request payload")
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
+	}
+	if len(req.VehicleTokenIDs) == 0 {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "vehicleTokenIDs field is required"})
+	}
+
+	devLicense, err := getDevLicense(c, v.logger)
+	if err != nil {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	var successCount int
+	for _, idStr := range req.VehicleTokenIDs {
+		trimmed := strings.TrimSpace(idStr)
+		dec := types.Decimal{}
+		if err := dec.Scan(trimmed); err != nil {
+			v.logger.Error().Err(err).Str("vehicleTokenID", trimmed).Msg("Invalid token format")
+			continue
+		}
+		_, err := models.EventVehicles(
+			qm.Where("event_id = ? AND vehicle_token_id = ? AND developer_license_address = ?", eventID, dec, devLicense),
+		).DeleteAll(c.Context(), v.store.DBS().Writer)
+		if err != nil {
+			v.logger.Error().Err(err).Str("vehicleTokenID", trimmed).Msg("Failed to unsubscribe vehicle")
+			continue
+		}
+		successCount++
+	}
+
+	return c.Status(http.StatusOK).JSON(fiber.Map{
+		"message": fmt.Sprintf("Successfully unsubscribed %d vehicles", successCount),
+	})
+}
+
+// ListVehiclesForWebhook godoc
+// @Summary      List all vehicles subscribed to a webhook
+// @Description  Retrieves all vehicle subscriptions for the specified webhook ID.
+// @Tags         Vehicle Subscriptions
+// @Produce      json
+// @Param        webhookId   path      string  true  "Webhook ID"
+// @Success      200         {array}   SubscriptionView
+// @Failure      401         {object}  map[string]string  "Unauthorized"
+// @Failure      500         {object}  map[string]string  "Internal server error"
+// @Security     BearerAuth
+// @Router       /v1/webhooks/{webhookId} [get]
+func (v *VehicleSubscriptionController) ListVehiclesForWebhook(c *fiber.Ctx) error {
+	webhookId := c.Params("webhookId")
+	if webhookId == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Webhook ID is required"})
+	}
+	devLicense, err := getDevLicense(c, v.logger)
+	if err != nil {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+	subs, err := models.EventVehicles(
+		qm.Where("event_id = ? AND developer_license_address = ?", webhookId, devLicense),
+	).All(c.Context(), v.store.DBS().Reader)
+	if err != nil {
+		v.logger.Error().Err(err).Msg("Failed to retrieve subscriptions for webhook")
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to list subscriptions"})
+	}
+
+	resp := make([]SubscriptionView, len(subs))
+	for i, sub := range subs {
+		resp[i] = SubscriptionView{
+			EventID:        sub.EventID,
+			VehicleTokenID: sub.VehicleTokenID.String(),
+			CreatedAt:      sub.CreatedAt,
+			Description:    sub.R.Event.Description.String,
+		}
+	}
+	return c.JSON(resp)
 }

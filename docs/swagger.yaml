@@ -1,3 +1,15 @@
+definitions:
+  internal_controllers.SubscriptionView:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      event_id:
+        type: string
+      vehicle_token_id:
+        type: string
+    type: object
 info:
   contact: {}
 paths:
@@ -190,6 +202,135 @@ paths:
       security:
       - BearerAuth: []
       summary: Subscribe all shared vehicles to a webhook
+      tags:
+      - Vehicle Subscriptions
+  /subscriptions/event/{eventID}/subscribe:
+    delete:
+      consumes:
+      - application/json
+      description: Takes a JSON array of vehicleTokenIDs and unsubscribes each from
+        the event.
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: List of Vehicle Token IDs
+        in: body
+        name: vehicleTokenIDs
+        required: true
+        schema:
+          items:
+            type: string
+          type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Unsubscribe multiple vehicles from a webhook
+      tags:
+      - Vehicle Subscriptions
+  /subscriptions/event/{eventID}/subscribe/all:
+    delete:
+      description: Removes subscription for every vehicle shared with the developer
+        from the specified event.
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Unsubscribe all shared vehicles from a webhook
+      tags:
+      - Vehicle Subscriptions
+  /v1/webhooks/{webhookId}:
+    get:
+      description: Retrieves all vehicle subscriptions for the specified webhook ID.
+      parameters:
+      - description: Webhook ID
+        in: path
+        name: webhookId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/internal_controllers.SubscriptionView'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List all vehicles subscribed to a webhook
       tags:
       - Vehicle Subscriptions
   /webhooks:

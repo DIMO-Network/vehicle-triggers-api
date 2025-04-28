@@ -51,27 +51,29 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 	// Create a JWT middleware that verifies developer licenses.
 	// settings.IdentityAPIURL is loaded from your settings.yaml.
 	jwtMiddleware := controllers.JWTMiddleware(store, settings.IdentityAPIURL, logger)
+	v1 := app.Group("/v1")
 
 	// Register Webhook routes.
 	webhookController := controllers.NewWebhookController(store, logger)
+	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger)
 
 	logger.Info().Msg("Registering routes...")
-	app.Post("/webhooks", jwtMiddleware, webhookController.RegisterWebhook)
-	app.Get("/webhooks", jwtMiddleware, webhookController.ListWebhooks)
-	app.Put("/webhooks/:id", jwtMiddleware, webhookController.UpdateWebhook)
-	app.Delete("/webhooks/:id", jwtMiddleware, webhookController.DeleteWebhook)
-	app.Get("/webhooks/signals", jwtMiddleware, webhookController.GetSignalNames)
+	v1.Get("/webhooks", jwtMiddleware, webhookController.ListWebhooks)
+	v1.Post("/webhooks", jwtMiddleware, webhookController.RegisterWebhook)
+	v1.Get("/webhooks/signals", jwtMiddleware, webhookController.GetSignalNames)
+	v1.Get("/webhooks/:webhookId", jwtMiddleware, vehicleSubscriptionController.ListVehiclesForWebhook)
+	v1.Put("/webhooks/:webhookId", jwtMiddleware, webhookController.UpdateWebhook)
+	v1.Delete("/webhooks/:webhookId", jwtMiddleware, webhookController.DeleteWebhook)
 
-	// Endpoint to build a CEL expression from user-defined conditions.
+	// Endpoint to build a CEL expression from user-defined conditions
 	app.Post("/build-cel", webhookController.BuildCEL)
 
-	// Register Vehicle Subscription routes.
-	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger)
-	app.Get("/subscriptions/:vehicleTokenID", jwtMiddleware, vehicleSubscriptionController.ListSubscriptions)
-	app.Post("/subscriptions/event/:eventID/subscribe", jwtMiddleware, vehicleSubscriptionController.AssignVehicleToWebhook)
-	app.Delete("/subscriptions/event/:eventID/subscribe", jwtMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
-	app.Post("/subscriptions/event/:eventID/subscribe/all", jwtMiddleware, vehicleSubscriptionController.SubscribeAllVehiclesToWebhook)
-	app.Post("/subscriptions/event/:eventID", jwtMiddleware, vehicleSubscriptionController.SubscribeMultipleVehiclesToWebhook)
+	// Register Vehicle Subscription routes
+	v1.Post("/webhooks/:webhookId/subscribe/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.AssignVehicleToWebhook)
+	v1.Delete("/webhooks/:webhookId/unsubscribe/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
+	v1.Post("/webhooks/:webhookId/subscribe/all", jwtMiddleware, vehicleSubscriptionController.SubscribeAllVehiclesToWebhook)
+	v1.Delete("/webhooks/:webhookId/unsubscribe/all", jwtMiddleware, vehicleSubscriptionController.UnsubscribeAllVehiclesFromWebhook)
+	v1.Get("/webhooks/vehicles/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.ListSubscriptions)
 
 	app.Get("/health", healthCheck)
 
