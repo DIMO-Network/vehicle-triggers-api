@@ -33,7 +33,7 @@ env:
   SERVICE_NAME: vehicle-events-api
   JWT_KEY_SET_URL: https://auth.dev.dimo.zone/keys
   DEPLOYMENT_BASE_URL: https://vehicle-events-api.dev.dimo.zone
-  IDENTITY_API_URL: https://identity-api.dimo.zone/query
+  IDENTITY_API_URL: https://identity-api.dev.dimo.zone/query
   KAFKA_BROKERS: kafka-dev-dimo-kafka-kafka-brokers:9092
   DEVICE_SIGNALS_TOPIC: topic.device.signals
   TOKEN_EXCHANGE_JWK_KEY_SET_URL: http://dex-roles-rights.dev.svc.cluster.local:5556/keys
