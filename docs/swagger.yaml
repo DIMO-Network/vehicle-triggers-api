@@ -1,6 +1,58 @@
 info:
   contact: {}
 paths:
+  /subscriptions/{eventID}:
+    post:
+      consumes:
+      - application/json
+      description: Takes a JSON array of vehicleTokenIDs in the request body and subscribes
+        each to the event.
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: List of Vehicle Token IDs
+        in: body
+        name: vehicleTokenIDs
+        required: true
+        schema:
+          items:
+            type: string
+          type: array
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Summary message
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request payload or missing IDs
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Subscribe multiple vehicles to a webhook
+      tags:
+      - Vehicle Subscriptions
   /subscriptions/{vehicleTokenID}:
     get:
       description: Retrieves all webhook subscriptions for a given vehicle.
@@ -96,6 +148,50 @@ paths:
       summary: Assign a vehicle to a webhook
       tags:
       - Vehicle Subscriptions
+  /subscriptions/all/event/{eventID}:
+    post:
+      consumes:
+      - application/json
+      description: Subscribes every vehicle that has been shared with the authenticated
+        developer license to the specified webhook event.
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Successfully subscribed count
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad request (e.g. missing eventID)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized (invalid or missing JWT)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Subscribe all shared vehicles to a webhook
+      tags:
+      - Vehicle Subscriptions
   /webhooks:
     get:
       description: Retrieves all registered webhooks for the developer.
@@ -120,7 +216,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Registers a new webhook with the specified configuration.
+      description: Registers a new webhook with the specified configuration. The target
+        URI is validated to ensure it is a valid URL, responds with 200 within a timeout,
+        and returns a verification token.
       parameters:
       - description: Request payload
         in: body
@@ -134,7 +232,7 @@ paths:
         "201":
           description: Webhook registered successfully
         "400":
-          description: Invalid request payload
+          description: Invalid request payload or target URI
         "500":
           description: Internal server error
       security:
@@ -214,9 +312,4 @@ paths:
       summary: Get signal names
       tags:
       - Webhooks
-securityDefinitions:
-  BearerAuth:
-    in: header
-    name: Authorization
-    type: apiKey
 swagger: "2.0"

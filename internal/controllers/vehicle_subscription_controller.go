@@ -198,7 +198,19 @@ func (v *VehicleSubscriptionController) ListSubscriptions(c *fiber.Ctx) error {
 	return c.JSON(resp)
 }
 
-// SubscribeAllVehiclesToWebhook subscribes all vehicles shared with the developer to a given webhook
+// SubscribeAllVehiclesToWebhook godoc
+// @Summary      Subscribe all shared vehicles to a webhook
+// @Description  Subscribes every vehicle that has been shared with the authenticated developer license to the specified webhook event.
+// @Tags         Vehicle Subscriptions
+// @Accept       json
+// @Produce      json
+// @Param        eventID   path      string  true  "Event ID"
+// @Success      201       {object}  map[string]string  "Successfully subscribed count"
+// @Failure      400       {object}  map[string]string  "Bad request (e.g. missing eventID)"
+// @Failure      401       {object}  map[string]string  "Unauthorized (invalid or missing JWT)"
+// @Failure      500       {object}  map[string]string  "Internal server error"
+// @Security     BearerAuth
+// @Router       /subscriptions/all/event/{eventID} [post]
 func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.Ctx) error {
 	eventID := c.Params("eventID")
 	if eventID == "" {

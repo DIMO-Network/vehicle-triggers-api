@@ -109,6 +109,14 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		w.logger.Error().Err(err).Msg("Failed to read response from target URI")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to verify target URI"})
 	}
+
+	w.logger.Debug().
+		Str("target_uri", parsedURL.String()).
+		Str("expected_token", payload.VerificationToken).
+		Str("returned_body_raw", string(bodyBytes)).
+		Str("returned_body_trimmed", strings.TrimSpace(string(bodyBytes))).
+		Msg("URI verification response details")
+
 	responseToken := strings.TrimSpace(string(bodyBytes))
 	if responseToken != payload.VerificationToken {
 		w.logger.Error().Msgf("Verification token mismatch. Expected '%s', got '%s'", payload.VerificationToken, responseToken)
