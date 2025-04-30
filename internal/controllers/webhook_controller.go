@@ -64,7 +64,7 @@ type CelRequestPayload struct {
 // @Failure      400      "Invalid request payload or target URI"
 // @Failure      500      "Internal server error"
 // @Security     BearerAuth
-// @Router       /webhooks [post]
+// @Router       v1/webhooks [post]
 func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	type RequestPayload struct {
 		Service           string `json:"service" validate:"required"`
@@ -154,7 +154,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 // @Failure      401  "Unauthorized"
 // @Failure      500  "Internal server error"
 // @Security     BearerAuth
-// @Router       /webhooks [get]
+// @Router       v1/webhooks [get]
 func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 	w.logger.Info().Msg("ListWebhooks endpoint hit")
 
@@ -195,7 +195,7 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 // @Failure      404      "Webhook not found"
 // @Failure      500      "Internal server error"
 // @Security     BearerAuth
-// @Router       /webhooks/{id} [put]
+// @Router       v1/webhooks/{id} [put]
 func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	id := c.Params("id")
 	devLicense, ok := c.Locals("developer_license_address").([]byte)
@@ -270,7 +270,7 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 // @Failure      404  "Webhook not found"
 // @Failure      500  "Internal server error"
 // @Security     BearerAuth
-// @Router       /webhooks/{id} [delete]
+// @Router       v1/webhooks/{id} [delete]
 func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 	id := c.Params("id")
 	devLicense, ok := c.Locals("developer_license_address").([]byte)
@@ -305,7 +305,7 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 // @Produce      json
 // @Success      200  {array}  string  "List of signal names"
 // @Failure      500  "Internal server error"
-// @Router       /webhooks/signals [get]
+// @Router       v1/webhooks/signals [get]
 func (w *WebhookController) GetSignalNames(c *fiber.Ctx) error {
 	dimoVss := strings.NewReader(schema.VssRel42DIMO())
 

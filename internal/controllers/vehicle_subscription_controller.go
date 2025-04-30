@@ -43,7 +43,7 @@ func getDevLicense(c *fiber.Ctx, logger zerolog.Logger) ([]byte, error) {
 // AssignVehicleToWebhook godoc
 // @Summary      Assign a vehicle to a webhook
 // @Description  Associates a vehicle with a specific event webhook.
-// @Tags         Vehicle Subscriptions
+// @Tags         Webhooks
 // @Accept       json
 // @Produce      json
 // @Param        webhookId       path      string  true  "Webhook ID"
@@ -87,7 +87,7 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 // RemoveVehicleFromWebhook godoc
 // @Summary      Unsubscribe a vehicle from a webhook
 // @Description  Removes a vehicle’s subscription.
-// @Tags         Vehicle Subscriptions
+// @Tags         Webhooks
 // @Produce      json
 // @Param        webhookId       path  string  true  "Webhook ID"
 // @Param        vehicleTokenId  path  string  true  "Vehicle Token ID"
@@ -122,7 +122,7 @@ func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) e
 // SubscribeAllVehiclesToWebhook godoc
 // @Summary      Subscribe all shared vehicles
 // @Description  Subscribes every vehicle shared with this developer to the webhook.
-// @Tags         Vehicle Subscriptions
+// @Tags         Webhooks
 // @Produce      json
 // @Param        webhookId  path  string  true  "Webhook ID"
 // @Success      201        {object}  map[string]string  "Count of subscribed vehicles"
@@ -170,7 +170,7 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 // UnsubscribeAllVehiclesFromWebhook godoc
 // @Summary      Unsubscribe all shared vehicles
 // @Description  Removes every shared vehicle subscription for this webhook.
-// @Tags         Vehicle Subscriptions
+// @Tags         Webhooks
 // @Produce      json
 // @Param        webhookId  path  string  true  "Webhook ID"
 // @Success      200        {object}  map[string]string  "Count of unsubscribed vehicles"
@@ -199,7 +199,7 @@ func (v *VehicleSubscriptionController) UnsubscribeAllVehiclesFromWebhook(c *fib
 // ListSubscriptions godoc
 // @Summary      List subscriptions for a vehicle
 // @Description  Retrieves all webhook subscriptions for a given vehicle.
-// @Tags         Vehicle Subscriptions
+// @Tags         Webhooks
 // @Produce      json
 // @Param        vehicleTokenId path string true "Vehicle Token ID"
 // @Success      200            {array}   SubscriptionView
@@ -247,7 +247,7 @@ func (v *VehicleSubscriptionController) ListSubscriptions(c *fiber.Ctx) error {
 // ListVehiclesForWebhook godoc
 // @Summary      List all vehicles subscribed to a webhook
 // @Description  Returns every vehicleTokenId currently subscribed.
-// @Tags         Vehicle Subscriptions
+// @Tags         Webhooks
 // @Produce      json
 // @Param        webhookId  path  string  true  "Webhook ID"
 // @Success      200        {array}   string
