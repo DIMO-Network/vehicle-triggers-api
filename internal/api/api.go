@@ -1,15 +1,5 @@
 package api
 
-// @title           Vehicle Events API
-// @version         1.0
-//
-// @securityDefinitions.apikey BearerAuth
-// @in                         header
-// @name                       Authorization
-// @description                JWT Authorization header using the Bearer scheme. Example: "Bearer {token}"
-//
-// @BasePath  /
-
 import (
 	"context"
 	"github.com/DIMO-Network/shared"

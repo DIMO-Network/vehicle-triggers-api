@@ -1,7 +1,9 @@
 {
     "swagger": "2.0",
     "info": {
-        "contact": {}
+        "title": "Vehicle Events API",
+        "contact": {},
+        "version": "1.0"
     },
     "paths": {
         "/v1/webhooks": {
@@ -134,7 +136,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/controllers.SubscriptionView"
+                                "$ref": "#/definitions/internal_controllers.SubscriptionView"
                             }
                         }
                     },
@@ -576,7 +578,7 @@
         }
     },
     "definitions": {
-        "controllers.SubscriptionView": {
+        "internal_controllers.SubscriptionView": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -596,6 +598,7 @@
     },
     "securityDefinitions": {
         "BearerAuth": {
+            "description": "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"

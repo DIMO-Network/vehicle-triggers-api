@@ -1,5 +1,5 @@
 definitions:
-  controllers.SubscriptionView:
+  internal_controllers.SubscriptionView:
     properties:
       created_at:
         type: string
@@ -12,6 +12,8 @@ definitions:
     type: object
 info:
   contact: {}
+  title: Vehicle Events API
+  version: "1.0"
 paths:
   /v1/webhooks:
     get:
@@ -360,7 +362,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/controllers.SubscriptionView'
+              $ref: '#/definitions/internal_controllers.SubscriptionView'
             type: array
         "401":
           description: Unauthorized
@@ -381,6 +383,8 @@ paths:
       - Webhooks
 securityDefinitions:
   BearerAuth:
+    description: 'JWT Authorization header using the Bearer scheme. Example: "Bearer
+      {token}"'
     in: header
     name: Authorization
     type: apiKey
