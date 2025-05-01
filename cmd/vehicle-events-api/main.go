@@ -22,6 +22,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+// @title           Vehicle Events API
+// @version         1.0
+//
+// @securityDefinitions.apikey BearerAuth
+// @in                         header
+// @name                       Authorization
+// @description                JWT Authorization header using the Bearer scheme. Example: "Bearer {token}"
+//
+// @BasePath  /
 func main() {
 	gitSha1 := os.Getenv("GIT_SHA1")
 	ctx := context.Background()
