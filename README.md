@@ -32,3 +32,12 @@ Migrate DB to latest:
 
 To regenerate models:
 `$  sqlboiler psql`
+
+# Running locally
+
+- in your postgres: `create database vehicle_events_api with owner dimo;` make sure you have user `dimo` setup in your local db.
+- install kafka with brew services
+- Create a topic:
+- `/opt/homebrew/opt/kafka/bin/kafka-topics --create --topic topics.signals --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1`
+- Pending: nee sample webhook config
+- need example of sending a payload in the kafka topic

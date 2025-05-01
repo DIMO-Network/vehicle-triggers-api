@@ -5,6 +5,8 @@ PORT: "3003"                  # Port number for the HTTP server
 GRPC_PORT: "50051"            # Port number for the gRPC server
 LOG_LEVEL: "info"             # Logging level (e.g., debug, info, warn, error)
 SERVICE_NAME: "vehicle-events-api"  # Name of the service
+KAFKA_BROKERS: 'localhost:9092'
+DEVICE_SIGNALS_TOPIC: topic.signals
 
 DB:                           # Database configuration
   HOST: "localhost"           # Database host
