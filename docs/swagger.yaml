@@ -379,4 +379,9 @@ paths:
       summary: List subscriptions for a vehicle
       tags:
       - Webhooks
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"
