@@ -195,9 +195,9 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 // @Failure      404      "Webhook not found"
 // @Failure      500      "Internal server error"
 // @Security     BearerAuth
-// @Router       /v1/webhooks/{id} [put]
+// @Router       /v1/webhooks/{webhookId} [put]
 func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
-	id := c.Params("id")
+	webhookId := c.Params("webhookId")
 	devLicense, ok := c.Locals("developer_license_address").([]byte)
 	if !ok {
 		w.logger.Error().Msg("Developer license not found in request context")
@@ -205,7 +205,7 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	}
 
 	event, err := models.Events(
-		qm.Where("id = ? AND developer_license_address = ?", id, devLicense),
+		qm.Where("id = ? AND developer_license_address = ?", webhookId, devLicense),
 	).One(c.Context(), w.store.DBS().Reader)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -270,9 +270,9 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 // @Failure      404  "Webhook not found"
 // @Failure      500  "Internal server error"
 // @Security     BearerAuth
-// @Router       /v1/webhooks/{id} [delete]
+// @Router       /v1/webhooks/{webhookId} [delete]
 func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
-	id := c.Params("id")
+	webhookId := c.Params("webhookId")
 	devLicense, ok := c.Locals("developer_license_address").([]byte)
 	if !ok {
 		w.logger.Error().Msg("Developer license not found in request context")
@@ -280,7 +280,7 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 	}
 
 	event, err := models.Events(
-		qm.Where("id = ? AND developer_license_address = ?", id, devLicense),
+		qm.Where("id = ? AND developer_license_address = ?", webhookId, devLicense),
 	).One(c.Context(), w.store.DBS().Reader)
 	if err != nil {
 		if err == sql.ErrNoRows {

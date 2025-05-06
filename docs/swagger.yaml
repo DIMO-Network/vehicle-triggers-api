@@ -63,7 +63,7 @@ paths:
       summary: Register a new webhook
       tags:
       - Webhooks
-  /v1/webhooks/{id}:
+  /v1/webhooks/{webhookId}:
     delete:
       description: Deletes a webhook by its ID.
       parameters:
@@ -86,39 +86,6 @@ paths:
       summary: Delete a webhook
       tags:
       - Webhooks
-    put:
-      consumes:
-      - application/json
-      description: Updates the configuration of a webhook by its ID.
-      parameters:
-      - description: Webhook ID
-        in: path
-        name: webhookId
-        required: true
-        type: string
-      - description: Request payload
-        in: body
-        name: request
-        required: true
-        schema:
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Webhook updated successfully
-        "400":
-          description: Invalid request payload
-        "404":
-          description: Webhook not found
-        "500":
-          description: Internal server error
-      security:
-      - BearerAuth: []
-      summary: Update a webhook
-      tags:
-      - Webhooks
-  /v1/webhooks/{webhookId}:
     get:
       description: Returns every vehicleTokenId currently subscribed.
       parameters:
@@ -151,6 +118,38 @@ paths:
       security:
       - BearerAuth: []
       summary: List all vehicles subscribed to a webhook
+      tags:
+      - Webhooks
+    put:
+      consumes:
+      - application/json
+      description: Updates the configuration of a webhook by its ID.
+      parameters:
+      - description: Webhook ID
+        in: path
+        name: webhookId
+        required: true
+        type: string
+      - description: Request payload
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook updated successfully
+        "400":
+          description: Invalid request payload
+        "404":
+          description: Webhook not found
+        "500":
+          description: Internal server error
+      security:
+      - BearerAuth: []
+      summary: Update a webhook
       tags:
       - Webhooks
   /v1/webhooks/{webhookId}/subscribe/{vehicleTokenId}:
