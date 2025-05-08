@@ -339,11 +339,7 @@ func (w *WebhookController) BuildCEL(c *fiber.Ctx) error {
 
 	conditions := []string{}
 	for _, condition := range payload.Conditions {
-		service := c.Query("service")
-		if service == "" {
-			service = "event"
-		}
-		expr := fmt.Sprintf("%s.%s %s %s", service, condition.Field, condition.Operator, condition.Value)
+		expr := fmt.Sprintf("%s %s %s", condition.Field, condition.Operator, condition.Value)
 		conditions = append(conditions, expr)
 	}
 	celExpression := strings.Join(conditions, fmt.Sprintf(" %s ", payload.Logic))
