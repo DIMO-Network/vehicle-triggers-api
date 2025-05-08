@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/DIMO-Network/vehicle-events-api/internal/config"
 	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"net/http"
@@ -17,11 +16,12 @@ type Vehicle struct {
 	TokenID string `json:"tokenId"`
 }
 
-func GetSharedVehicles(devLicense []byte, logger zerolog.Logger) ([]Vehicle, error) {
+func GetSharedVehicles(identityAPIURL string, devLicense []byte, logger zerolog.Logger) ([]Vehicle, error) {
 	ethAddress := common.BytesToAddress(devLicense).Hex()
 
-	identityAPIURL := config.GetSettings().IdentityAPIURL
-
+	if identityAPIURL == "" {
+		return nil, fmt.Errorf("identity API URL not configured")
+	}
 	query := `
 		query($eth: String!) {
 			vehicles(first: 50, filterBy: { privileged: $eth }) {

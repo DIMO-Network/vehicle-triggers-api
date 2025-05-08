@@ -3,7 +3,6 @@ package controllers
 import (
 	"fmt"
 	"net/http"
-	"runtime/debug"
 	"time"
 
 	"github.com/DIMO-Network/shared/db"
@@ -17,12 +16,13 @@ import (
 )
 
 type VehicleSubscriptionController struct {
-	store  db.Store
-	logger zerolog.Logger
+	store          db.Store
+	logger         zerolog.Logger
+	identityAPIURL string
 }
 
-func NewVehicleSubscriptionController(store db.Store, logger zerolog.Logger) *VehicleSubscriptionController {
-	return &VehicleSubscriptionController{store: store, logger: logger}
+func NewVehicleSubscriptionController(store db.Store, logger zerolog.Logger, identityAPIURL string) *VehicleSubscriptionController {
+	return &VehicleSubscriptionController{store: store, logger: logger, identityAPIURL: identityAPIURL}
 }
 
 type SubscriptionView struct {
@@ -134,26 +134,16 @@ func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) e
 // @Router       /v1/webhooks/{webhookId}/subscribe/all [post]
 func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.Ctx) error {
 
-	defer func() {
-		if r := recover(); r != nil {
-			v.logger.Error().
-				Msgf("panic in SubscribeAllVehiclesToWebhook: %v\n%s", r, debug.Stack())
-			c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"error": "internal server error (panic)",
-			})
-		}
-	}()
-
 	webhookID := c.Params("webhookId")
 	dl, err := getDevLicense(c, v.logger)
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	vehicles, err := GetSharedVehicles(dl, v.logger)
+	vehicles, err := GetSharedVehicles(v.identityAPIURL, dl, v.logger)
 	if err != nil {
 		v.logger.Error().Err(err).Msg("Failed to fetch shared vehicles")
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch vehicles"})
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	var count int

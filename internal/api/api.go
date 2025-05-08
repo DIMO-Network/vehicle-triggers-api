@@ -54,7 +54,7 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 
 	// Register Webhook routes.
 	webhookController := controllers.NewWebhookController(store, logger)
-	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger)
+	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger, settings.IdentityAPIURL)
 
 	logger.Info().Msg("Registering routes...")
 
