@@ -3,6 +3,7 @@ package controllers
 import (
 	"fmt"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/DIMO-Network/shared/db"
@@ -132,6 +133,17 @@ func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) e
 // @Security     BearerAuth
 // @Router       /v1/webhooks/{webhookId}/subscribe/all [post]
 func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.Ctx) error {
+
+	defer func() {
+		if r := recover(); r != nil {
+			v.logger.Error().
+				Msgf("panic in SubscribeAllVehiclesToWebhook: %v\n%s", r, debug.Stack())
+			c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"error": "internal server error (panic)",
+			})
+		}
+	}()
+
 	webhookID := c.Params("webhookId")
 	dl, err := getDevLicense(c, v.logger)
 	if err != nil {
