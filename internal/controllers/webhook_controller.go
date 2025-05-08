@@ -325,28 +325,3 @@ func (w *WebhookController) GetSignalNames(c *fiber.Ctx) error {
 	w.logger.Info().Int("signal_count", len(signalNames)).Msg("Returning signal names")
 	return c.JSON(signalNames)
 }
-
-func (w *WebhookController) BuildCEL(c *fiber.Ctx) error {
-	var payload CelRequestPayload
-
-	if err := c.BodyParser(&payload); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
-	}
-
-	if payload.Logic != "AND" && payload.Logic != "OR" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid logic. Must be AND or OR."})
-	}
-
-	conditions := []string{}
-	for _, condition := range payload.Conditions {
-		service := c.Query("service")
-		if service == "" {
-			service = "event"
-		}
-		expr := fmt.Sprintf("%s.%s %s %s", service, condition.Field, condition.Operator, condition.Value)
-		conditions = append(conditions, expr)
-	}
-	celExpression := strings.Join(conditions, fmt.Sprintf(" %s ", payload.Logic))
-
-	return c.JSON(fiber.Map{"cel_expression": celExpression})
-}
