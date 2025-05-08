@@ -40,7 +40,11 @@ var FetchWebhooksFromDBFunc = fetchEventVehicleWebhooks
 func (wc *WebhookCache) PopulateCache(ctx context.Context, exec boil.ContextExecutor) error {
 	newData, err := FetchWebhooksFromDBFunc(ctx, exec)
 	if err != nil {
-		return err
+		if err.Error() == "no webhook configurations found in the database" {
+			newData = make(map[uint32]map[string][]Webhook)
+		} else {
+			return err
+		}
 	}
 	wc.Update(newData)
 	return nil
