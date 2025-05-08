@@ -22,8 +22,9 @@ func GetSharedVehicles(identityAPIURL string, devLicense []byte, logger zerolog.
 	if identityAPIURL == "" {
 		return nil, fmt.Errorf("identity API URL not configured")
 	}
+
 	query := `
-		query($eth: String!) {
+		query($eth: Address!) {
 			vehicles(first: 50, filterBy: { privileged: $eth }) {
 				nodes {
 					tokenId
