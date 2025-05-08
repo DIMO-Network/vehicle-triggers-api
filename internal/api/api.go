@@ -58,6 +58,8 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 
 	logger.Info().Msg("Registering routes...")
 
+	app.Post("/build-cel", webhookController.BuildCEL)
+
 	// Webhook CRUD
 	app.Get("/v1/webhooks", jwtMiddleware, webhookController.ListWebhooks)
 	app.Post("/v1/webhooks", jwtMiddleware, webhookController.RegisterWebhook)
