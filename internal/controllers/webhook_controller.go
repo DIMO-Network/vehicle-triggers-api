@@ -305,6 +305,7 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 // @Produce      json
 // @Success      200  {array}  string  "List of signal names"
 // @Failure      500  "Internal server error"
+// @Security     BearerAuth
 // @Router       /v1/webhooks/signals [get]
 func (w *WebhookController) GetSignalNames(c *fiber.Ctx) error {
 	dimoVss := strings.NewReader(schema.VssRel42DIMO())
