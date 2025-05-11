@@ -342,6 +342,8 @@ paths:
             type: array
         "500":
           description: Internal server error
+      security:
+      - BearerAuth: []
       summary: Get signal names
       tags:
       - Webhooks

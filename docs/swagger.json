@@ -82,6 +82,11 @@
         },
         "/v1/webhooks/signals": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Fetches the list of signal names available for the data field.",
                 "produces": [
                     "application/json"
