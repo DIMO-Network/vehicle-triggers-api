@@ -80,6 +80,8 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		Str("value_string", signal.ValueString).
 		Msg("Parsed Signal")
 
+	// gets a vehicle's webhooks based on the signal name
+	// ex/ speed, or odometer
 	webhooks := l.webhookCache.GetWebhooks(signal.TokenID, signal.Name)
 	l.log.Debug().
 		Uint32("token_id", signal.TokenID).
@@ -128,18 +130,20 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 	return nil
 }
 
+// 'speed > 10', '{ ValueNumber: 10 }', 'speed'
 func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telemetry string) (bool, error) {
 	if trigger == "" {
 		return true, nil
 	}
-
+	// here telemetry is actually going to be a signal name
+	// we need to figure out whether it's a number or a string.
 	opts := []cel.EnvOption{
 		cel.Variable("valueNumber", cel.DoubleType),
 		cel.Variable("valueString", cel.StringType),
 		cel.Variable("tokenId", cel.IntType),
 	}
 	if telemetry != "valueNumber" && telemetry != "valueString" {
-		opts = append(opts, cel.Variable(telemetry, cel.DoubleType))
+		opts = append(opts, cel.Variable(telemetry, cel.DoubleType)) // here you'd want to try to figure out the cel type based on the telemetry. Is it a Double, Bool, or String?
 	}
 
 	env, err := cel.NewEnv(opts...)
@@ -163,7 +167,10 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 		"tokenId":     int64(signal.TokenID),
 	}
 	if telemetry != "valueNumber" && telemetry != "valueString" {
+		// here again, figure out whether we want to be using the Signal's ValueNumber or ValueString
+		// also, wouldn't you want to do vars[signal.Name] = signal.ValueNumber | signal.ValueString
 		vars[telemetry] = signal.ValueNumber
+		// { "speed": "10" }
 	}
 
 	out, _, err := prg.Eval(vars)

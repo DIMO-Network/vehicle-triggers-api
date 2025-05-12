@@ -144,6 +144,17 @@ func TestEvaluateCondition_StringComparisons(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:      "valueString == Active without quotes",
+			condition: `valueString == 'Active'`,
+			telemetry: "valueString",
+			signal: Signal{
+				ValueString: "Active",
+				TokenID:     1,
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
 			name:      "valueString == 'Active' false",
 			condition: `valueString == 'Active'`,
 			telemetry: "valueString",

@@ -3,10 +3,10 @@ no-tests = true
 
 [psql]
 dbname = "vehicle_events_api"
-blacklist = ["migrations"]
 host   = "localhost"
 port   = 5432
-user   = "dimo"
-pass   = "dimo"
-schema = "vehicle_events_api"
+user   = "postgres"
+pass   = ""
+schema = "public"
 sslmode= "disable"
+blacklist = ["goose_db_version"]
