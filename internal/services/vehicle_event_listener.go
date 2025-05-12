@@ -68,6 +68,9 @@ func (l *SignalListener) ProcessSignals(messages <-chan *message.Message) {
 }
 
 func (l *SignalListener) processMessage(msg *message.Message) error {
+	l.log.Debug().
+		RawJSON("raw_payload", msg.Payload).
+		Msg("Received raw Kafka payload")
 	var signal Signal
 	if err := json.Unmarshal(msg.Payload, &signal); err != nil {
 		return errors.Wrap(err, "failed to parse vehicle signal JSON")
