@@ -86,7 +86,7 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 	return c.Status(http.StatusCreated).JSON(fiber.Map{"message": "Vehicle assigned successfully"})
 }
 
-// AssignVehiclesFromCSV godoc
+// SubscribeVehiclesFromCSV godoc
 // @Summary      Assign multiple vehicles to a webhook from CSV
 // @Description  Parses a CSV file from the request body and subscribes each vehicleTokenId to the webhook.
 // @Tags         Webhooks
@@ -99,7 +99,7 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 // @Failure      500        {object}  map[string]string  "Internal server error"
 // @Security     BearerAuth
 // @Router       /v1/webhooks/{webhookId}/subscribe/csv [post]
-func (v *VehicleSubscriptionController) AssignVehiclesFromCSV(c *fiber.Ctx) error {
+func (v *VehicleSubscriptionController) SubscribeVehiclesFromCSV(c *fiber.Ctx) error {
 	webhookID := c.Params("webhookId")
 	dl, err := getDevLicense(c, v.logger)
 	if err != nil {
@@ -163,6 +163,79 @@ func (v *VehicleSubscriptionController) AssignVehiclesFromCSV(c *fiber.Ctx) erro
 	}
 
 	return c.Status(http.StatusCreated).JSON(fiber.Map{"message": fmt.Sprintf("Subscribed %d vehicles", count)})
+}
+
+// UnsubscribeVehiclesFromCSV godoc
+// @Summary      Unsubscribe multiple vehicles from a webhook using CSV
+// @Description  Parses a CSV file from the request body and unsubscribes each vehicleTokenId from the webhook.
+// @Tags         Webhooks
+// @Accept       text/csv
+// @Produce      json
+// @Param        webhookId  path  string  true  "Webhook ID"
+// @Success      200        {object}  map[string]string  "Count of unsubscribed vehicles"
+// @Failure      400        {object}  map[string]string  "Bad request"
+// @Failure      401        {object}  map[string]string  "Unauthorized"
+// @Failure      500        {object}  map[string]string  "Internal server error"
+// @Security     BearerAuth
+// @Router       /v1/webhooks/{webhookId}/unsubscribe/csv [delete]
+func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromCSV(c *fiber.Ctx) error {
+	webhookID := c.Params("webhookId")
+	dl, err := getDevLicense(c, v.logger)
+	if err != nil {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		v.logger.Error().Err(err).Msg("Failed to get file from form data")
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Missing CSV file"})
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		v.logger.Error().Err(err).Msg("Failed to open uploaded file")
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to open CSV file"})
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+
+	records, err := reader.ReadAll()
+	if err != nil {
+		v.logger.Error().Err(err).Msg("Failed to parse CSV")
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid CSV format"})
+	}
+
+	if len(records) == 0 || len(records[0]) == 0 || records[0][0] != "tokenId" {
+		v.logger.Error().Msg("CSV header missing or invalid")
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "CSV header must contain 'tokenId'"})
+	}
+
+	var count int
+	for _, record := range records[1:] {
+		if len(record) == 0 {
+			continue
+		}
+		tokenStr := record[0]
+		dec := types.Decimal{}
+		if err := dec.Scan(tokenStr); err != nil {
+			v.logger.Error().Err(err).Msgf("Invalid token format in CSV: %v", tokenStr)
+			continue
+		}
+
+		res, err := models.EventVehicles(
+			qm.Where("event_id = ? AND vehicle_token_id = ? AND developer_license_address = ?", webhookID, dec, dl),
+		).DeleteAll(c.Context(), v.store.DBS().Writer)
+		if err != nil {
+			v.logger.Error().Err(err).Msgf("Failed to unsubscribe vehicle from CSV: %v", tokenStr)
+			continue
+		}
+		if res > 0 {
+			count++
+		}
+	}
+
+	return c.JSON(fiber.Map{"message": fmt.Sprintf("Unsubscribed %d vehicles", count)})
 }
 
 // RemoveVehicleFromWebhook godoc
