@@ -224,8 +224,11 @@ func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromCSV(c *fiber.Ctx)
 		}
 
 		res, err := models.EventVehicles(
-			qm.Where("event_id = ? AND vehicle_token_id = ? AND developer_license_address = ?", webhookID, dec, dl),
+			models.EventVehicleWhere.EventID.EQ(webhookID),
+			models.EventVehicleWhere.VehicleTokenID.EQ(dec),
+			models.EventVehicleWhere.DeveloperLicenseAddress.EQ(dl),
 		).DeleteAll(c.Context(), v.store.DBS().Writer)
+
 		if err != nil {
 			v.logger.Error().Err(err).Msgf("Failed to unsubscribe vehicle from CSV: %v", tokenStr)
 			continue
