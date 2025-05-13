@@ -241,6 +241,50 @@ paths:
       summary: Subscribe all shared vehicles
       tags:
       - Webhooks
+  /v1/webhooks/{webhookId}/subscribe/csv:
+    post:
+      consumes:
+      - text/csv
+      description: Parses a CSV file from the request body and subscribes each vehicleTokenId
+        to the webhook.
+      parameters:
+      - description: Webhook ID
+        in: path
+        name: webhookId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Count of subscribed vehicles
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Assign multiple vehicles to a webhook from CSV
+      tags:
+      - Webhooks
   /v1/webhooks/{webhookId}/unsubscribe/{vehicleTokenId}:
     delete:
       description: Removes a vehicle’s subscription.
@@ -326,6 +370,50 @@ paths:
       security:
       - BearerAuth: []
       summary: Unsubscribe all shared vehicles
+      tags:
+      - Webhooks
+  /v1/webhooks/{webhookId}/unsubscribe/csv:
+    delete:
+      consumes:
+      - text/csv
+      description: Parses a CSV file from the request body and unsubscribes each vehicleTokenId
+        from the webhook.
+      parameters:
+      - description: Webhook ID
+        in: path
+        name: webhookId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Count of unsubscribed vehicles
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Unsubscribe multiple vehicles from a webhook using CSV
       tags:
       - Webhooks
   /v1/webhooks/signals:
