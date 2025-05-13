@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/csv"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"time"
 
@@ -117,7 +118,12 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromCSV(c *fiber.Ctx) e
 		v.logger.Error().Err(err).Msg("Failed to open uploaded file")
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to open CSV file"})
 	}
-	defer file.Close()
+	defer func(file multipart.File) {
+		err := file.Close()
+		if err != nil {
+
+		}
+	}(file)
 
 	reader := csv.NewReader(file)
 
@@ -196,7 +202,12 @@ func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromCSV(c *fiber.Ctx)
 		v.logger.Error().Err(err).Msg("Failed to open uploaded file")
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to open CSV file"})
 	}
-	defer file.Close()
+	defer func(file multipart.File) {
+		err := file.Close()
+		if err != nil {
+			
+		}
+	}(file)
 
 	reader := csv.NewReader(file)
 
