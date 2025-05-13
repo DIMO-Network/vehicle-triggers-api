@@ -121,7 +121,7 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromCSV(c *fiber.Ctx) e
 	defer func(file multipart.File) {
 		err := file.Close()
 		if err != nil {
-
+			v.logger.Warn().Err(err).Msg("Failed to close uploaded file")
 		}
 	}(file)
 
@@ -205,7 +205,7 @@ func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromCSV(c *fiber.Ctx)
 	defer func(file multipart.File) {
 		err := file.Close()
 		if err != nil {
-			
+			v.logger.Warn().Err(err).Msg("Failed to close uploaded file")
 		}
 	}(file)
 
