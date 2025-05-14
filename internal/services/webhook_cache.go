@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-events-api/internal/utils"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"github.com/volatiletech/sqlboiler/v4/types"
@@ -38,15 +39,30 @@ var FetchWebhooksFromDBFunc = fetchEventVehicleWebhooks
 
 // PopulateCache builds the cache from the database
 func (wc *WebhookCache) PopulateCache(ctx context.Context, exec boil.ContextExecutor) error {
-	newData, err := FetchWebhooksFromDBFunc(ctx, exec)
+	rawData, err := FetchWebhooksFromDBFunc(ctx, exec)
 	if err != nil {
 		if err.Error() == "no webhook configurations found in the database" {
-			newData = make(map[uint32]map[string][]Webhook)
+			rawData = make(map[uint32]map[string][]Webhook)
 		} else {
 			return err
 		}
 	}
-	wc.Update(newData)
+
+	// normalize keys
+	normalized := make(map[uint32]map[string][]Webhook)
+	for tokenID, hooksByRaw := range rawData {
+		normalized[tokenID] = make(map[string][]Webhook)
+		for rawName, hooks := range hooksByRaw {
+			normKey := utils.NormalizeSignalName(rawName)
+			// update Data field to normalized name as well
+			for i := range hooks {
+				hooks[i].Data = normKey
+			}
+			normalized[tokenID][normKey] = append(normalized[tokenID][normKey], hooks...)
+		}
+	}
+
+	wc.Update(normalized)
 	return nil
 }
 
