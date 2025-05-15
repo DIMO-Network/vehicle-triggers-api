@@ -13,7 +13,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	// on registration we sent “testtoken” as our verification_token
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(200)
-	w.Write([]byte("testtoken"))
+	if _, err := w.Write([]byte("testtoken")); err != nil {
+		log.Printf("write failed: %v", err)
+	}
 }
 
 func main() {

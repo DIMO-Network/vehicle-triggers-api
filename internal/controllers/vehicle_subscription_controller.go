@@ -86,8 +86,9 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		v.logger.Error().Err(err).Msg("Failed to assign vehicle")
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to assign vehicle"})
 	}
-	v.cache.PopulateCache(c.Context(), v.store.DBS().Reader)
-
+	if err := v.cache.PopulateCache(c.Context(), v.store.DBS().Reader); err != nil {
+		v.logger.Error().Err(err).Msg("cache refresh failed after subscription change")
+	}
 	return c.Status(http.StatusCreated).JSON(fiber.Map{"message": "Vehicle assigned successfully"})
 }
 
@@ -337,7 +338,11 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 		}
 		count++
 	}
-	v.cache.PopulateCache(c.Context(), v.store.DBS().Reader)
+
+	if err := v.cache.PopulateCache(c.Context(), v.store.DBS().Reader); err != nil {
+		v.logger.Error().Err(err).Msg("cache refresh failed after subscription change")
+	}
+
 	return c.Status(http.StatusCreated).JSON(fiber.Map{"message": fmt.Sprintf("Subscribed %d vehicles", count)})
 }
 
