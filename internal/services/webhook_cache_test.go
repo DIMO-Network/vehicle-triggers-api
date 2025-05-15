@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/DIMO-Network/vehicle-events-api/internal/utils"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 )
 
@@ -72,5 +73,59 @@ func TestUpdateAndGetWebhooks(t *testing.T) {
 	}
 	if hooks[0].URL != "u1" || hooks[1].URL != "u2" {
 		t.Errorf("unexpected URLs: %+v", hooks)
+	}
+}
+
+func TestPopulateCacheNormalization(t *testing.T) {
+	rawSignals := []string{
+		"Vehicle.Powertrain.CombustionEngine.IsRunning",
+		"Vehicle.Powertrain.TractionBattery.CurrentPower",
+		"Vehicle.Powertrain.TractionBattery.Charging.IsCharging",
+		"Vehicle.TraveledDistance",
+		"Vehicle.Powertrain.TractionBattery.StateOfCharge.Current",
+		"Vehicle.Powertrain.FuelSystem.RelativeLevel",
+		"Vehicle.Powertrain.FuelSystem.AbsoluteLevel",
+		"Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.Pressure",
+		"Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.Pressure",
+		"Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.Pressure",
+		"Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.Pressure",
+	}
+
+	// prepare stub data: one hook per raw signal
+	stubData := make(map[uint32]map[string][]Webhook)
+	const tokenID = 42
+	stubData[tokenID] = make(map[string][]Webhook)
+	for _, raw := range rawSignals {
+		// PopulateCache should re-key it to normalized
+		stubData[tokenID][raw] = []Webhook{{
+			ID:             "evt1",
+			URL:            "http://u",
+			Trigger:        "valueNumber>10",
+			CooldownPeriod: 0,
+			Data:           raw,
+		}}
+	}
+
+	orig := FetchWebhooksFromDBFunc
+	defer func() { FetchWebhooksFromDBFunc = orig }()
+	FetchWebhooksFromDBFunc = func(ctx context.Context, exec boil.ContextExecutor) (map[uint32]map[string][]Webhook, error) {
+		return stubData, nil
+	}
+
+	wc := NewWebhookCache()
+	if err := wc.PopulateCache(context.Background(), nil); err != nil {
+		t.Fatalf("PopulateCache failed: %v", err)
+	}
+
+	for _, raw := range rawSignals {
+		norm := utils.NormalizeSignalName(raw)
+		hooks := wc.GetWebhooks(tokenID, norm)
+		if len(hooks) != 1 {
+			t.Errorf("expected 1 hook under key %q, got %d", norm, len(hooks))
+		}
+		// raw key should no longer work
+		if got := wc.GetWebhooks(tokenID, raw); len(got) != 0 {
+			t.Errorf("expected no hooks under raw key %q, got %d", raw, len(got))
+		}
 	}
 }

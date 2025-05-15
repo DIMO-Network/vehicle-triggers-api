@@ -1,12 +1,12 @@
 package api
 
 import (
-	"context"
 	"github.com/DIMO-Network/shared"
 	"github.com/DIMO-Network/shared/db"
 	_ "github.com/DIMO-Network/vehicle-events-api/docs" // Import Swagger docs
 	"github.com/DIMO-Network/vehicle-events-api/internal/config"
 	"github.com/DIMO-Network/vehicle-events-api/internal/controllers"
+	"github.com/DIMO-Network/vehicle-events-api/internal/services"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/rs/zerolog"
@@ -22,7 +22,7 @@ func healthCheck(c *fiber.Ctx) error {
 }
 
 // Run sets up the API routes and starts the HTTP server.
-func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
+func Run(logger zerolog.Logger, store db.Store, webhookCache *services.WebhookCache) {
 	logger.Info().Msg("Starting Vehicle Events API...")
 
 	settings, err := shared.LoadConfig[config.Settings]("settings.yaml")
@@ -54,8 +54,7 @@ func Run(ctx context.Context, logger zerolog.Logger, store db.Store) {
 
 	// Register Webhook routes.
 	webhookController := controllers.NewWebhookController(store, logger)
-	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger, settings.IdentityAPIURL)
-
+	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger, settings.IdentityAPIURL, webhookCache)
 	logger.Info().Msg("Registering routes...")
 
 	app.Post("/build-cel", webhookController.BuildCEL)

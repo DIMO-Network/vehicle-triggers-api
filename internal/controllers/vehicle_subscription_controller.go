@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/csv"
 	"fmt"
+	"github.com/DIMO-Network/vehicle-events-api/internal/services"
 	"mime/multipart"
 	"net/http"
 	"time"
@@ -21,10 +22,11 @@ type VehicleSubscriptionController struct {
 	store          db.Store
 	logger         zerolog.Logger
 	identityAPIURL string
+	cache          *services.WebhookCache
 }
 
-func NewVehicleSubscriptionController(store db.Store, logger zerolog.Logger, identityAPIURL string) *VehicleSubscriptionController {
-	return &VehicleSubscriptionController{store: store, logger: logger, identityAPIURL: identityAPIURL}
+func NewVehicleSubscriptionController(store db.Store, logger zerolog.Logger, identityAPIURL string, cache *services.WebhookCache) *VehicleSubscriptionController {
+	return &VehicleSubscriptionController{store: store, logger: logger, identityAPIURL: identityAPIURL, cache: cache}
 }
 
 type SubscriptionView struct {
@@ -83,6 +85,9 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 	if err := ev.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
 		v.logger.Error().Err(err).Msg("Failed to assign vehicle")
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to assign vehicle"})
+	}
+	if err := v.cache.PopulateCache(c.Context(), v.store.DBS().Reader); err != nil {
+		v.logger.Error().Err(err).Msg("cache refresh failed after subscription change")
 	}
 	return c.Status(http.StatusCreated).JSON(fiber.Map{"message": "Vehicle assigned successfully"})
 }
@@ -333,6 +338,11 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 		}
 		count++
 	}
+
+	if err := v.cache.PopulateCache(c.Context(), v.store.DBS().Reader); err != nil {
+		v.logger.Error().Err(err).Msg("cache refresh failed after subscription change")
+	}
+
 	return c.Status(http.StatusCreated).JSON(fiber.Map{"message": fmt.Sprintf("Subscribed %d vehicles", count)})
 }
 

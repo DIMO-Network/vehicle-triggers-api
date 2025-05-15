@@ -13,6 +13,7 @@ import (
 	"github.com/DIMO-Network/model-garage/pkg/schema"
 	"github.com/DIMO-Network/shared/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-events-api/internal/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 	"github.com/teris-io/shortid"
@@ -124,10 +125,11 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	}
 	// --- End URI Validation ---
 
+	normalized := utils.NormalizeSignalName(payload.Data)
 	event := &models.Event{
 		ID:                      generateShortID(w.logger),
 		Service:                 payload.Service,
-		Data:                    strings.TrimSpace(payload.Data),
+		Data:                    normalized,
 		Trigger:                 payload.Trigger,
 		Setup:                   payload.Setup,
 		Description:             null.StringFrom(payload.Description),
@@ -234,7 +236,7 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		event.Service = payload.Service
 	}
 	if payload.Data != "" {
-		event.Data = payload.Data
+		event.Data = utils.NormalizeSignalName(payload.Data)
 	}
 	if payload.Setup != "" {
 		event.Setup = payload.Setup

@@ -50,6 +50,9 @@ func main() {
 		Str("git-sha1", gitSha1).
 		Logger()
 
+	logger.Info().
+		Msgf("Connecting to Postgres as %s@%s", settings.DB.User, settings.DB.Name)
+
 	args := os.Args
 	if len(args) > 1 && strings.ToLower(args[1]) == "migrate" {
 		db.MigrateDatabase(ctx, logger, &settings, args)
@@ -59,6 +62,11 @@ func main() {
 	store := sharedDB.NewDbConnectionFromSettings(ctx, &settings.DB, true)
 	store.WaitForDB(logger)
 
+	logger.Info().
+		Str("db_host", settings.DB.Host).
+		Str("db_name", settings.DB.Name).
+		Msg("Connected to database")
+
 	monApp := createMonitoringServer()
 	go func() {
 		monPort := settings.MonitoringPort
@@ -67,13 +75,13 @@ func main() {
 		}
 	}()
 
-	startDeviceSignalsConsumer(ctx, logger, &settings)
+	webhookCache := startDeviceSignalsConsumer(ctx, logger, &settings)
 
-	api.Run(ctx, logger, store)
+	api.Run(logger, store, webhookCache)
 }
 
 // startDeviceSignalsConsumer sets up and starts the Kafka consumer for topic.device.signals
-func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings) {
+func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings) *services.WebhookCache {
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
@@ -117,6 +125,8 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 	consumer.Start(ctx, signalListener.ProcessSignals)
 
 	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)
+
+	return webhookCache
 }
 
 func createMonitoringServer() *fiber.App {
