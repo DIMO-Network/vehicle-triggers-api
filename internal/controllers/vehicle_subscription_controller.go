@@ -321,8 +321,8 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 	var count int
 	for _, veh := range vehicles {
 		dec := types.Decimal{}
-		if err := dec.Scan(veh.TokenID); err != nil {
-			v.logger.Error().Err(err).Msgf("Invalid token for %v", veh.TokenID)
+		if err := dec.Scan(veh.TokenID.String()); err != nil {
+			v.logger.Error().Err(err).Msgf("Invalid token for %v", veh.TokenID.String())
 			continue
 		}
 		ev := &models.EventVehicle{
@@ -333,7 +333,7 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 			UpdatedAt:               time.Now(),
 		}
 		if err := ev.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
-			v.logger.Error().Err(err).Msgf("Failed to subscribe %v", veh.TokenID)
+			v.logger.Error().Err(err).Msgf("Failed to subscribe %v", veh.TokenID.String())
 			continue
 		}
 		count++

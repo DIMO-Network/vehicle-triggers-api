@@ -13,7 +13,7 @@ import (
 )
 
 type Vehicle struct {
-	TokenID string `json:"tokenId"`
+	TokenID json.Number `json:"tokenId"`
 }
 
 func GetSharedVehicles(identityAPIURL string, devLicense []byte, logger zerolog.Logger) ([]Vehicle, error) {
