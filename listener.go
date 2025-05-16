@@ -9,7 +9,7 @@ import (
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
-	fmt.Printf("✅ Webhook receiver got payload: %s\n", body)
+	fmt.Printf("Webhook receiver got payload: %s\n", body)
 	// on registration we sent “testtoken” as our verification_token
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(200)

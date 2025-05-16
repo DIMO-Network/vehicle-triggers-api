@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/rs/zerolog/log"
 	"strconv"
 	"strings"
@@ -150,19 +151,22 @@ func fetchEventVehicleWebhooks(ctx context.Context, exec boil.ContextExecutor) (
 		return nil, err
 	}
 
+	fmt.Printf("%+v", evVehicles)
+
 	newData := make(map[uint32]map[string][]Webhook)
 	for _, evv := range evVehicles {
 		vehicleTokenID, err := decimalToUint32(evv.VehicleTokenID)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("converting token_id: %s", evv.VehicleTokenID.String())
 		}
-		if evv.R == nil || evv.R.Event == nil {
-			continue
+		event, err := models.FindEvent(ctx, exec, evv.EventID)
+		if err != nil {
+			return nil, fmt.Errorf("FindEvent failed: %s", evv.EventID)
 		}
-		event := evv.R.Event
+
 		raw := strings.TrimSpace(event.Data)
 		if raw == "" {
-			continue
+			return nil, fmt.Errorf("event.Data empty for event %s (vehicle_token_id %d)", event.ID, vehicleTokenID)
 		}
 		telemetry := utils.NormalizeSignalName(raw)
 		if newData[vehicleTokenID] == nil {
@@ -175,6 +179,7 @@ func fetchEventVehicleWebhooks(ctx context.Context, exec boil.ContextExecutor) (
 			CooldownPeriod: event.CooldownPeriod,
 			Data:           telemetry,
 		}
+		fmt.Println("got here")
 		newData[vehicleTokenID][telemetry] = append(newData[vehicleTokenID][telemetry], wh)
 	}
 	if len(newData) == 0 {
