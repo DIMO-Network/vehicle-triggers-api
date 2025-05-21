@@ -207,8 +207,8 @@ func (l *SignalListener) checkCooldown(webhook Webhook) (bool, error) {
 	}
 	lastTriggered := logs[0].LastTriggeredAt
 	diff := time.Since(lastTriggered)
-	l.log.Debug().Msgf("Last triggered %v ago, required cooldown: %vs", diff.Seconds(), webhook.CooldownPeriod)
-	if diff >= time.Duration(webhook.CooldownPeriod)*time.Second {
+	l.log.Debug().Msgf("Last triggered %v ago, required cooldown: %vs", diff.Seconds(), cooldown)
+	if diff >= time.Duration(cooldown)*time.Second {
 		return true, nil
 	}
 	return false, nil
