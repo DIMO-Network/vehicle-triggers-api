@@ -143,8 +143,6 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 		return true, nil
 	}
 
-	trigger = convertIntLits(trigger)
-
 	opts := []cel.EnvOption{
 		cel.Variable("valueNumber", cel.DoubleType),
 		cel.Variable("valueString", cel.StringType),
