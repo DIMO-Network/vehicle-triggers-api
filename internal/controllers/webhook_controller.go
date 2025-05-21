@@ -126,6 +126,12 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	// --- End URI Validation ---
 
 	normalized := utils.NormalizeSignalName(payload.Data)
+
+	defaultCooldown := 0
+	if payload.Setup == "Hourly" {
+		defaultCooldown = 3600
+	}
+
 	event := &models.Event{
 		ID:                      generateShortID(w.logger),
 		Service:                 payload.Service,
@@ -134,6 +140,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		Setup:                   payload.Setup,
 		Description:             null.StringFrom(payload.Description),
 		TargetURI:               payload.TargetURI,
+		CooldownPeriod:          defaultCooldown,
 		DeveloperLicenseAddress: c.Locals("developer_license_address").([]byte),
 		Status:                  payload.Status,
 	}
@@ -252,6 +259,10 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	}
 	if payload.Description != "" {
 		event.Description = null.StringFrom(payload.Description)
+	}
+
+	if strings.EqualFold(event.Setup, "Hourly") && event.CooldownPeriod == 0 {
+		event.CooldownPeriod = 3600
 	}
 
 	if _, err := event.Update(c.Context(), w.store.DBS().Writer, boil.Infer()); err != nil {

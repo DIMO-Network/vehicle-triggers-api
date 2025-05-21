@@ -9,7 +9,6 @@ import (
 	"github.com/volatiletech/null/v8"
 	"io"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -32,12 +31,6 @@ func generateShortID(logger zerolog.Logger) string {
 		return ""
 	}
 	return strings.TrimSpace(id)
-}
-
-var reIntLit = regexp.MustCompile(`\b\d+\b`)
-
-func convertIntLits(expr string) string {
-	return reIntLit.ReplaceAllStringFunc(expr, func(s string) string { return s + ".0" })
 }
 
 type Signal struct {
@@ -143,8 +136,6 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 		return true, nil
 	}
 
-	trigger = convertIntLits(trigger)
-
 	opts := []cel.EnvOption{
 		cel.Variable("valueNumber", cel.DoubleType),
 		cel.Variable("valueString", cel.StringType),
@@ -188,6 +179,10 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 }
 
 func (l *SignalListener) checkCooldown(webhook Webhook) (bool, error) {
+	cooldown := webhook.CooldownPeriod
+	if cooldown == 0 && strings.EqualFold(webhook.Setup, "Hourly") {
+		cooldown = 3600
+	}
 	logs, err := models.EventLogs(
 		qm.Where("event_id = ?", webhook.ID),
 		qm.OrderBy("last_triggered_at DESC"),
@@ -203,8 +198,8 @@ func (l *SignalListener) checkCooldown(webhook Webhook) (bool, error) {
 	}
 	lastTriggered := logs[0].LastTriggeredAt
 	diff := time.Since(lastTriggered)
-	l.log.Debug().Msgf("Last triggered %v ago, required cooldown: %vs", diff.Seconds(), webhook.CooldownPeriod)
-	if diff >= time.Duration(webhook.CooldownPeriod)*time.Second {
+	l.log.Debug().Msgf("Last triggered %v ago, required cooldown: %vs", diff.Seconds(), cooldown)
+	if diff >= time.Duration(cooldown)*time.Second {
 		return true, nil
 	}
 	return false, nil
