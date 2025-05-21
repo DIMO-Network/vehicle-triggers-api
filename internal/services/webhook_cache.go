@@ -22,6 +22,7 @@ type Webhook struct {
 	Trigger        string
 	CooldownPeriod int
 	Data           string
+	Setup          string
 }
 
 // WebhookCache is an in-memory map: vehicleTokenID -> telemetry identifier -> []Webhook.
@@ -178,7 +179,9 @@ func fetchEventVehicleWebhooks(ctx context.Context, exec boil.ContextExecutor) (
 			Trigger:        event.Trigger,
 			CooldownPeriod: event.CooldownPeriod,
 			Data:           telemetry,
+			Setup:          event.Setup,
 		}
+
 		fmt.Println("got here")
 		newData[vehicleTokenID][telemetry] = append(newData[vehicleTokenID][telemetry], wh)
 	}

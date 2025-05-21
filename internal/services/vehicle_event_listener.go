@@ -188,6 +188,10 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 }
 
 func (l *SignalListener) checkCooldown(webhook Webhook) (bool, error) {
+	cooldown := webhook.CooldownPeriod
+	if cooldown == 0 && strings.EqualFold(webhook.Setup, "Hourly") {
+		cooldown = 3600
+	}
 	logs, err := models.EventLogs(
 		qm.Where("event_id = ?", webhook.ID),
 		qm.OrderBy("last_triggered_at DESC"),
