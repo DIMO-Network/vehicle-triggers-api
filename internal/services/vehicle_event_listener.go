@@ -15,14 +15,15 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/common/types"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
 	"github.com/DIMO-Network/shared/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
+	celtypes "github.com/google/cel-go/common/types"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
+	sqltypes "github.com/volatiletech/sqlboiler/v4/types"
 )
 
 func generateShortID(logger zerolog.Logger) string {
@@ -101,7 +102,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 	}
 
 	for _, wh := range webhooks {
-		cooldownPassed, err := l.checkCooldown(wh)
+		cooldownPassed, err := l.checkCooldown(wh, signal.TokenID)
 		if err != nil {
 			l.log.Error().Err(err).Msg("failed to check cooldown")
 			continue
@@ -124,7 +125,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 			if err := l.sendWebhookNotification(wh, &signal); err != nil {
 				l.log.Error().Err(err).Msg("failed to send webhook")
 			} else {
-				if err := l.logWebhookTrigger(wh.ID); err != nil {
+				if err := l.logWebhookTrigger(wh.ID, signal.TokenID); err != nil {
 					l.log.Error().Err(err).Msg("failed to log webhook trigger")
 				}
 			}
@@ -184,16 +185,16 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 		l.log.Error().Err(err).Msg("Error during CEL evaluation")
 		return false, err
 	}
-	return out == types.True, nil
+	return out == celtypes.True, nil
 }
 
-func (l *SignalListener) checkCooldown(webhook Webhook) (bool, error) {
+func (l *SignalListener) checkCooldown(webhook Webhook, tokenID uint32) (bool, error) {
 	cooldown := webhook.CooldownPeriod
 	if cooldown == 0 && strings.EqualFold(webhook.Setup, "Hourly") {
 		cooldown = 3600
 	}
 	logs, err := models.EventLogs(
-		qm.Where("event_id = ?", webhook.ID),
+		qm.Where("event_id = ? AND vehicle_token_id = ?", webhook.ID, tokenID),
 		qm.OrderBy("last_triggered_at DESC"),
 		qm.Limit(1),
 	).All(context.Background(), l.store.DBS().Reader)
@@ -214,10 +215,16 @@ func (l *SignalListener) checkCooldown(webhook Webhook) (bool, error) {
 	return false, nil
 }
 
-func (l *SignalListener) logWebhookTrigger(eventID string) error {
+func (l *SignalListener) logWebhookTrigger(eventID string, tokenID uint32) error {
+	var dec sqltypes.Decimal
+	if err := dec.Scan(fmt.Sprint(tokenID)); err != nil {
+		l.log.Error().Err(err).Msg("failed to convert tokenID")
+		return err
+	}
 	eventLog := &models.EventLog{
 		ID:               generateShortID(l.log),
 		EventID:          eventID,
+		VehicleTokenID:   dec,
 		SnapshotData:     []byte("{}"),
 		HTTPResponseCode: null.IntFrom(0),
 		LastTriggeredAt:  time.Now(),
@@ -229,7 +236,7 @@ func (l *SignalListener) logWebhookTrigger(eventID string) error {
 		l.log.Error().Err(err).Msg("Error inserting EventLog")
 		return err
 	}
-	l.log.Debug().Msgf("Logged webhook trigger for event %s", eventID)
+	l.log.Debug().Msgf("Logged webhook trigger for event %s, vehicle %d", eventID, tokenID)
 	return nil
 }
 
