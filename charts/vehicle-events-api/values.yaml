@@ -2,7 +2,7 @@ replicaCount: 1
 image:
   repository: dimozone/vehicle-events-api
   pullPolicy: IfNotPresent
-  tag: 076c9bb
+  tag: a0623e9
 imagePullSecrets: []
 nameOverride: ''
 fullnameOverride: ''
