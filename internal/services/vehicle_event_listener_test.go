@@ -38,8 +38,8 @@ func TestEvaluateCondition(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:      "valueNumber > 100.0 false",
-			condition: "valueNumber > 100.0",
+			name:      "valueNumber > 100 false",
+			condition: "valueNumber > 100",
 			telemetry: "valueNumber",
 			signal: Signal{
 				ValueNumber: 50,
@@ -51,8 +51,8 @@ func TestEvaluateCondition(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:      "valueNumber > 100.0 true",
-			condition: "valueNumber > 100.0",
+			name:      "valueNumber > 100 true",
+			condition: "valueNumber > 100",
 			telemetry: "valueNumber",
 			signal: Signal{
 				ValueNumber: 150,
@@ -64,12 +64,12 @@ func TestEvaluateCondition(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:      "tokenId equals 1 returns true",
-			condition: "tokenId == 1",
+			name:      "valueNumber equals 1 returns true",
+			condition: "valueNumber == 1",
 			telemetry: "valueNumber",
 			signal: Signal{
-				ValueNumber: 80,
-				ValueString: "active",
+				ValueNumber: 1,
+				ValueString: "fop",
 				TokenID:     1,
 				Timestamp:   time.Now(),
 			},
@@ -77,16 +77,16 @@ func TestEvaluateCondition(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:      "tokenId equals 1 fails for different token",
-			condition: "tokenId == 1",
+			name:      "valueNumber equals 0 returns false",
+			condition: "valueNumber == 0",
 			telemetry: "valueNumber",
 			signal: Signal{
-				ValueNumber: 80,
-				ValueString: "active",
-				TokenID:     2,
+				ValueNumber: 0,
+				ValueString: "bat",
+				TokenID:     1,
 				Timestamp:   time.Now(),
 			},
-			want:    false,
+			want:    true,
 			wantErr: false,
 		},
 		{

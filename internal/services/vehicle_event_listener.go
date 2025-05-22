@@ -9,6 +9,7 @@ import (
 	"github.com/volatiletech/null/v8"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -31,6 +32,12 @@ func generateShortID(logger zerolog.Logger) string {
 		return ""
 	}
 	return strings.TrimSpace(id)
+}
+
+var reIntLit = regexp.MustCompile(`\b\d+\b`)
+
+func convertIntLits(expr string) string {
+	return reIntLit.ReplaceAllStringFunc(expr, func(s string) string { return s + ".0" })
 }
 
 type Signal struct {
@@ -135,6 +142,8 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 	if trigger == "" {
 		return true, nil
 	}
+
+	trigger = convertIntLits(trigger)
 
 	opts := []cel.EnvOption{
 		cel.Variable("valueNumber", cel.DoubleType),
