@@ -17,15 +17,16 @@ func NormalizeSignalName(vss string) string {
 		if p == "" {
 			continue
 		}
+		// lower-case first letter of the first segment
+		// upper-case first letter of every later segment
+		runes := []rune(p)
+		first := runes[0]
 		if i == 0 {
-			// lower-case the entire first segment (OBD → obd)
-			parts[i] = strings.ToLower(p)
+			runes[0] = unicode.ToLower(first)
 		} else {
-			// upper-case only the first letter of later segments
-			runes := []rune(p)
-			runes[0] = unicode.ToUpper(runes[0])
-			parts[i] = string(runes)
+			runes[0] = unicode.ToUpper(first)
 		}
+		parts[i] = string(runes)
 	}
 	return strings.Join(parts, "")
 }
