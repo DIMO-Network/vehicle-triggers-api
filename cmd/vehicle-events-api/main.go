@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"log"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/adaptor"
 
 	"github.com/rs/zerolog"
 
@@ -100,7 +101,7 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 	}
 
 	// Initialize the in-memory webhook cache.
-	webhookCache := services.NewWebhookCache()
+	webhookCache := services.NewWebhookCache(&logger)
 
 	store := sharedDB.NewDbConnectionFromSettings(ctx, &settings.DB, true)
 	store.WaitForDB(logger)
