@@ -7,11 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
-
-	"github.com/rs/zerolog"
-
 	"github.com/DIMO-Network/shared"
 	sharedDB "github.com/DIMO-Network/shared/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/api"
@@ -20,7 +15,10 @@ import (
 	"github.com/DIMO-Network/vehicle-events-api/internal/kafka"
 	"github.com/DIMO-Network/vehicle-events-api/internal/services"
 	"github.com/IBM/sarama"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
 )
 
 // @title           Vehicle Events API
