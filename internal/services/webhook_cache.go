@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-events-api/internal/utils"
+	"github.com/rs/zerolog"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"github.com/volatiletech/sqlboiler/v4/types"
@@ -29,11 +29,13 @@ type Webhook struct {
 type WebhookCache struct {
 	mu       sync.RWMutex
 	webhooks map[uint32]map[string][]Webhook
+	logger   *zerolog.Logger
 }
 
-func NewWebhookCache() *WebhookCache {
+func NewWebhookCache(logger *zerolog.Logger) *WebhookCache {
 	return &WebhookCache{
 		webhooks: make(map[uint32]map[string][]Webhook),
+		logger:   logger,
 	}
 }
 
@@ -42,12 +44,12 @@ var FetchWebhooksFromDBFunc = fetchEventVehicleWebhooks
 // PopulateCache builds the cache from the database
 func (wc *WebhookCache) PopulateCache(ctx context.Context, exec boil.ContextExecutor) error {
 	rawData, err := FetchWebhooksFromDBFunc(ctx, exec)
-	log.Debug().
+	wc.logger.Debug().
 		Int("vehicles_with_hooks", len(rawData)).
 		Msg("Fetched raw hook map from DB")
 	for veh, byName := range rawData {
 		for name, hooks := range byName {
-			log.Debug().
+			wc.logger.Debug().
 				Uint32("vehicle", veh).
 				Str("raw_data_field", name).
 				Int("hook_count", len(hooks)).
@@ -78,7 +80,7 @@ func (wc *WebhookCache) PopulateCache(ctx context.Context, exec boil.ContextExec
 	}
 	for veh, byNorm := range normalized {
 		for normKey, hooks := range byNorm {
-			log.Debug().
+			wc.logger.Debug().
 				Uint32("vehicle", veh).
 				Str("normalized_key", normKey).
 				Int("hook_count", len(hooks)).
@@ -96,7 +98,7 @@ func (wc *WebhookCache) GetWebhooks(vehicleTokenID uint32, telemetry string) []W
 
 	byVehicle, exists := wc.webhooks[vehicleTokenID]
 	if !exists {
-		log.Debug().
+		wc.logger.Debug().
 			Uint32("vehicle_token", vehicleTokenID).
 			Msg("No webhooks cached for this vehicle")
 		return nil
@@ -107,7 +109,7 @@ func (wc *WebhookCache) GetWebhooks(vehicleTokenID uint32, telemetry string) []W
 	for k := range byVehicle {
 		available = append(available, k)
 	}
-	log.Debug().
+	wc.logger.Debug().
 		Uint32("vehicle_token", vehicleTokenID).
 		Str("looking_for", telemetry).
 		Strs("available_keys", available).
@@ -126,7 +128,7 @@ func (wc *WebhookCache) Update(newData map[uint32]map[string][]Webhook) {
 			total += len(hooks)
 		}
 	}
-	log.Info().
+	wc.logger.Info().
 		Int("webhook_config_count", total).
 		Msg("Webhook cache updated")
 	// additional logging for debug
@@ -135,7 +137,7 @@ func (wc *WebhookCache) Update(newData map[uint32]map[string][]Webhook) {
 		for signal := range bySignal {
 			keys = append(keys, signal)
 		}
-		log.Debug().
+		wc.logger.Debug().
 			Uint32("vehicle_token", tokenID).
 			Strs("signals", keys).
 			Msg("Cached signals for vehicle")

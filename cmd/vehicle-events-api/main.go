@@ -2,14 +2,10 @@ package main
 
 import (
 	"context"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"log"
 	"os"
 	"strings"
 	"time"
-
-	"github.com/rs/zerolog"
 
 	"github.com/DIMO-Network/shared"
 	sharedDB "github.com/DIMO-Network/shared/db"
@@ -19,7 +15,10 @@ import (
 	"github.com/DIMO-Network/vehicle-events-api/internal/kafka"
 	"github.com/DIMO-Network/vehicle-events-api/internal/services"
 	"github.com/IBM/sarama"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
 )
 
 // @title           Vehicle Events API
@@ -100,7 +99,7 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 	}
 
 	// Initialize the in-memory webhook cache.
-	webhookCache := services.NewWebhookCache()
+	webhookCache := services.NewWebhookCache(&logger)
 
 	store := sharedDB.NewDbConnectionFromSettings(ctx, &settings.DB, true)
 	store.WaitForDB(logger)
