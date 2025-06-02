@@ -6,8 +6,11 @@ import (
 	"testing"
 
 	"github.com/DIMO-Network/vehicle-events-api/internal/utils"
+	"github.com/rs/zerolog"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 )
+
+var nopLogger = zerolog.Nop()
 
 func TestPopulateCache(t *testing.T) {
 	orig := FetchWebhooksFromDBFunc
@@ -24,7 +27,7 @@ func TestPopulateCache(t *testing.T) {
 		}, nil
 	}
 
-	cache := NewWebhookCache()
+	cache := NewWebhookCache(&nopLogger)
 	if err := cache.PopulateCache(context.Background(), nil); err != nil {
 		t.Fatalf("PopulateCache returned error: %v", err)
 	}
@@ -42,14 +45,14 @@ func TestPopulateCache_Error(t *testing.T) {
 		return nil, errors.New("db error")
 	}
 
-	cache := NewWebhookCache()
+	cache := NewWebhookCache(&nopLogger)
 	if err := cache.PopulateCache(context.Background(), nil); err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }
 
 func TestGetWebhooks_Empty(t *testing.T) {
-	cache := NewWebhookCache()
+	cache := NewWebhookCache(&nopLogger)
 	// without PopulateCache, lookup should return nil
 	if got := cache.GetWebhooks(123, "foo"); got != nil {
 		t.Errorf("expected nil slice, got %v", got)
@@ -64,7 +67,7 @@ func TestUpdateAndGetWebhooks(t *testing.T) {
 			},
 		},
 	}
-	cache := NewWebhookCache()
+	cache := NewWebhookCache(&nopLogger)
 	cache.Update(data)
 
 	hooks := cache.GetWebhooks(55, "gps")
@@ -112,7 +115,7 @@ func TestPopulateCacheNormalization(t *testing.T) {
 		return stubData, nil
 	}
 
-	wc := NewWebhookCache()
+	wc := NewWebhookCache(&nopLogger)
 	if err := wc.PopulateCache(context.Background(), nil); err != nil {
 		t.Fatalf("PopulateCache failed: %v", err)
 	}
