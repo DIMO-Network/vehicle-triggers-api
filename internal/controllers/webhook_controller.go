@@ -329,10 +329,20 @@ func (w *WebhookController) GetSignalNames(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to load signals"})
 	}
 
-	signalNames := make([]string, 0)
+	type ValidaSignal struct {
+		Name string `json:"name"`
+		Unit string `json:"unit"`
+	}
+
+	signalNames := make([]ValidaSignal, 0)
 	for _, vssSignal := range vssSignals {
 		if !vssSignal.Deprecated {
-			signalNames = append(signalNames, vssSignal.Name)
+			signal := ValidaSignal{
+				Name: vssSignal.Name,
+				Unit: vssSignal.Unit,
+			}
+
+			signalNames = append(signalNames, signal)
 		}
 	}
 
