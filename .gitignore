@@ -4,3 +4,5 @@ settings.yaml
 vendor
 
 target/
+
+bin/
