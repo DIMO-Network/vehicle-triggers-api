@@ -17,12 +17,13 @@ import (
 )
 
 type Webhook struct {
-	ID             string
-	URL            string
-	Trigger        string
-	CooldownPeriod int
-	Data           string
-	Setup          string
+	ID                      string
+	URL                     string
+	Trigger                 string
+	CooldownPeriod          int
+	Data                    string
+	Setup                   string
+	DeveloperLicenseAddress []byte
 }
 
 // WebhookCache is an in-memory map: vehicleTokenID -> telemetry identifier -> []Webhook.
@@ -154,8 +155,6 @@ func fetchEventVehicleWebhooks(ctx context.Context, exec boil.ContextExecutor) (
 		return nil, err
 	}
 
-	fmt.Printf("%+v", evVehicles)
-
 	newData := make(map[uint32]map[string][]Webhook)
 	for _, evv := range evVehicles {
 		vehicleTokenID, err := decimalToUint32(evv.VehicleTokenID)
@@ -176,15 +175,15 @@ func fetchEventVehicleWebhooks(ctx context.Context, exec boil.ContextExecutor) (
 			newData[vehicleTokenID] = make(map[string][]Webhook)
 		}
 		wh := Webhook{
-			ID:             event.ID,
-			URL:            event.TargetURI,
-			Trigger:        event.Trigger,
-			CooldownPeriod: event.CooldownPeriod,
-			Data:           telemetry,
-			Setup:          event.Setup,
+			ID:                      event.ID,
+			URL:                     event.TargetURI,
+			Trigger:                 event.Trigger,
+			CooldownPeriod:          event.CooldownPeriod,
+			Data:                    telemetry,
+			Setup:                   event.Setup,
+			DeveloperLicenseAddress: evv.DeveloperLicenseAddress,
 		}
 
-		fmt.Println("got here")
 		newData[vehicleTokenID][telemetry] = append(newData[vehicleTokenID][telemetry], wh)
 	}
 	if len(newData) == 0 {

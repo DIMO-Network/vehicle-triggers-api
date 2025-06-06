@@ -75,6 +75,15 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
+	hasPerm, err := services.HasVehiclePermissions(v.identityAPIURL, tokenStr, dl, v.logger)
+	if err != nil {
+		v.logger.Error().Err(err).Msg("permission validation failed")
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to validate permissions"})
+	}
+	if !hasPerm {
+		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "Insufficient vehicle permissions"})
+	}
+
 	ev := &models.EventVehicle{
 		VehicleTokenID:          dec,
 		EventID:                 webhookID,

@@ -120,7 +120,7 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 		}
 	}()
 
-	signalListener := services.NewSignalListener(logger, webhookCache, store)
+	signalListener := services.NewSignalListener(logger, webhookCache, store, settings.IdentityAPIURL)
 	consumer.Start(ctx, signalListener.ProcessSignals)
 
 	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)
