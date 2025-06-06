@@ -113,9 +113,38 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 			l.log.Info().Msgf("permissions revoked for license %x on vehicle %d", wh.DeveloperLicenseAddress, signal.TokenID)
 			var dec sqltypes.Decimal
 			if err := dec.Scan(fmt.Sprint(signal.TokenID)); err == nil {
-				models.EventVehicles(qm.Where("event_id = ? AND vehicle_token_id = ? AND developer_license_address = ?", wh.ID, dec, wh.DeveloperLicenseAddress)).DeleteAll(context.Background(), l.store.DBS().Writer)
-				l.webhookCache.PopulateCache(context.Background(), l.store.DBS().Reader)
+				// 1) Delete the EventVehicle row and check its error
+				if delCount, err := models.EventVehicles(
+					qm.Where(
+						"event_id = ? AND vehicle_token_id = ? AND developer_license_address = ?",
+						wh.ID, dec, wh.DeveloperLicenseAddress,
+					),
+				).DeleteAll(context.Background(), l.store.DBS().Writer); err != nil {
+					l.log.Error().
+						Err(err).
+						Str("event_id", wh.ID).
+						Uint32("vehicle_token", signal.TokenID).
+						Msg("Failed to delete EventVehicle subscription")
+				} else {
+					l.log.Debug().
+						Str("event_id", wh.ID).
+						Uint32("vehicle_token", signal.TokenID).
+						Int("rows_deleted", int(delCount)).
+						Msg("Successfully removed EventVehicle subscription")
+				}
+
+				// 2) Refresh the cache and check its error
+				if err := l.webhookCache.PopulateCache(context.Background(), l.store.DBS().Reader); err != nil {
+					l.log.Error().
+						Err(err).
+						Msg("Failed to refresh webhook cache after permission revocation")
+				} else {
+					l.log.Debug().
+						Uint32("vehicle_token", signal.TokenID).
+						Msg("Webhook cache refreshed after permission revocation")
+				}
 			}
+
 			continue
 		}
 		cooldownPassed, err := l.checkCooldown(wh, signal.TokenID)
