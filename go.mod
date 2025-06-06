@@ -11,7 +11,7 @@ require (
 	github.com/ethereum/go-ethereum v1.14.11
 	github.com/friendsofgo/errors v0.9.2
 	github.com/gofiber/fiber/v2 v2.52.5
-	github.com/golang-jwt/jwt/v4 v4.5.1
+	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/cel-go v0.25.0
 	github.com/lib/pq v1.10.9
 	github.com/pkg/errors v0.9.1
@@ -25,7 +25,6 @@ require (
 	github.com/volatiletech/null/v8 v8.1.2
 	github.com/volatiletech/sqlboiler/v4 v4.17.1
 	github.com/volatiletech/strmangle v0.0.8
-
 )
 
 require (
