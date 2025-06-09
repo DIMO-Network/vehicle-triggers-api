@@ -23,8 +23,12 @@ func HasVehiclePermissions(identityAPIURL, vehicleTokenID string, devLicense []b
 	query := `query($tokenId: Int!) {
   vehicle(tokenId: $tokenId) {
     sacds {
-      grantee
-      permissions
+      edges {
+        node {
+          grantee
+          permissions
+        }
+      }
     }
   }
 }`
