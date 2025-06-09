@@ -20,14 +20,15 @@ func HasVehiclePermissions(identityAPIURL, vehicleTokenID string, devLicense []b
 		return false, fmt.Errorf("identity API URL not configured")
 	}
 
-	query := `query($tokenId: Int!) {
+	query := `query ($tokenId: Int!) {
   vehicle(tokenId: $tokenId) {
-    sacds {
-      edges {
-        node {
-          grantee
-          permissions
-        }
+    sacds(first:100) {
+      nodes {
+        grantee
+        permissions
+      }
+      pageInfo{
+        hasNextPage
       }
     }
   }
