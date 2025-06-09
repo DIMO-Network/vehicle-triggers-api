@@ -20,7 +20,7 @@ func HasVehiclePermissions(identityAPIURL, vehicleTokenID string, devLicense []b
 		return false, fmt.Errorf("identity API URL not configured")
 	}
 
-	query := `query($tokenId: BigInt!) {
+	query := `query($tokenId: Int!) {
   vehicle(tokenId: $tokenId) {
     sacds {
       grantee
