@@ -18,6 +18,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
+	"github.com/DIMO-Network/vehicle-events-api/internal/gateways"
+
 	"github.com/DIMO-Network/shared/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
 	celtypes "github.com/google/cel-go/common/types"
@@ -53,18 +55,18 @@ type Signal struct {
 }
 
 type SignalListener struct {
-	log            zerolog.Logger
-	webhookCache   *WebhookCache
-	store          db.Store
-	identityAPIURL string
+	log          zerolog.Logger
+	webhookCache *WebhookCache
+	store        db.Store
+	identityAPI  gateways.IdentityAPI
 }
 
-func NewSignalListener(logger zerolog.Logger, wc *WebhookCache, store db.Store, identityAPIURL string) *SignalListener {
+func NewSignalListener(logger zerolog.Logger, wc *WebhookCache, store db.Store, identityAPI gateways.IdentityAPI) *SignalListener {
 	return &SignalListener{
-		log:            logger,
-		webhookCache:   wc,
-		store:          store,
-		identityAPIURL: identityAPIURL,
+		log:          logger,
+		webhookCache: wc,
+		store:        store,
+		identityAPI:  identityAPI,
 	}
 }
 
@@ -104,7 +106,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 	}
 
 	for _, wh := range webhooks {
-		hasPerm, err := HasVehiclePermissions(l.identityAPIURL, fmt.Sprint(signal.TokenID), wh.DeveloperLicenseAddress, l.log)
+		hasPerm, err := l.identityAPI.HasVehiclePermissions(fmt.Sprint(signal.TokenID), wh.DeveloperLicenseAddress)
 		if err != nil {
 			l.log.Error().Err(err).Msg("permission check failed")
 			continue

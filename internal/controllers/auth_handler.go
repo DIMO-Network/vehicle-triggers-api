@@ -8,6 +8,7 @@ import (
 
 	"github.com/DIMO-Network/shared/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/auth"
+	"github.com/DIMO-Network/vehicle-events-api/internal/gateways"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/rs/zerolog"
@@ -15,30 +16,25 @@ import (
 
 // JWTMiddleware extracts the "ethereum_address" from the JWT,
 // verifies it against the identity API, and stores it in the request context.
-func JWTMiddleware(store db.Store, identityAPIURL string, logger zerolog.Logger) fiber.Handler {
+func JWTMiddleware(store db.Store, identityAPI gateways.IdentityAPI, logger zerolog.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Get the Authorization header.
 		tokenString := c.Get("Authorization")
-		if tokenString == "" || !strings.HasPrefix(tokenString, "Bearer ") {
+		if tokenString == "" || !strings.HasPrefix(tokenString, "Bearer") {
 			fmt.Println("DEBUG: Authorization header missing or malformed")
 			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized")
 		}
-		// Remove the "Bearer " prefix.
 		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
 
-		// Extract the ethereum address (developer license) from the JWT.
 		developerLicenseStr, err := ExtractDeveloperLicenseFromToken(tokenString)
 		if err != nil {
 			fmt.Printf("DEBUG: Error extracting developer license: %s\n", err.Error())
 			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized: " + err.Error())
 		}
 
-		// Verify that this developer license exists on identity API and in our DB.
-		if err := auth.EnsureDeveloperLicenseExists(developerLicenseStr, identityAPIURL, store, logger); err != nil {
+		if err := auth.EnsureDeveloperLicenseExists(developerLicenseStr, identityAPI, store, logger); err != nil {
 			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized: " + err.Error())
 		}
 
-		// Remove "0x" prefix and decode the hex string.
 		licenseHex := strings.TrimPrefix(developerLicenseStr, "0x")
 		developerLicenseBytes, err := hex.DecodeString(licenseHex)
 		if err != nil {
@@ -46,7 +42,6 @@ func JWTMiddleware(store db.Store, identityAPIURL string, logger zerolog.Logger)
 			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized: invalid developer license format")
 		}
 
-		// Store the decoded developer license bytes in the request context.
 		c.Locals("developer_license_address", developerLicenseBytes)
 		return c.Next()
 	}
