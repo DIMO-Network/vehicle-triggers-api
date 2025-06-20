@@ -12,6 +12,7 @@ import (
 	"github.com/DIMO-Network/vehicle-events-api/internal/api"
 	"github.com/DIMO-Network/vehicle-events-api/internal/config"
 	"github.com/DIMO-Network/vehicle-events-api/internal/db"
+	"github.com/DIMO-Network/vehicle-events-api/internal/gateways"
 	"github.com/DIMO-Network/vehicle-events-api/internal/kafka"
 	"github.com/DIMO-Network/vehicle-events-api/internal/services"
 	"github.com/IBM/sarama"
@@ -74,13 +75,13 @@ func main() {
 		}
 	}()
 
-	webhookCache := startDeviceSignalsConsumer(ctx, logger, &settings)
-
-	api.Run(logger, store, webhookCache)
+	identityAPI := gateways.NewIdentityAPIService(settings.IdentityAPIURL, logger)
+	webhookCache := startDeviceSignalsConsumer(ctx, logger, &settings, identityAPI)
+	api.Run(logger, store, webhookCache, identityAPI, &settings)
 }
 
 // startDeviceSignalsConsumer sets up and starts the Kafka consumer for topic.device.signals
-func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings) *services.WebhookCache {
+func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings, identityAPI gateways.IdentityAPI) *services.WebhookCache {
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
@@ -120,7 +121,7 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 		}
 	}()
 
-	signalListener := services.NewSignalListener(logger, webhookCache, store, settings.IdentityAPIURL)
+	signalListener := services.NewSignalListener(logger, webhookCache, store, identityAPI)
 	consumer.Start(ctx, signalListener.ProcessSignals)
 
 	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)
