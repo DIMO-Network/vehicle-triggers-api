@@ -2,7 +2,7 @@ package db
 
 import (
 	"context"
-	sharedDB "github.com/DIMO-Network/shared/db"
+	sharedDB "github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/config"
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"

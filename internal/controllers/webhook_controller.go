@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/DIMO-Network/model-garage/pkg/schema"
-	"github.com/DIMO-Network/shared/db"
+	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-events-api/internal/utils"
 	"github.com/gofiber/fiber/v2"

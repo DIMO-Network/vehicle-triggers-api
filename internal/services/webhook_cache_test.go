@@ -21,7 +21,7 @@ func TestPopulateCache(t *testing.T) {
 		return map[uint32]map[string][]Webhook{
 			10: {
 				"temperature": {
-					{URL: "http://example.com", Trigger: "valueNumber>50", Data: "temperature"},
+					{URL: "http://example.com", Trigger: "valueNumber>50", Data: "temperature", DeveloperLicenseAddress: nil},
 				},
 			},
 		}, nil
@@ -63,7 +63,7 @@ func TestUpdateAndGetWebhooks(t *testing.T) {
 	data := map[uint32]map[string][]Webhook{
 		55: {
 			"gps": {
-				{URL: "u1"}, {URL: "u2"},
+				{URL: "u1", DeveloperLicenseAddress: nil}, {URL: "u2", DeveloperLicenseAddress: nil},
 			},
 		},
 	}
@@ -101,11 +101,12 @@ func TestPopulateCacheNormalization(t *testing.T) {
 	for _, raw := range rawSignals {
 		// PopulateCache should re-key it to normalized
 		stubData[tokenID][raw] = []Webhook{{
-			ID:             "evt1",
-			URL:            "http://u",
-			Trigger:        "valueNumber>10",
-			CooldownPeriod: 0,
-			Data:           raw,
+			ID:                      "evt1",
+			URL:                     "http://u",
+			Trigger:                 "valueNumber>10",
+			CooldownPeriod:          0,
+			Data:                    raw,
+			DeveloperLicenseAddress: nil,
 		}}
 	}
 

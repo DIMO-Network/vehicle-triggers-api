@@ -3,12 +3,13 @@ package controllers
 import (
 	"encoding/csv"
 	"fmt"
+	"github.com/DIMO-Network/vehicle-events-api/internal/gateways"
 	"github.com/DIMO-Network/vehicle-events-api/internal/services"
 	"mime/multipart"
 	"net/http"
 	"time"
 
-	"github.com/DIMO-Network/shared/db"
+	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
@@ -19,14 +20,14 @@ import (
 )
 
 type VehicleSubscriptionController struct {
-	store          db.Store
-	logger         zerolog.Logger
-	identityAPIURL string
-	cache          *services.WebhookCache
+	store       db.Store
+	logger      zerolog.Logger
+	identityAPI gateways.IdentityAPI
+	cache       *services.WebhookCache
 }
 
-func NewVehicleSubscriptionController(store db.Store, logger zerolog.Logger, identityAPIURL string, cache *services.WebhookCache) *VehicleSubscriptionController {
-	return &VehicleSubscriptionController{store: store, logger: logger, identityAPIURL: identityAPIURL, cache: cache}
+func NewVehicleSubscriptionController(store db.Store, logger zerolog.Logger, identityAPI gateways.IdentityAPI, cache *services.WebhookCache) *VehicleSubscriptionController {
+	return &VehicleSubscriptionController{store: store, logger: logger, identityAPI: identityAPI, cache: cache}
 }
 
 type SubscriptionView struct {
@@ -73,6 +74,15 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 	dl, err := getDevLicense(c, v.logger)
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	hasPerm, err := v.identityAPI.HasVehiclePermissions(tokenStr, dl)
+	if err != nil {
+		v.logger.Error().Err(err).Msg("permission validation failed")
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to validate permissions"})
+	}
+	if !hasPerm {
+		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "Insufficient vehicle permissions"})
 	}
 
 	ev := &models.EventVehicle{
@@ -312,7 +322,7 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	vehicles, err := GetSharedVehicles(v.identityAPIURL, dl, v.logger)
+	vehicles, err := v.identityAPI.GetSharedVehicles(dl)
 	if err != nil {
 		v.logger.Error().Err(err).Msg("Failed to fetch shared vehicles")
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})

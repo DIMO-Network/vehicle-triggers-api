@@ -1,11 +1,11 @@
 package api
 
 import (
-	"github.com/DIMO-Network/shared"
-	"github.com/DIMO-Network/shared/db"
+	"github.com/DIMO-Network/shared/pkg/db"
 	_ "github.com/DIMO-Network/vehicle-events-api/docs" // Import Swagger docs
 	"github.com/DIMO-Network/vehicle-events-api/internal/config"
 	"github.com/DIMO-Network/vehicle-events-api/internal/controllers"
+	"github.com/DIMO-Network/vehicle-events-api/internal/gateways"
 	"github.com/DIMO-Network/vehicle-events-api/internal/services"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -22,13 +22,9 @@ func healthCheck(c *fiber.Ctx) error {
 }
 
 // Run sets up the API routes and starts the HTTP server.
-func Run(logger zerolog.Logger, store db.Store, webhookCache *services.WebhookCache) {
+func Run(logger zerolog.Logger, store db.Store, webhookCache *services.WebhookCache, identityAPI gateways.IdentityAPI, settings *config.Settings) {
 	logger.Info().Msg("Starting Vehicle Events API...")
 
-	settings, err := shared.LoadConfig[config.Settings]("settings.yaml")
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed to load settings")
-	}
 	app := fiber.New()
 
 	app.Use(cors.New(cors.Config{
@@ -50,11 +46,10 @@ func Run(logger zerolog.Logger, store db.Store, webhookCache *services.WebhookCa
 
 	// Create a JWT middleware that verifies developer licenses.
 	// settings.IdentityAPIURL is loaded from your settings.yaml.
-	jwtMiddleware := controllers.JWTMiddleware(store, settings.IdentityAPIURL, logger)
-
+	jwtMiddleware := controllers.JWTMiddleware(store, identityAPI, logger)
 	// Register Webhook routes.
 	webhookController := controllers.NewWebhookController(store, logger)
-	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger, settings.IdentityAPIURL, webhookCache)
+	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger, identityAPI, webhookCache)
 	logger.Info().Msg("Registering routes...")
 
 	app.Post("/build-cel", webhookController.BuildCEL)

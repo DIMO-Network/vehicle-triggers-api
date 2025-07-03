@@ -4,9 +4,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/DIMO-Network/vehicle-events-api/internal/gateways"
 	"strings"
 
-	"github.com/DIMO-Network/shared/db"
+	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/auth"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
@@ -15,9 +16,8 @@ import (
 
 // JWTMiddleware extracts the "ethereum_address" from the JWT,
 // verifies it against the identity API, and stores it in the request context.
-func JWTMiddleware(store db.Store, identityAPIURL string, logger zerolog.Logger) fiber.Handler {
+func JWTMiddleware(store db.Store, identityAPI gateways.IdentityAPI, logger zerolog.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Get the Authorization header.
 		tokenString := c.Get("Authorization")
 		if tokenString == "" || !strings.HasPrefix(tokenString, "Bearer ") {
 			fmt.Println("DEBUG: Authorization header missing or malformed")
@@ -34,7 +34,7 @@ func JWTMiddleware(store db.Store, identityAPIURL string, logger zerolog.Logger)
 		}
 
 		// Verify that this developer license exists on identity API and in our DB.
-		if err := auth.EnsureDeveloperLicenseExists(developerLicenseStr, identityAPIURL, store, logger); err != nil {
+		if err := auth.EnsureDeveloperLicenseExists(developerLicenseStr, identityAPI, store, logger); err != nil {
 			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized: " + err.Error())
 		}
 
