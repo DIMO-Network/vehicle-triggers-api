@@ -19,7 +19,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
-	"github.com/DIMO-Network/shared/db"
+	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
 	celtypes "github.com/google/cel-go/common/types"
 	"github.com/volatiletech/sqlboiler/v4/boil"

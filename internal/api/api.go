@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/DIMO-Network/shared/db"
+	"github.com/DIMO-Network/shared/pkg/db"
 	_ "github.com/DIMO-Network/vehicle-events-api/docs" // Import Swagger docs
 	"github.com/DIMO-Network/vehicle-events-api/internal/config"
 	"github.com/DIMO-Network/vehicle-events-api/internal/controllers"

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DIMO-Network/shared"
-	sharedDB "github.com/DIMO-Network/shared/db"
+	sharedDB "github.com/DIMO-Network/shared/pkg/db"
+	sharedSettings "github.com/DIMO-Network/shared/pkg/settings"
 	"github.com/DIMO-Network/vehicle-events-api/internal/api"
 	"github.com/DIMO-Network/vehicle-events-api/internal/config"
 	"github.com/DIMO-Network/vehicle-events-api/internal/db"
@@ -35,7 +35,7 @@ func main() {
 	gitSha1 := os.Getenv("GIT_SHA1")
 	ctx := context.Background()
 
-	settings, err := shared.LoadConfig[config.Settings]("settings.yaml")
+	settings, err := sharedSettings.LoadConfig[config.Settings]("settings.yaml")
 	if err != nil {
 		log.Fatalf("could not load settings: %s", err)
 	}

@@ -1,17 +1,15 @@
 package gateways
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/DIMO-Network/shared/pkg/http"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 )
@@ -34,8 +32,7 @@ type cachedPerm struct {
 }
 
 type identityAPIService struct {
-	url        string
-	httpClient *http.Client
+	httpClient http.ClientWrapper
 	logger     zerolog.Logger
 	mu         sync.Mutex
 	permCache  map[string]cachedPerm
@@ -43,49 +40,25 @@ type identityAPIService struct {
 
 // NewIdentityAPIService creates a new IdentityAPI implementation.
 func NewIdentityAPIService(url string, logger zerolog.Logger) IdentityAPI {
+	httpClient, _ := http.NewClientWrapper(url, "", 10*time.Second, nil, true)
 	return &identityAPIService{
-		url:        url,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		httpClient: httpClient,
 		logger:     logger,
 		permCache:  make(map[string]cachedPerm),
 	}
 }
 
 func (i *identityAPIService) VerifyDeveloperLicense(clientID string) (bool, int, error) {
-	query := `query($clientId: Address!) {\n  developerLicense(by: { clientId: $clientId }) {\n    clientId\n    tokenId\n  }\n}`
-	payload := map[string]any{
-		"query":     query,
-		"variables": map[string]any{"clientId": clientID},
-	}
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		i.logger.Error().Err(err).Msg("failed to marshal GraphQL payload")
-		return false, 0, err
-	}
+	query := fmt.Sprintf(`{
+		developerLicense(by: { clientId: "%s" }) {
+			clientId
+			tokenId
+		}
+	}`, clientID)
 
-	resp, err := i.httpClient.Post(i.url, "application/json", bytes.NewBuffer(payloadBytes))
-	if err != nil {
-		i.logger.Error().Err(err).Msg("failed to POST to identity API")
-		return false, 0, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		i.logger.Error().Err(err).Msg("failed to read response body")
-		return false, 0, err
-	}
-
-	i.logger.Debug().Int("status_code", resp.StatusCode).Str("response_body", string(body)).Msg("identity API response")
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		errMsg := fmt.Sprintf("identity API returned non-2xx status: %d", resp.StatusCode)
-		i.logger.Error().Msg(errMsg)
-		return false, 0, errors.New(errMsg)
-	}
-
-	var result struct {
-		Data *struct {
-			DeveloperLicense *struct {
+	var resp struct {
+		Data struct {
+			DeveloperLicense struct {
 				ClientID string `json:"clientId"`
 				TokenID  int    `json:"tokenId"`
 			} `json:"developerLicense"`
@@ -94,27 +67,17 @@ func (i *identityAPIService) VerifyDeveloperLicense(clientID string) (bool, int,
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		i.logger.Error().Err(err).Msg("failed to unmarshal JSON response")
+
+	if err := i.httpClient.GraphQLQuery("", query, &resp); err != nil {
 		return false, 0, err
 	}
-	if len(result.Errors) > 0 {
-		i.logger.Error().Msgf("GraphQL errors: %+v", result.Errors)
+	if len(resp.Errors) > 0 || resp.Data.DeveloperLicense.ClientID == "" {
 		return false, 0, nil
 	}
-	if result.Data == nil || result.Data.DeveloperLicense == nil {
-		i.logger.Error().Msg("no developerLicense data found in response")
-		return false, 0, nil
-	}
-	tokenID := result.Data.DeveloperLicense.TokenID
-	return true, tokenID, nil
+	return true, resp.Data.DeveloperLicense.TokenID, nil
 }
 
 func (i *identityAPIService) HasVehiclePermissions(vehicleTokenID string, devLicense []byte) (bool, error) {
-	if i.url == "" {
-		return false, fmt.Errorf("identity API URL not configured")
-	}
-
 	key := vehicleTokenID + string(devLicense)
 	i.mu.Lock()
 	if c, ok := i.permCache[key]; ok && time.Now().Before(c.expires) {
@@ -124,29 +87,16 @@ func (i *identityAPIService) HasVehiclePermissions(vehicleTokenID string, devLic
 	}
 	i.mu.Unlock()
 
-	query := `query ($tokenId: Int!) {\n  vehicle(tokenId: $tokenId) {\n    sacds(first:100) {\n      nodes {\n        grantee\n        permissions\n      }\n    }\n  }\n}`
-	payload := map[string]any{
-		"query":     query,
-		"variables": map[string]any{"tokenId": vehicleTokenID},
-	}
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		i.logger.Error().Err(err).Msg("failed to marshal GraphQL payload")
-		return false, err
-	}
-	resp, err := i.httpClient.Post(i.url, "application/json", bytes.NewBuffer(payloadBytes))
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return false, fmt.Errorf("identity API returned status %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, err
-	}
+	query := fmt.Sprintf(`{
+		vehicle(tokenId: %s) {
+			sacds(first:100) {
+				nodes {
+					grantee
+					permissions
+				}
+			}
+		}
+	}`, vehicleTokenID)
 
 	var result struct {
 		Data struct {
@@ -161,8 +111,8 @@ func (i *identityAPIService) HasVehiclePermissions(vehicleTokenID string, devLic
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		i.logger.Error().Err(err).Msg("failed to unmarshal GraphQL response")
+
+	if err := i.httpClient.GraphQLQuery("", query, &result); err != nil {
 		return false, err
 	}
 	if len(result.Errors) > 0 {
@@ -188,35 +138,13 @@ func (i *identityAPIService) HasVehiclePermissions(vehicleTokenID string, devLic
 
 func (i *identityAPIService) GetSharedVehicles(devLicense []byte) ([]IdentityVehicle, error) {
 	ethAddress := common.BytesToAddress(devLicense).Hex()
-	if i.url == "" {
-		return nil, fmt.Errorf("identity API URL not configured")
-	}
-
-	query := `query($eth: Address!) { vehicles(first: 50, filterBy: { privileged: $eth }) { nodes { tokenId } } }`
-	payload := map[string]any{
-		"query":     query,
-		"variables": map[string]any{"eth": ethAddress},
-	}
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		i.logger.Error().Err(err).Msg("failed to marshal GraphQL payload")
-		return nil, err
-	}
-	resp, err := i.httpClient.Post(i.url, "application/json", bytes.NewBuffer(payloadBytes))
-	if err != nil {
-		i.logger.Error().Err(err).Msg("failed to POST to identity API")
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		i.logger.Error().Err(err).Msg("failed to read response body")
-		return nil, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, fmt.Errorf("identity API returned non-2xx status: %d", resp.StatusCode)
-	}
+	query := fmt.Sprintf(`{
+		vehicles(first: 50, filterBy: { privileged: "%s" }) {
+			nodes {
+				tokenId
+			}
+		}
+	}`, ethAddress)
 
 	var result struct {
 		Data struct {
@@ -229,8 +157,8 @@ func (i *identityAPIService) GetSharedVehicles(devLicense []byte) ([]IdentityVeh
 			Path    []string `json:"path"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		i.logger.Error().Err(err).Msg("failed to unmarshal JSON response")
+
+	if err := i.httpClient.GraphQLQuery("", query, &result); err != nil {
 		return nil, err
 	}
 	if len(result.Errors) > 0 {
