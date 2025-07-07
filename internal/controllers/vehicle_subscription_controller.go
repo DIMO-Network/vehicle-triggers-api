@@ -90,7 +90,7 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		VehicleTokenID:             dec,
 		EventID:                    webhookID,
 		DeveloperLicenseAddress:    dl,
-		DeveloperLicenseAddressHex: hex.EncodeToString(dl),
+		DeveloperLicenseAddressHex: []byte(hex.EncodeToString(dl)),
 		CreatedAt:                  time.Now(),
 		UpdatedAt:                  time.Now(),
 	}
@@ -175,7 +175,7 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromCSV(c *fiber.Ctx) e
 			VehicleTokenID:             dec,
 			EventID:                    webhookID,
 			DeveloperLicenseAddress:    dl,
-			DeveloperLicenseAddressHex: hex.EncodeToString(dl),
+			DeveloperLicenseAddressHex: []byte(hex.EncodeToString(dl)),
 			CreatedAt:                  time.Now(),
 			UpdatedAt:                  time.Now(),
 		}
@@ -342,7 +342,7 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 			VehicleTokenID:             dec,
 			EventID:                    webhookID,
 			DeveloperLicenseAddress:    dl,
-			DeveloperLicenseAddressHex: hex.EncodeToString(dl),
+			DeveloperLicenseAddressHex: []byte(hex.EncodeToString(dl)),
 			CreatedAt:                  time.Now(),
 			UpdatedAt:                  time.Now(),
 		}

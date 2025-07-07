@@ -49,7 +49,7 @@ func EnsureDeveloperLicenseExists(clientID string, api gateways.IdentityAPI, sto
 
 	dl := models.DeveloperLicense{
 		LicenseAddress:    licenseBytes,
-		LicenseAddressHex: hexStr,
+		LicenseAddressHex: []byte(hexStr),
 		DeveloperID:       fmt.Sprintf("%d", tokenID),
 		Status:            "Active",
 		CreatedAt:         time.Now(),

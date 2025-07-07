@@ -29,7 +29,7 @@ type EventVehicle struct {
 	DeveloperLicenseAddress    []byte        `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
 	CreatedAt                  time.Time     `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
 	UpdatedAt                  time.Time     `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
-	DeveloperLicenseAddressHex string        `boil:"developer_license_address_hex" json:"developer_license_address_hex" toml:"developer_license_address_hex" yaml:"developer_license_address_hex"`
+	DeveloperLicenseAddressHex []byte        `boil:"developer_license_address_hex" json:"developer_license_address_hex" toml:"developer_license_address_hex" yaml:"developer_license_address_hex"`
 
 	R *eventVehicleR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L eventVehicleL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -75,14 +75,14 @@ var EventVehicleWhere = struct {
 	DeveloperLicenseAddress    whereHelper__byte
 	CreatedAt                  whereHelpertime_Time
 	UpdatedAt                  whereHelpertime_Time
-	DeveloperLicenseAddressHex whereHelperstring
+	DeveloperLicenseAddressHex whereHelper__byte
 }{
 	VehicleTokenID:             whereHelpertypes_Decimal{field: "\"vehicle_events_api\".\"event_vehicles\".\"vehicle_token_id\""},
 	EventID:                    whereHelperstring{field: "\"vehicle_events_api\".\"event_vehicles\".\"event_id\""},
 	DeveloperLicenseAddress:    whereHelper__byte{field: "\"vehicle_events_api\".\"event_vehicles\".\"developer_license_address\""},
 	CreatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_vehicles\".\"created_at\""},
 	UpdatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_vehicles\".\"updated_at\""},
-	DeveloperLicenseAddressHex: whereHelperstring{field: "\"vehicle_events_api\".\"event_vehicles\".\"developer_license_address_hex\""},
+	DeveloperLicenseAddressHex: whereHelper__byte{field: "\"vehicle_events_api\".\"event_vehicles\".\"developer_license_address_hex\""},
 }
 
 // EventVehicleRels is where relationship names are stored.

@@ -28,7 +28,7 @@ type DeveloperLicense struct {
 	Status            string    `boil:"status" json:"status" toml:"status" yaml:"status"`
 	CreatedAt         time.Time `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
 	UpdatedAt         time.Time `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
-	LicenseAddressHex string    `boil:"license_address_hex" json:"license_address_hex" toml:"license_address_hex" yaml:"license_address_hex"`
+	LicenseAddressHex []byte    `boil:"license_address_hex" json:"license_address_hex" toml:"license_address_hex" yaml:"license_address_hex"`
 
 	R *developerLicenseR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L developerLicenseL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -131,14 +131,14 @@ var DeveloperLicenseWhere = struct {
 	Status            whereHelperstring
 	CreatedAt         whereHelpertime_Time
 	UpdatedAt         whereHelpertime_Time
-	LicenseAddressHex whereHelperstring
+	LicenseAddressHex whereHelper__byte
 }{
 	LicenseAddress:    whereHelper__byte{field: "\"vehicle_events_api\".\"developer_licenses\".\"license_address\""},
 	DeveloperID:       whereHelperstring{field: "\"vehicle_events_api\".\"developer_licenses\".\"developer_id\""},
 	Status:            whereHelperstring{field: "\"vehicle_events_api\".\"developer_licenses\".\"status\""},
 	CreatedAt:         whereHelpertime_Time{field: "\"vehicle_events_api\".\"developer_licenses\".\"created_at\""},
 	UpdatedAt:         whereHelpertime_Time{field: "\"vehicle_events_api\".\"developer_licenses\".\"updated_at\""},
-	LicenseAddressHex: whereHelperstring{field: "\"vehicle_events_api\".\"developer_licenses\".\"license_address_hex\""},
+	LicenseAddressHex: whereHelper__byte{field: "\"vehicle_events_api\".\"developer_licenses\".\"license_address_hex\""},
 }
 
 // DeveloperLicenseRels is where relationship names are stored.

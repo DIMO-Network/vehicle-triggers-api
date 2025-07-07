@@ -37,7 +37,7 @@ type Event struct {
 	Status                     string      `boil:"status" json:"status" toml:"status" yaml:"status"`
 	Description                null.String `boil:"description" json:"description,omitempty" toml:"description" yaml:"description,omitempty"`
 	FailureCount               int         `boil:"failure_count" json:"failure_count" toml:"failure_count" yaml:"failure_count"`
-	DeveloperLicenseAddressHex string      `boil:"developer_license_address_hex" json:"developer_license_address_hex" toml:"developer_license_address_hex" yaml:"developer_license_address_hex"`
+	DeveloperLicenseAddressHex []byte      `boil:"developer_license_address_hex" json:"developer_license_address_hex" toml:"developer_license_address_hex" yaml:"developer_license_address_hex"`
 
 	R *eventR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L eventL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -196,7 +196,7 @@ var EventWhere = struct {
 	Status                     whereHelperstring
 	Description                whereHelpernull_String
 	FailureCount               whereHelperint
-	DeveloperLicenseAddressHex whereHelperstring
+	DeveloperLicenseAddressHex whereHelper__byte
 }{
 	ID:                         whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"id\""},
 	Service:                    whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"service\""},
@@ -211,7 +211,7 @@ var EventWhere = struct {
 	Status:                     whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"status\""},
 	Description:                whereHelpernull_String{field: "\"vehicle_events_api\".\"events\".\"description\""},
 	FailureCount:               whereHelperint{field: "\"vehicle_events_api\".\"events\".\"failure_count\""},
-	DeveloperLicenseAddressHex: whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"developer_license_address_hex\""},
+	DeveloperLicenseAddressHex: whereHelper__byte{field: "\"vehicle_events_api\".\"events\".\"developer_license_address_hex\""},
 }
 
 // EventRels is where relationship names are stored.
