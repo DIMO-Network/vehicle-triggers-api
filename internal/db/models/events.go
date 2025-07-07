@@ -24,82 +24,87 @@ import (
 
 // Event is an object representing the database table.
 type Event struct {
-	ID                      string      `boil:"id" json:"id" toml:"id" yaml:"id"`
-	Service                 string      `boil:"service" json:"service" toml:"service" yaml:"service"`
-	Data                    string      `boil:"data" json:"data" toml:"data" yaml:"data"`
-	Trigger                 string      `boil:"trigger" json:"trigger" toml:"trigger" yaml:"trigger"`
-	Setup                   string      `boil:"setup" json:"setup" toml:"setup" yaml:"setup"`
-	TargetURI               string      `boil:"target_uri" json:"target_uri" toml:"target_uri" yaml:"target_uri"`
-	CooldownPeriod          int         `boil:"cooldown_period" json:"cooldown_period" toml:"cooldown_period" yaml:"cooldown_period"`
-	DeveloperLicenseAddress []byte      `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
-	CreatedAt               time.Time   `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	UpdatedAt               time.Time   `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
-	Status                  string      `boil:"status" json:"status" toml:"status" yaml:"status"`
-	Description             null.String `boil:"description" json:"description,omitempty" toml:"description" yaml:"description,omitempty"`
-	FailureCount            int         `boil:"failure_count" json:"failure_count" toml:"failure_count" yaml:"failure_count"`
+	ID                         string      `boil:"id" json:"id" toml:"id" yaml:"id"`
+	Service                    string      `boil:"service" json:"service" toml:"service" yaml:"service"`
+	Data                       string      `boil:"data" json:"data" toml:"data" yaml:"data"`
+	Trigger                    string      `boil:"trigger" json:"trigger" toml:"trigger" yaml:"trigger"`
+	Setup                      string      `boil:"setup" json:"setup" toml:"setup" yaml:"setup"`
+	TargetURI                  string      `boil:"target_uri" json:"target_uri" toml:"target_uri" yaml:"target_uri"`
+	CooldownPeriod             int         `boil:"cooldown_period" json:"cooldown_period" toml:"cooldown_period" yaml:"cooldown_period"`
+	DeveloperLicenseAddress    []byte      `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
+	CreatedAt                  time.Time   `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	UpdatedAt                  time.Time   `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	Status                     string      `boil:"status" json:"status" toml:"status" yaml:"status"`
+	Description                null.String `boil:"description" json:"description,omitempty" toml:"description" yaml:"description,omitempty"`
+	FailureCount               int         `boil:"failure_count" json:"failure_count" toml:"failure_count" yaml:"failure_count"`
+	DeveloperLicenseAddressHex string      `boil:"developer_license_address_hex" json:"developer_license_address_hex" toml:"developer_license_address_hex" yaml:"developer_license_address_hex"`
 
 	R *eventR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L eventL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var EventColumns = struct {
-	ID                      string
-	Service                 string
-	Data                    string
-	Trigger                 string
-	Setup                   string
-	TargetURI               string
-	CooldownPeriod          string
-	DeveloperLicenseAddress string
-	CreatedAt               string
-	UpdatedAt               string
-	Status                  string
-	Description             string
-	FailureCount            string
+	ID                         string
+	Service                    string
+	Data                       string
+	Trigger                    string
+	Setup                      string
+	TargetURI                  string
+	CooldownPeriod             string
+	DeveloperLicenseAddress    string
+	CreatedAt                  string
+	UpdatedAt                  string
+	Status                     string
+	Description                string
+	FailureCount               string
+	DeveloperLicenseAddressHex string
 }{
-	ID:                      "id",
-	Service:                 "service",
-	Data:                    "data",
-	Trigger:                 "trigger",
-	Setup:                   "setup",
-	TargetURI:               "target_uri",
-	CooldownPeriod:          "cooldown_period",
-	DeveloperLicenseAddress: "developer_license_address",
-	CreatedAt:               "created_at",
-	UpdatedAt:               "updated_at",
-	Status:                  "status",
-	Description:             "description",
-	FailureCount:            "failure_count",
+	ID:                         "id",
+	Service:                    "service",
+	Data:                       "data",
+	Trigger:                    "trigger",
+	Setup:                      "setup",
+	TargetURI:                  "target_uri",
+	CooldownPeriod:             "cooldown_period",
+	DeveloperLicenseAddress:    "developer_license_address",
+	CreatedAt:                  "created_at",
+	UpdatedAt:                  "updated_at",
+	Status:                     "status",
+	Description:                "description",
+	FailureCount:               "failure_count",
+	DeveloperLicenseAddressHex: "developer_license_address_hex",
 }
 
 var EventTableColumns = struct {
-	ID                      string
-	Service                 string
-	Data                    string
-	Trigger                 string
-	Setup                   string
-	TargetURI               string
-	CooldownPeriod          string
-	DeveloperLicenseAddress string
-	CreatedAt               string
-	UpdatedAt               string
-	Status                  string
-	Description             string
-	FailureCount            string
+	ID                         string
+	Service                    string
+	Data                       string
+	Trigger                    string
+	Setup                      string
+	TargetURI                  string
+	CooldownPeriod             string
+	DeveloperLicenseAddress    string
+	CreatedAt                  string
+	UpdatedAt                  string
+	Status                     string
+	Description                string
+	FailureCount               string
+	DeveloperLicenseAddressHex string
 }{
-	ID:                      "events.id",
-	Service:                 "events.service",
-	Data:                    "events.data",
-	Trigger:                 "events.trigger",
-	Setup:                   "events.setup",
-	TargetURI:               "events.target_uri",
-	CooldownPeriod:          "events.cooldown_period",
-	DeveloperLicenseAddress: "events.developer_license_address",
-	CreatedAt:               "events.created_at",
-	UpdatedAt:               "events.updated_at",
-	Status:                  "events.status",
-	Description:             "events.description",
-	FailureCount:            "events.failure_count",
+	ID:                         "events.id",
+	Service:                    "events.service",
+	Data:                       "events.data",
+	Trigger:                    "events.trigger",
+	Setup:                      "events.setup",
+	TargetURI:                  "events.target_uri",
+	CooldownPeriod:             "events.cooldown_period",
+	DeveloperLicenseAddress:    "events.developer_license_address",
+	CreatedAt:                  "events.created_at",
+	UpdatedAt:                  "events.updated_at",
+	Status:                     "events.status",
+	Description:                "events.description",
+	FailureCount:               "events.failure_count",
+	DeveloperLicenseAddressHex: "events.developer_license_address_hex",
 }
 
 // Generated where
@@ -178,33 +183,35 @@ func (w whereHelpernull_String) IsNull() qm.QueryMod    { return qmhelper.WhereI
 func (w whereHelpernull_String) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
 
 var EventWhere = struct {
-	ID                      whereHelperstring
-	Service                 whereHelperstring
-	Data                    whereHelperstring
-	Trigger                 whereHelperstring
-	Setup                   whereHelperstring
-	TargetURI               whereHelperstring
-	CooldownPeriod          whereHelperint
-	DeveloperLicenseAddress whereHelper__byte
-	CreatedAt               whereHelpertime_Time
-	UpdatedAt               whereHelpertime_Time
-	Status                  whereHelperstring
-	Description             whereHelpernull_String
-	FailureCount            whereHelperint
+	ID                         whereHelperstring
+	Service                    whereHelperstring
+	Data                       whereHelperstring
+	Trigger                    whereHelperstring
+	Setup                      whereHelperstring
+	TargetURI                  whereHelperstring
+	CooldownPeriod             whereHelperint
+	DeveloperLicenseAddress    whereHelper__byte
+	CreatedAt                  whereHelpertime_Time
+	UpdatedAt                  whereHelpertime_Time
+	Status                     whereHelperstring
+	Description                whereHelpernull_String
+	FailureCount               whereHelperint
+	DeveloperLicenseAddressHex whereHelperstring
 }{
-	ID:                      whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"id\""},
-	Service:                 whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"service\""},
-	Data:                    whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"data\""},
-	Trigger:                 whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"trigger\""},
-	Setup:                   whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"setup\""},
-	TargetURI:               whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"target_uri\""},
-	CooldownPeriod:          whereHelperint{field: "\"vehicle_events_api\".\"events\".\"cooldown_period\""},
-	DeveloperLicenseAddress: whereHelper__byte{field: "\"vehicle_events_api\".\"events\".\"developer_license_address\""},
-	CreatedAt:               whereHelpertime_Time{field: "\"vehicle_events_api\".\"events\".\"created_at\""},
-	UpdatedAt:               whereHelpertime_Time{field: "\"vehicle_events_api\".\"events\".\"updated_at\""},
-	Status:                  whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"status\""},
-	Description:             whereHelpernull_String{field: "\"vehicle_events_api\".\"events\".\"description\""},
-	FailureCount:            whereHelperint{field: "\"vehicle_events_api\".\"events\".\"failure_count\""},
+	ID:                         whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"id\""},
+	Service:                    whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"service\""},
+	Data:                       whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"data\""},
+	Trigger:                    whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"trigger\""},
+	Setup:                      whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"setup\""},
+	TargetURI:                  whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"target_uri\""},
+	CooldownPeriod:             whereHelperint{field: "\"vehicle_events_api\".\"events\".\"cooldown_period\""},
+	DeveloperLicenseAddress:    whereHelper__byte{field: "\"vehicle_events_api\".\"events\".\"developer_license_address\""},
+	CreatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"events\".\"created_at\""},
+	UpdatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"events\".\"updated_at\""},
+	Status:                     whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"status\""},
+	Description:                whereHelpernull_String{field: "\"vehicle_events_api\".\"events\".\"description\""},
+	FailureCount:               whereHelperint{field: "\"vehicle_events_api\".\"events\".\"failure_count\""},
+	DeveloperLicenseAddressHex: whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"developer_license_address_hex\""},
 }
 
 // EventRels is where relationship names are stored.
@@ -255,8 +262,8 @@ func (r *eventR) GetEventVehicles() EventVehicleSlice {
 type eventL struct{}
 
 var (
-	eventAllColumns            = []string{"id", "service", "data", "trigger", "setup", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description", "failure_count"}
-	eventColumnsWithoutDefault = []string{"id", "service", "data", "trigger", "setup", "target_uri", "developer_license_address", "status"}
+	eventAllColumns            = []string{"id", "service", "data", "trigger", "setup", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description", "failure_count", "developer_license_address_hex"}
+	eventColumnsWithoutDefault = []string{"id", "service", "data", "trigger", "setup", "target_uri", "developer_license_address", "status", "developer_license_address_hex"}
 	eventColumnsWithDefault    = []string{"cooldown_period", "created_at", "updated_at", "description", "failure_count"}
 	eventPrimaryKeyColumns     = []string{"id"}
 	eventGeneratedColumns      = []string{}
