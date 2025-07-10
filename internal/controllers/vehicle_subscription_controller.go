@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/csv"
+	"encoding/hex"
 	"fmt"
 	"github.com/DIMO-Network/vehicle-events-api/internal/gateways"
 	"github.com/DIMO-Network/vehicle-events-api/internal/services"
@@ -86,11 +87,12 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 	}
 
 	ev := &models.EventVehicle{
-		VehicleTokenID:          dec,
-		EventID:                 webhookID,
-		DeveloperLicenseAddress: dl,
-		CreatedAt:               time.Now(),
-		UpdatedAt:               time.Now(),
+		VehicleTokenID:             dec,
+		EventID:                    webhookID,
+		DeveloperLicenseAddress:    dl,
+		DeveloperLicenseAddressHex: []byte(hex.EncodeToString(dl)),
+		CreatedAt:                  time.Now(),
+		UpdatedAt:                  time.Now(),
 	}
 	if err := ev.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
 		v.logger.Error().Err(err).Msg("Failed to assign vehicle")
@@ -170,11 +172,12 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromCSV(c *fiber.Ctx) e
 		}
 
 		ev := &models.EventVehicle{
-			VehicleTokenID:          dec,
-			EventID:                 webhookID,
-			DeveloperLicenseAddress: dl,
-			CreatedAt:               time.Now(),
-			UpdatedAt:               time.Now(),
+			VehicleTokenID:             dec,
+			EventID:                    webhookID,
+			DeveloperLicenseAddress:    dl,
+			DeveloperLicenseAddressHex: []byte(hex.EncodeToString(dl)),
+			CreatedAt:                  time.Now(),
+			UpdatedAt:                  time.Now(),
 		}
 		if err := ev.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
 			v.logger.Error().Err(err).Msgf("Failed to assign vehicle from CSV: %v", tokenStr)
@@ -336,11 +339,12 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 			continue
 		}
 		ev := &models.EventVehicle{
-			VehicleTokenID:          dec,
-			EventID:                 webhookID,
-			DeveloperLicenseAddress: dl,
-			CreatedAt:               time.Now(),
-			UpdatedAt:               time.Now(),
+			VehicleTokenID:             dec,
+			EventID:                    webhookID,
+			DeveloperLicenseAddress:    dl,
+			DeveloperLicenseAddressHex: []byte(hex.EncodeToString(dl)),
+			CreatedAt:                  time.Now(),
+			UpdatedAt:                  time.Now(),
 		}
 		if err := ev.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
 			v.logger.Error().Err(err).Msgf("Failed to subscribe %v", veh.TokenID.String())

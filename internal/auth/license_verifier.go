@@ -48,11 +48,12 @@ func EnsureDeveloperLicenseExists(clientID string, api gateways.IdentityAPI, sto
 	}
 
 	dl := models.DeveloperLicense{
-		LicenseAddress: licenseBytes,
-		DeveloperID:    fmt.Sprintf("%d", tokenID),
-		Status:         "Active",
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		LicenseAddress:    licenseBytes,
+		LicenseAddressHex: []byte(hexStr),
+		DeveloperID:       fmt.Sprintf("%d", tokenID),
+		Status:            "Active",
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
 	}
 
 	if err := dl.Insert(context.Background(), store.DBS().Writer, boil.Infer()); err != nil {

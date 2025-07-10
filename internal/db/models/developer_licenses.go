@@ -23,42 +23,47 @@ import (
 
 // DeveloperLicense is an object representing the database table.
 type DeveloperLicense struct {
-	LicenseAddress []byte    `boil:"license_address" json:"license_address" toml:"license_address" yaml:"license_address"`
-	DeveloperID    string    `boil:"developer_id" json:"developer_id" toml:"developer_id" yaml:"developer_id"`
-	Status         string    `boil:"status" json:"status" toml:"status" yaml:"status"`
-	CreatedAt      time.Time `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	UpdatedAt      time.Time `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	LicenseAddress    []byte    `boil:"license_address" json:"license_address" toml:"license_address" yaml:"license_address"`
+	DeveloperID       string    `boil:"developer_id" json:"developer_id" toml:"developer_id" yaml:"developer_id"`
+	Status            string    `boil:"status" json:"status" toml:"status" yaml:"status"`
+	CreatedAt         time.Time `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	UpdatedAt         time.Time `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	LicenseAddressHex []byte    `boil:"license_address_hex" json:"license_address_hex" toml:"license_address_hex" yaml:"license_address_hex"`
 
 	R *developerLicenseR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L developerLicenseL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var DeveloperLicenseColumns = struct {
-	LicenseAddress string
-	DeveloperID    string
-	Status         string
-	CreatedAt      string
-	UpdatedAt      string
+	LicenseAddress    string
+	DeveloperID       string
+	Status            string
+	CreatedAt         string
+	UpdatedAt         string
+	LicenseAddressHex string
 }{
-	LicenseAddress: "license_address",
-	DeveloperID:    "developer_id",
-	Status:         "status",
-	CreatedAt:      "created_at",
-	UpdatedAt:      "updated_at",
+	LicenseAddress:    "license_address",
+	DeveloperID:       "developer_id",
+	Status:            "status",
+	CreatedAt:         "created_at",
+	UpdatedAt:         "updated_at",
+	LicenseAddressHex: "license_address_hex",
 }
 
 var DeveloperLicenseTableColumns = struct {
-	LicenseAddress string
-	DeveloperID    string
-	Status         string
-	CreatedAt      string
-	UpdatedAt      string
+	LicenseAddress    string
+	DeveloperID       string
+	Status            string
+	CreatedAt         string
+	UpdatedAt         string
+	LicenseAddressHex string
 }{
-	LicenseAddress: "developer_licenses.license_address",
-	DeveloperID:    "developer_licenses.developer_id",
-	Status:         "developer_licenses.status",
-	CreatedAt:      "developer_licenses.created_at",
-	UpdatedAt:      "developer_licenses.updated_at",
+	LicenseAddress:    "developer_licenses.license_address",
+	DeveloperID:       "developer_licenses.developer_id",
+	Status:            "developer_licenses.status",
+	CreatedAt:         "developer_licenses.created_at",
+	UpdatedAt:         "developer_licenses.updated_at",
+	LicenseAddressHex: "developer_licenses.license_address_hex",
 }
 
 // Generated where
@@ -121,17 +126,19 @@ func (w whereHelpertime_Time) GTE(x time.Time) qm.QueryMod {
 }
 
 var DeveloperLicenseWhere = struct {
-	LicenseAddress whereHelper__byte
-	DeveloperID    whereHelperstring
-	Status         whereHelperstring
-	CreatedAt      whereHelpertime_Time
-	UpdatedAt      whereHelpertime_Time
+	LicenseAddress    whereHelper__byte
+	DeveloperID       whereHelperstring
+	Status            whereHelperstring
+	CreatedAt         whereHelpertime_Time
+	UpdatedAt         whereHelpertime_Time
+	LicenseAddressHex whereHelper__byte
 }{
-	LicenseAddress: whereHelper__byte{field: "\"vehicle_events_api\".\"developer_licenses\".\"license_address\""},
-	DeveloperID:    whereHelperstring{field: "\"vehicle_events_api\".\"developer_licenses\".\"developer_id\""},
-	Status:         whereHelperstring{field: "\"vehicle_events_api\".\"developer_licenses\".\"status\""},
-	CreatedAt:      whereHelpertime_Time{field: "\"vehicle_events_api\".\"developer_licenses\".\"created_at\""},
-	UpdatedAt:      whereHelpertime_Time{field: "\"vehicle_events_api\".\"developer_licenses\".\"updated_at\""},
+	LicenseAddress:    whereHelper__byte{field: "\"vehicle_events_api\".\"developer_licenses\".\"license_address\""},
+	DeveloperID:       whereHelperstring{field: "\"vehicle_events_api\".\"developer_licenses\".\"developer_id\""},
+	Status:            whereHelperstring{field: "\"vehicle_events_api\".\"developer_licenses\".\"status\""},
+	CreatedAt:         whereHelpertime_Time{field: "\"vehicle_events_api\".\"developer_licenses\".\"created_at\""},
+	UpdatedAt:         whereHelpertime_Time{field: "\"vehicle_events_api\".\"developer_licenses\".\"updated_at\""},
+	LicenseAddressHex: whereHelper__byte{field: "\"vehicle_events_api\".\"developer_licenses\".\"license_address_hex\""},
 }
 
 // DeveloperLicenseRels is where relationship names are stored.
@@ -172,8 +179,8 @@ func (r *developerLicenseR) GetDeveloperLicenseAddressEvents() EventSlice {
 type developerLicenseL struct{}
 
 var (
-	developerLicenseAllColumns            = []string{"license_address", "developer_id", "status", "created_at", "updated_at"}
-	developerLicenseColumnsWithoutDefault = []string{"license_address", "developer_id", "status"}
+	developerLicenseAllColumns            = []string{"license_address", "developer_id", "status", "created_at", "updated_at", "license_address_hex"}
+	developerLicenseColumnsWithoutDefault = []string{"license_address", "developer_id", "status", "license_address_hex"}
 	developerLicenseColumnsWithDefault    = []string{"created_at", "updated_at"}
 	developerLicensePrimaryKeyColumns     = []string{"license_address"}
 	developerLicenseGeneratedColumns      = []string{}

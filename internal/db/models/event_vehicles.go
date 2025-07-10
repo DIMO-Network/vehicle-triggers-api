@@ -24,58 +24,65 @@ import (
 
 // EventVehicle is an object representing the database table.
 type EventVehicle struct {
-	VehicleTokenID          types.Decimal `boil:"vehicle_token_id" json:"vehicle_token_id" toml:"vehicle_token_id" yaml:"vehicle_token_id"`
-	EventID                 string        `boil:"event_id" json:"event_id" toml:"event_id" yaml:"event_id"`
-	DeveloperLicenseAddress []byte        `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
-	CreatedAt               time.Time     `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	UpdatedAt               time.Time     `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	VehicleTokenID             types.Decimal `boil:"vehicle_token_id" json:"vehicle_token_id" toml:"vehicle_token_id" yaml:"vehicle_token_id"`
+	EventID                    string        `boil:"event_id" json:"event_id" toml:"event_id" yaml:"event_id"`
+	DeveloperLicenseAddress    []byte        `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
+	CreatedAt                  time.Time     `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	UpdatedAt                  time.Time     `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	DeveloperLicenseAddressHex []byte        `boil:"developer_license_address_hex" json:"developer_license_address_hex" toml:"developer_license_address_hex" yaml:"developer_license_address_hex"`
 
 	R *eventVehicleR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L eventVehicleL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var EventVehicleColumns = struct {
-	VehicleTokenID          string
-	EventID                 string
-	DeveloperLicenseAddress string
-	CreatedAt               string
-	UpdatedAt               string
+	VehicleTokenID             string
+	EventID                    string
+	DeveloperLicenseAddress    string
+	CreatedAt                  string
+	UpdatedAt                  string
+	DeveloperLicenseAddressHex string
 }{
-	VehicleTokenID:          "vehicle_token_id",
-	EventID:                 "event_id",
-	DeveloperLicenseAddress: "developer_license_address",
-	CreatedAt:               "created_at",
-	UpdatedAt:               "updated_at",
+	VehicleTokenID:             "vehicle_token_id",
+	EventID:                    "event_id",
+	DeveloperLicenseAddress:    "developer_license_address",
+	CreatedAt:                  "created_at",
+	UpdatedAt:                  "updated_at",
+	DeveloperLicenseAddressHex: "developer_license_address_hex",
 }
 
 var EventVehicleTableColumns = struct {
-	VehicleTokenID          string
-	EventID                 string
-	DeveloperLicenseAddress string
-	CreatedAt               string
-	UpdatedAt               string
+	VehicleTokenID             string
+	EventID                    string
+	DeveloperLicenseAddress    string
+	CreatedAt                  string
+	UpdatedAt                  string
+	DeveloperLicenseAddressHex string
 }{
-	VehicleTokenID:          "event_vehicles.vehicle_token_id",
-	EventID:                 "event_vehicles.event_id",
-	DeveloperLicenseAddress: "event_vehicles.developer_license_address",
-	CreatedAt:               "event_vehicles.created_at",
-	UpdatedAt:               "event_vehicles.updated_at",
+	VehicleTokenID:             "event_vehicles.vehicle_token_id",
+	EventID:                    "event_vehicles.event_id",
+	DeveloperLicenseAddress:    "event_vehicles.developer_license_address",
+	CreatedAt:                  "event_vehicles.created_at",
+	UpdatedAt:                  "event_vehicles.updated_at",
+	DeveloperLicenseAddressHex: "event_vehicles.developer_license_address_hex",
 }
 
 // Generated where
 
 var EventVehicleWhere = struct {
-	VehicleTokenID          whereHelpertypes_Decimal
-	EventID                 whereHelperstring
-	DeveloperLicenseAddress whereHelper__byte
-	CreatedAt               whereHelpertime_Time
-	UpdatedAt               whereHelpertime_Time
+	VehicleTokenID             whereHelpertypes_Decimal
+	EventID                    whereHelperstring
+	DeveloperLicenseAddress    whereHelper__byte
+	CreatedAt                  whereHelpertime_Time
+	UpdatedAt                  whereHelpertime_Time
+	DeveloperLicenseAddressHex whereHelper__byte
 }{
-	VehicleTokenID:          whereHelpertypes_Decimal{field: "\"vehicle_events_api\".\"event_vehicles\".\"vehicle_token_id\""},
-	EventID:                 whereHelperstring{field: "\"vehicle_events_api\".\"event_vehicles\".\"event_id\""},
-	DeveloperLicenseAddress: whereHelper__byte{field: "\"vehicle_events_api\".\"event_vehicles\".\"developer_license_address\""},
-	CreatedAt:               whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_vehicles\".\"created_at\""},
-	UpdatedAt:               whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_vehicles\".\"updated_at\""},
+	VehicleTokenID:             whereHelpertypes_Decimal{field: "\"vehicle_events_api\".\"event_vehicles\".\"vehicle_token_id\""},
+	EventID:                    whereHelperstring{field: "\"vehicle_events_api\".\"event_vehicles\".\"event_id\""},
+	DeveloperLicenseAddress:    whereHelper__byte{field: "\"vehicle_events_api\".\"event_vehicles\".\"developer_license_address\""},
+	CreatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_vehicles\".\"created_at\""},
+	UpdatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_vehicles\".\"updated_at\""},
+	DeveloperLicenseAddressHex: whereHelper__byte{field: "\"vehicle_events_api\".\"event_vehicles\".\"developer_license_address_hex\""},
 }
 
 // EventVehicleRels is where relationship names are stored.
@@ -116,8 +123,8 @@ func (r *eventVehicleR) GetDeveloperLicenseAddressDeveloperLicense() *DeveloperL
 type eventVehicleL struct{}
 
 var (
-	eventVehicleAllColumns            = []string{"vehicle_token_id", "event_id", "developer_license_address", "created_at", "updated_at"}
-	eventVehicleColumnsWithoutDefault = []string{"vehicle_token_id", "event_id", "developer_license_address"}
+	eventVehicleAllColumns            = []string{"vehicle_token_id", "event_id", "developer_license_address", "created_at", "updated_at", "developer_license_address_hex"}
+	eventVehicleColumnsWithoutDefault = []string{"vehicle_token_id", "event_id", "developer_license_address", "developer_license_address_hex"}
 	eventVehicleColumnsWithDefault    = []string{"created_at", "updated_at"}
 	eventVehiclePrimaryKeyColumns     = []string{"vehicle_token_id", "event_id", "developer_license_address"}
 	eventVehicleGeneratedColumns      = []string{}
