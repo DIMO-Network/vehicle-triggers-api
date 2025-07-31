@@ -80,6 +80,6 @@ generate-go:## run go generate
 generate-sqlboiler: build
 	docker compose up -d postgresql
 	sleep 5
-	DB_USER=dimo DB_PASSWORD=dimo DB_HOST=localhost DB_PORT=5432 DB_NAME=credit_tracker $(PATHINSTBIN)/$(BIN_NAME) -migrate-only
+	DB_USER=dimo DB_PASSWORD=dimo DB_HOST=localhost DB_PORT=5432 DB_NAME=vehicle_events_api $(PATHINSTBIN)/$(BIN_NAME) -migrate-only
 	@PATH=$$PATH go tool sqlboiler psql --no-tests --wipe
 	docker compose down

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"strings"
@@ -11,7 +12,7 @@ import (
 	sharedSettings "github.com/DIMO-Network/shared/pkg/settings"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/api"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/db"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/migrations"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/gateways"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services"
@@ -35,6 +36,10 @@ func main() {
 	gitSha1 := os.Getenv("GIT_SHA1")
 	ctx := context.Background()
 
+	migrationCommand := flag.String("migrations", "", "run migrations")
+	migrateOnly := flag.Bool("migrate-only", false, "run migrations only")
+	flag.Parse()
+
 	settings, err := sharedSettings.LoadConfig[config.Settings]("settings.yaml")
 	if err != nil {
 		log.Fatalf("could not load settings: %s", err)
@@ -53,10 +58,17 @@ func main() {
 	logger.Info().
 		Msgf("Connecting to Postgres as %s@%s", settings.DB.User, settings.DB.Name)
 
-	args := os.Args
-	if len(args) > 1 && strings.ToLower(args[1]) == "migrate" {
-		db.MigrateDatabase(ctx, logger, &settings, args)
-		return
+	if *migrationCommand != "" || *migrateOnly {
+		if *migrationCommand == "" {
+			*migrationCommand = "up -v"
+		}
+		err := migrations.RunGoose(ctx, strings.Fields(*migrationCommand), settings.DB)
+		if err != nil {
+			logger.Fatal().Err(err).Msg("Failed to run migrations")
+		}
+		if *migrateOnly {
+			return
+		}
 	}
 
 	store := sharedDB.NewDbConnectionFromSettings(ctx, &settings.DB, true)
