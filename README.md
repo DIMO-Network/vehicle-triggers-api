@@ -20,21 +20,14 @@ To create a db:
 `$ psql -h localhost -p 5432 -d vehicle_events_api`
 `# ALTER DATABASE vehicle_events_api OWNER TO dimo;`
 
-To install goose CLI:
-
-```bash
-$ go install github.com/pressly/goose/v3/cmd/goose
-export GOOSE_DRIVER=postgres
-```
-
 Add a migrations:
-`$ goose -dir internal/db/migrations create <migration_name> sql`
+`$ make add-migration name=<migration_name>`
 
 Migrate DB to latest:
-`$ go run cmd/vehicle-triggers-api/main.go migrate`
+`$ go run cmd/vehicle-triggers-api/main.go -migrate="only"`
 
 To regenerate models:
-`$  sqlboiler psql`
+`$ make generate-sqlboiler`
 
 # Running locally
 

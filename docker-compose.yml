@@ -1,0 +1,9 @@
+services:
+  postgresql:
+    image: postgres:16.6-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=dimo
+      - POSTGRES_PASSWORD=dimo
+      - POSTGRES_DB=vehicle_events_api
