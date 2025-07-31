@@ -1,7 +1,7 @@
 {
     "swagger": "2.0",
     "info": {
-        "title": "Vehicle Events API",
+        "title": "Vehicle Triggers API",
         "contact": {},
         "version": "1.0"
     },
@@ -141,7 +141,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/internal_controllers.SubscriptionView"
+                                "$ref": "#/definitions/controllers.SubscriptionView"
                             }
                         }
                     },
@@ -715,7 +715,7 @@
         }
     },
     "definitions": {
-        "internal_controllers.SubscriptionView": {
+        "controllers.SubscriptionView": {
             "type": "object",
             "properties": {
                 "created_at": {

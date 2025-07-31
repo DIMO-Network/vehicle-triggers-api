@@ -299,7 +299,7 @@ func (l *SignalListener) sendWebhookNotification(wh Webhook, signal *Signal) err
 		}
 		return errors.Wrap(err, "failed to POST to webhook")
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)

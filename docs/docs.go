@@ -150,7 +150,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/internal_controllers.SubscriptionView"
+                                "$ref": "#/definitions/controllers.SubscriptionView"
                             }
                         }
                     },
@@ -724,7 +724,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "internal_controllers.SubscriptionView": {
+        "controllers.SubscriptionView": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -758,7 +758,7 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "",
 	BasePath:         "",
 	Schemes:          []string{},
-	Title:            "Vehicle Events API",
+	Title:            "Vehicle Triggers API",
 	Description:      "",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
