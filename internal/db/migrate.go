@@ -2,8 +2,9 @@ package db
 
 import (
 	"context"
+
 	sharedDB "github.com/DIMO-Network/shared/pkg/db"
-	"github.com/DIMO-Network/vehicle-events-api/internal/config"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog"

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/DIMO-Network/vehicle-events-api/internal/utils"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/utils"
 	"github.com/rs/zerolog"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 )

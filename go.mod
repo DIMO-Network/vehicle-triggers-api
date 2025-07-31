@@ -1,4 +1,4 @@
-module github.com/DIMO-Network/vehicle-events-api
+module github.com/DIMO-Network/vehicle-triggers-api
 
 go 1.23.5
 
@@ -25,7 +25,6 @@ require (
 	github.com/volatiletech/null/v8 v8.1.2
 	github.com/volatiletech/sqlboiler/v4 v4.17.1
 	github.com/volatiletech/strmangle v0.0.8
-
 )
 
 require (

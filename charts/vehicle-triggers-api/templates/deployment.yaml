@@ -1,17 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "vehicle-events-api.fullname" . }}
+  name: {{ include "vehicle-triggers-api.fullname" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "vehicle-events-api.labels" . | nindent 4 }}
+    {{- include "vehicle-triggers-api.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "vehicle-events-api.selectorLabels" . | nindent 6 }}
+      {{- include "vehicle-triggers-api.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
@@ -20,7 +20,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "vehicle-events-api.selectorLabels" . | nindent 8 }}
+        {{- include "vehicle-triggers-api.selectorLabels" . | nindent 8 }}
     spec:
       topologySpreadConstraints:
       - maxSkew: 1
@@ -28,12 +28,12 @@ spec:
         whenUnsatisfiable: ScheduleAnyway
         labelSelector:
           matchLabels:
-            {{- include "vehicle-events-api.selectorLabels" . | nindent 12 }}
+            {{- include "vehicle-triggers-api.selectorLabels" . | nindent 12 }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "vehicle-events-api.serviceAccountName" . }}
+      serviceAccountName: {{ include "vehicle-triggers-api.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       initContainers:
@@ -41,12 +41,12 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          command: ['sh', '-c', "/vehicle-events-api migrate"]
+          command: ['sh', '-c', "/vehicle-triggers-api migrate"]
           envFrom:
           - configMapRef:
-              name: {{ include "vehicle-events-api.fullname" . }}-config
+              name: {{ include "vehicle-triggers-api.fullname" . }}-config
           - secretRef:
-              name: {{ include "vehicle-events-api.fullname" . }}-secret
+              name: {{ include "vehicle-triggers-api.fullname" . }}-secret
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -55,9 +55,9 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           envFrom:
           - configMapRef:
-              name: {{ include "vehicle-events-api.fullname" . }}-config
+              name: {{ include "vehicle-triggers-api.fullname" . }}-config
           - secretRef:
-              name: {{ include "vehicle-events-api.fullname" . }}-secret
+              name: {{ include "vehicle-triggers-api.fullname" . }}-secret
           ports:
 {{ toYaml .Values.ports | indent 12 }}
           livenessProbe:

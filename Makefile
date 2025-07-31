@@ -26,12 +26,12 @@ LD_FLAGS   =
 GO_FLAGS   =
 DOCS_FLAGS =
 
-APPS = vehicle-events-api
+APPS = vehicle-triggers-api
 all: $(APPS)
 
 install: $(APPS)
 	@mkdir -p bin
-	@cp $(PATHINSTBIN)/vehicle-events-api ./bin/
+	@cp $(PATHINSTBIN)/vehicle-triggers-api ./bin/
 
 deps:
 	@go mod tidy
@@ -49,13 +49,13 @@ gen-proto:
 	@protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative pkg/grpc/*.proto
 
 gen-swag:
-	@swag init -g cmd/vehicle-events-api/main.go --parseDependency --parseInternal
+	@swag init -g cmd/vehicle-triggers-api/main.go --parseDependency --parseInternal
 
 add-migration:
 	goose -dir internal/infrastructure/db/migrations create rename_me sql
 
 migrate:
-	@go run ./cmd/vehicle-events-api migrate
+	@go run ./cmd/vehicle-triggers-api migrate
 
 sqlboiler:
 	@sqlboiler psql --no-tests --wipe
@@ -70,8 +70,8 @@ docker-cgo-tags:
 	@echo "latest-cgo,$(VER_CUT)-cgo,$(VER_MAJOR).$(VER_MINOR)-cgo,$(VER_MAJOR)-cgo" > .tags
 
 docker: deps
-	@docker build -f ./resources/docker/Dockerfile . -t dimozone/vehicle-events-api:$(VER_CUT)
-	@docker tag dimozone/vehicle-events-api:$(VER_CUT) dimozone/vehicle-events-api:latest
+	@docker build -f ./resources/docker/Dockerfile . -t dimozone/vehicle-triggers-api:$(VER_CUT)
+	@docker tag dimozone/vehicle-triggers-api:$(VER_CUT) dimozone/vehicle-triggers-api:latest
 
 tools-golangci-lint: ## install golangci-lint
 	@mkdir -p $(PATHINSTBIN)
@@ -117,7 +117,7 @@ lint:
 
 test: $(APPS)
 	@go test $(GO_FLAGS) -timeout 3m -race ./...
-	@$(PATHINSTBIN)/vehicle-events-api test ./config/test/...
+	@$(PATHINSTBIN)/vehicle-triggers-api test ./config/test/...
 
 clean:
 	rm -rf $(PATHINSTBIN)

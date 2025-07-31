@@ -1,17 +1,18 @@
 package api
 
 import (
+	"path/filepath"
+
 	"github.com/DIMO-Network/shared/pkg/db"
-	_ "github.com/DIMO-Network/vehicle-events-api/docs" // Import Swagger docs
-	"github.com/DIMO-Network/vehicle-events-api/internal/config"
-	"github.com/DIMO-Network/vehicle-events-api/internal/controllers"
-	"github.com/DIMO-Network/vehicle-events-api/internal/gateways"
-	"github.com/DIMO-Network/vehicle-events-api/internal/services"
+	_ "github.com/DIMO-Network/vehicle-triggers-api/docs" // Import Swagger docs
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/gateways"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/rs/zerolog"
 	fiberSwagger "github.com/swaggo/fiber-swagger"
-	"path/filepath"
 )
 
 func healthCheck(c *fiber.Ctx) error {
@@ -23,7 +24,7 @@ func healthCheck(c *fiber.Ctx) error {
 
 // Run sets up the API routes and starts the HTTP server.
 func Run(logger zerolog.Logger, store db.Store, webhookCache *services.WebhookCache, identityAPI gateways.IdentityAPI, settings *config.Settings) {
-	logger.Info().Msg("Starting Vehicle Events API...")
+	logger.Info().Msg("Starting Vehicle Triggers API...")
 
 	app := fiber.New()
 

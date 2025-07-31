@@ -1,9 +1,11 @@
-# vehicle-events-api
+# vehicle-triggers-api
 
 ## Overview
-The DIMO Events API is being developed to deliver real-time vehicle event notifications via webhooks. It aims to provide scalable and flexible event handling using Kafka.
+
+The DIMO Vehicle Triggers API is being developed to deliver real-time vehicle notifications via webhooks. It aims to provide scalable and flexible event handling using Kafka.
 
 ## Objectives
+
 Real-Time Notifications
 Scalable Event Processing
 Customizable Webhook Configurations
@@ -19,6 +21,7 @@ To create a db:
 `# ALTER DATABASE vehicle_events_api OWNER TO dimo;`
 
 To install goose CLI:
+
 ```bash
 $ go install github.com/pressly/goose/v3/cmd/goose
 export GOOSE_DRIVER=postgres
@@ -28,7 +31,7 @@ Add a migrations:
 `$ goose -dir internal/db/migrations create <migration_name> sql`
 
 Migrate DB to latest:
-`$ go run cmd/vehicle-events-api/main.go migrate`
+`$ go run cmd/vehicle-triggers-api/main.go migrate`
 
 To regenerate models:
 `$  sqlboiler psql`

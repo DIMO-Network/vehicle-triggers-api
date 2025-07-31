@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-// WebhookPayload represents a generic payload received from the vehicle events API.
+// WebhookPayload represents a generic payload received from the vehicle triggers API.
 type WebhookPayload struct {
 	ID          string      `json:"id"`
 	Source      string      `json:"source"`

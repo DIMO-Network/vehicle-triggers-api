@@ -4,11 +4,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/DIMO-Network/vehicle-events-api/internal/gateways"
 	"strings"
 
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/gateways"
+
 	"github.com/DIMO-Network/shared/pkg/db"
-	"github.com/DIMO-Network/vehicle-events-api/internal/auth"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/rs/zerolog"

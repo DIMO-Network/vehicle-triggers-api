@@ -9,12 +9,12 @@ import (
 
 	sharedDB "github.com/DIMO-Network/shared/pkg/db"
 	sharedSettings "github.com/DIMO-Network/shared/pkg/settings"
-	"github.com/DIMO-Network/vehicle-events-api/internal/api"
-	"github.com/DIMO-Network/vehicle-events-api/internal/config"
-	"github.com/DIMO-Network/vehicle-events-api/internal/db"
-	"github.com/DIMO-Network/vehicle-events-api/internal/gateways"
-	"github.com/DIMO-Network/vehicle-events-api/internal/kafka"
-	"github.com/DIMO-Network/vehicle-events-api/internal/services"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/api"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/db"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/gateways"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services"
 	"github.com/IBM/sarama"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
@@ -22,7 +22,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// @title           Vehicle Events API
+// @title           Vehicle Triggers API
 // @version         1.0
 //
 // @securityDefinitions.apikey BearerAuth
