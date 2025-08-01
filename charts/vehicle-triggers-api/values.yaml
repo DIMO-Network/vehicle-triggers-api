@@ -4,6 +4,7 @@ image:
   pullPolicy: IfNotPresent
   tag: f74653a
 imagePullSecrets: []
+command: ['/app', '-migrations="up -v"']
 nameOverride: ''
 fullnameOverride: ''
 serviceAccount:

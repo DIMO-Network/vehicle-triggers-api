@@ -36,23 +36,13 @@ spec:
       serviceAccountName: {{ include "vehicle-triggers-api.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      initContainers:
-        - name: migrate
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          command: ['sh', '-c', "/vehicle-triggers-api migrate"]
-          envFrom:
-          - configMapRef:
-              name: {{ include "vehicle-triggers-api.fullname" . }}-config
-          - secretRef:
-              name: {{ include "vehicle-triggers-api.fullname" . }}-secret
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: {{ toYaml .Values.command | nindent 12 }}
           envFrom:
           - configMapRef:
               name: {{ include "vehicle-triggers-api.fullname" . }}-config
