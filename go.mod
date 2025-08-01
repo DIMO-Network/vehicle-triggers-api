@@ -4,7 +4,7 @@ go 1.24
 
 require (
 	github.com/DIMO-Network/model-garage v0.6.8
-	github.com/DIMO-Network/server-garage v0.0.3
+	github.com/DIMO-Network/server-garage v0.0.4-0.20250801162253-18eabf727c79
 	github.com/DIMO-Network/shared v1.0.7
 	github.com/IBM/sarama v1.45.2
 	github.com/ThreeDotsLabs/watermill v1.4.7
