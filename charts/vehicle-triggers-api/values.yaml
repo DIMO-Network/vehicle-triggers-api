@@ -6,7 +6,7 @@ image:
 imagePullSecrets: []
 command:
   - /app
-  - '-migrations="up -v"'
+  - '-migrations=up -v'
 nameOverride: ''
 fullnameOverride: ''
 serviceAccount:
