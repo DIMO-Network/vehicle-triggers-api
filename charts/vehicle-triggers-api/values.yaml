@@ -1,15 +1,15 @@
 replicaCount: 1
 image:
-  repository: dimozone/vehicle-events-api
+  repository: dimozone/vehicle-triggers-api
   pullPolicy: IfNotPresent
   tag: 6a7bd33
 imagePullSecrets: []
-nameOverride: ''
-fullnameOverride: ''
+nameOverride: ""
+fullnameOverride: ""
 serviceAccount:
   create: true
   annotations: {}
-  name: ''
+  name: ""
 podAnnotations: {}
 podSecurityContext:
   runAsNonRoot: true
@@ -22,17 +22,17 @@ securityContext:
       - all
 env:
   ENVIRONMENT: dev
-  PORT: '8080'
-  MONITORING_PORT: '8888'
+  PORT: "8080"
+  MON_PORT: "8888"
+  ENABLE_PPROF: false
   LOG_LEVEL: debug
-  DB_PORT: '5432'
+  DB_PORT: "5432"
   DB_NAME: vehicle_events_api
   DB_SSL_MODE: require
-  DB_MAX_OPEN_CONNECTIONS: '10'
-  DB_MAX_IDLE_CONNECTIONS: '3'
-  SERVICE_NAME: vehicle-events-api
+  DB_MAX_OPEN_CONNECTIONS: "10"
+  DB_MAX_IDLE_CONNECTIONS: "3"
+  SERVICE_NAME: vehicle-triggers-api
   JWT_KEY_SET_URL: https://auth.dev.dimo.zone/keys
-  DEPLOYMENT_BASE_URL: https://vehicle-events-api.dev.dimo.zone
   IDENTITY_API_URL: https://identity-api.dev.dimo.zone/query
   KAFKA_BROKERS: kafka-dev-dimo-kafka-kafka-brokers:9092
   DEVICE_SIGNALS_TOPIC: topic.device.signals
@@ -67,13 +67,13 @@ ingress:
   className: nginx
   annotations:
     nginx.ingress.kubernetes.io/auth-tls-secret: ingress/cf-origin-ca
-    nginx.ingress.kubernetes.io/auth-tls-verify-client: 'on'
-    nginx.ingress.kubernetes.io/enable-cors: 'true'
-    nginx.ingress.kubernetes.io/cors-allow-origin: '*'
-    nginx.ingress.kubernetes.io/limit-rps: '3'
-    external-dns.alpha.kubernetes.io/hostname: vehicle-events-api.dev.dimo.zone
+    nginx.ingress.kubernetes.io/auth-tls-verify-client: "on"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/limit-rps: "3"
+    external-dns.alpha.kubernetes.io/hostname: vehicle-triggers-api.dev.dimo.zone
   hosts:
-    - host: vehicle-events-api.dev.dimo.zone
+    - host: vehicle-triggers-api.dev.dimo.zone
       paths:
         - path: /
           pathType: ImplementationSpecific

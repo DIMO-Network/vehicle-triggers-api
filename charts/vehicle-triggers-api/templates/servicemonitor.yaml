@@ -2,14 +2,14 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: {{ include "vehicle-events-api.fullname" . }}-monitor
+  name: {{ include "vehicle-triggers-api.fullname" . }}-monitor
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "vehicle-events-api.labels" . | nindent 4 }}
+    {{- include "vehicle-triggers-api.labels" . | nindent 4 }}
 spec:
   selector:
     matchLabels:
-    {{- include "vehicle-events-api.selectorLabels" . | nindent 6 }}
+    {{- include "vehicle-triggers-api.selectorLabels" . | nindent 6 }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace }}

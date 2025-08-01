@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"net/http"
+
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/rs/zerolog"
 )
@@ -48,7 +49,7 @@ func GetSharedVehicles(identityAPIURL string, devLicense []byte, logger zerolog.
 		logger.Error().Err(err).Msg("failed to POST to identity API")
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

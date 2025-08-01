@@ -1,33 +1,23 @@
-FROM golang:1.23 AS build
-
+FROM golang:1.24 AS build
 RUN useradd -u 10001 dimo
 
-WORKDIR /go/src/github.com/DIMO-Network/vehicle-events-api/
-COPY . /go/src/github.com/DIMO-Network/vehicle-events-api/
+WORKDIR /build
+COPY . ./
 
-ENV CGO_ENABLED=0
-ENV GOOS=linux
-ENV GOFLAGS=-mod=vendor
+RUN make tidy
+RUN make build
 
-RUN ls
-RUN go mod vendor
-RUN go mod tidy
-RUN make install
-
-FROM busybox AS package
+FROM gcr.io/distroless/base AS final
+ARG APP_NAME
 
 LABEL maintainer="DIMO <hello@dimo.zone>"
 
-WORKDIR /
+USER nonroot:nonroot
 
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /etc/passwd /etc/passwd
-COPY --from=build /go/src/github.com/DIMO-Network/vehicle-events-api/internal/db/migrations ./internal/db/migrations
-COPY --from=build /go/src/github.com/DIMO-Network/vehicle-events-api/target/bin/vehicle-events-api .
-
-USER dimo
+COPY --from=build --chown=nonroot:nonroot /build/bin/${APP_NAME} /app
 
 EXPOSE 8080
 EXPOSE 8888
 
-CMD /vehicle-events-api
+ENTRYPOINT ["/app"]
+

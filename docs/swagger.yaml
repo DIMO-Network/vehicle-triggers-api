@@ -1,5 +1,5 @@
 definitions:
-  internal_controllers.SubscriptionView:
+  controllers.SubscriptionView:
     properties:
       created_at:
         type: string
@@ -12,7 +12,7 @@ definitions:
     type: object
 info:
   contact: {}
-  title: Vehicle Events API
+  title: Vehicle Triggers API
   version: "1.0"
 paths:
   /v1/webhooks:
@@ -451,7 +451,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/internal_controllers.SubscriptionView'
+              $ref: '#/definitions/controllers.SubscriptionView'
             type: array
         "401":
           description: Unauthorized

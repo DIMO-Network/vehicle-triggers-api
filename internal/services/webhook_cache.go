@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
-	"github.com/DIMO-Network/vehicle-events-api/internal/utils"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/utils"
 	"github.com/rs/zerolog"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"

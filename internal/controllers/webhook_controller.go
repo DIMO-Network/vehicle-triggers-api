@@ -12,8 +12,8 @@ import (
 
 	"github.com/DIMO-Network/model-garage/pkg/schema"
 	"github.com/DIMO-Network/shared/pkg/db"
-	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
-	"github.com/DIMO-Network/vehicle-events-api/internal/utils"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 	"github.com/teris-io/shortid"
@@ -98,7 +98,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		w.logger.Error().Err(err).Msg("Failed to call target URI")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Target URI unreachable"})
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 	if resp.StatusCode != http.StatusOK {
 		w.logger.Error().Msgf("Target URI responded with status %d", resp.StatusCode)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": fmt.Sprintf("Target URI did not return status 200 (got %d)", resp.StatusCode)})

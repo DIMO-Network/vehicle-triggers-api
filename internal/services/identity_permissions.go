@@ -52,7 +52,7 @@ func HasVehiclePermissions(identityAPIURL, vehicleTokenID string, devLicense []b
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return false, fmt.Errorf("identity API returned status %d", resp.StatusCode)

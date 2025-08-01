@@ -5,23 +5,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/DIMO-Network/vehicle-events-api/internal/gateways"
-	"github.com/teris-io/shortid"
-	"github.com/volatiletech/null/v8"
 	"io"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/DIMO-Network/shared/pkg/db"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/gateways"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/google/cel-go/cel"
+	celtypes "github.com/google/cel-go/common/types"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-
-	"github.com/DIMO-Network/shared/pkg/db"
-	"github.com/DIMO-Network/vehicle-events-api/internal/db/models"
-	celtypes "github.com/google/cel-go/common/types"
+	"github.com/teris-io/shortid"
+	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	sqltypes "github.com/volatiletech/sqlboiler/v4/types"
@@ -300,7 +299,7 @@ func (l *SignalListener) sendWebhookNotification(wh Webhook, signal *Signal) err
 		}
 		return errors.Wrap(err, "failed to POST to webhook")
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
