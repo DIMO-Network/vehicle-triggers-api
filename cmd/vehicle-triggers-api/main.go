@@ -5,22 +5,20 @@ import (
 	"flag"
 	"log"
 	"os"
+	"os/signal"
+	"strconv"
 	"strings"
-	"time"
+	"syscall"
 
-	sharedDB "github.com/DIMO-Network/shared/pkg/db"
-	sharedSettings "github.com/DIMO-Network/shared/pkg/settings"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/api"
+	"github.com/DIMO-Network/server-garage/pkg/env"
+	"github.com/DIMO-Network/server-garage/pkg/logging"
+	"github.com/DIMO-Network/server-garage/pkg/monserver"
+	"github.com/DIMO-Network/server-garage/pkg/runner"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/app.go"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/migrations"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/gateways"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/services"
-	"github.com/IBM/sarama"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 )
 
 // @title           Vehicle Triggers API
@@ -33,36 +31,41 @@ import (
 //
 // @BasePath  /
 func main() {
-	gitSha1 := os.Getenv("GIT_SHA1")
-	ctx := context.Background()
+	logger := logging.GetAndSetDefaultLogger("vehicle-triggers-api")
+	mainCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-mainCtx.Done()
+		logger.Info().Msg("Received signal, shutting down...")
+		cancel()
+	}()
+
+	runnerGroup, runnerCtx := errgroup.WithContext(mainCtx)
 
 	migrationCommand := flag.String("migrations", "", "run migrations")
+	envFile := flag.String("env-file", "", "path to env file")
 	migrateOnly := flag.Bool("migrate-only", false, "run migrations only")
 	flag.Parse()
 
-	settings, err := sharedSettings.LoadConfig[config.Settings]("settings.yaml")
+	settings, err := env.LoadSettings[config.Settings](*envFile)
 	if err != nil {
 		log.Fatalf("could not load settings: %s", err)
 	}
 
+	if settings.LogLevel == "" {
+		settings.LogLevel = "info"
+	}
 	level, err := zerolog.ParseLevel(settings.LogLevel)
 	if err != nil {
 		log.Fatalf("could not parse log level: %s", err)
 	}
-	logger := zerolog.New(os.Stdout).Level(level).With().
-		Timestamp().
-		Str("app", settings.ServiceName).
-		Str("git-sha1", gitSha1).
-		Logger()
-
-	logger.Info().
-		Msgf("Connecting to Postgres as %s@%s", settings.DB.User, settings.DB.Name)
+	zerolog.SetGlobalLevel(level)
+	logger = logging.GetAndSetDefaultLogger(settings.ServiceName)
 
 	if *migrationCommand != "" || *migrateOnly {
 		if *migrationCommand == "" {
 			*migrationCommand = "up -v"
 		}
-		err := migrations.RunGoose(ctx, strings.Fields(*migrationCommand), settings.DB)
+		err := migrations.RunGoose(mainCtx, strings.Fields(*migrationCommand), settings.DB)
 		if err != nil {
 			logger.Fatal().Err(err).Msg("Failed to run migrations")
 		}
@@ -71,81 +74,19 @@ func main() {
 		}
 	}
 
-	store := sharedDB.NewDbConnectionFromSettings(ctx, &settings.DB, true)
-	store.WaitForDB(logger)
+	monApp := monserver.NewMonitoringServer(&logger, settings.EnablePprof)
+	logger.Info().Str("port", strconv.Itoa(settings.MonPort)).Msgf("Starting monitoring server")
+	runner.RunHandler(runnerCtx, runnerGroup, monApp, ":"+strconv.Itoa(settings.MonPort))
 
-	logger.Info().
-		Str("db_host", settings.DB.Host).
-		Str("db_name", settings.DB.Name).
-		Msg("Connected to database")
-
-	monApp := createMonitoringServer()
-	go func() {
-		monPort := settings.MonitoringPort
-		if err := monApp.Listen(":" + monPort); err != nil {
-			logger.Error().Err(err).Msg("Monitoring server failed")
-		}
-	}()
-
-	identityAPI := gateways.NewIdentityAPIService(settings.IdentityAPIURL, logger)
-	webhookCache := startDeviceSignalsConsumer(ctx, logger, &settings, identityAPI)
-	api.Run(logger, store, webhookCache, identityAPI, &settings)
-}
-
-// startDeviceSignalsConsumer sets up and starts the Kafka consumer for topic.device.signals
-func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings, identityAPI gateways.IdentityAPI) *services.WebhookCache {
-	clusterConfig := sarama.NewConfig()
-	clusterConfig.Version = sarama.V2_8_1_0
-	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-
-	consumerConfig := &kafka.Config{
-		ClusterConfig:   clusterConfig,
-		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
-		Topic:           settings.DeviceSignalsTopic,
-		GroupID:         "vehicle-events",
-		MaxInFlight:     1,
-	}
-
-	consumer, err := kafka.NewConsumer(consumerConfig, &logger)
+	app, err := app.CreateServers(runnerCtx, &settings, logger)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not create device signals consumer")
+		logger.Fatal().Err(err).Msg("Failed to create servers")
 	}
+	logger.Info().Str("port", strconv.Itoa(settings.Port)).Msgf("Starting web server")
+	runner.RunFiber(runnerCtx, runnerGroup, app, ":"+strconv.Itoa(settings.Port))
 
-	// Initialize the in-memory webhook cache.
-	webhookCache := services.NewWebhookCache(&logger)
-
-	store := sharedDB.NewDbConnectionFromSettings(ctx, &settings.DB, true)
-	store.WaitForDB(logger)
-
-	//load all existing webhooks into memory** so GetWebhooks() won't be empty
-	if err := webhookCache.PopulateCache(ctx, store.DBS().Reader); err != nil {
-		logger.Fatal().Err(err).Msg("Unable to populate webhook cache at startup")
+	if err := runnerGroup.Wait(); err != nil {
+		logger.Fatal().Err(err).Msg("Server failed.")
 	}
-
-	// Periodically refresh the cache so new/updated webhooks show up without a restart
-	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			if err := webhookCache.PopulateCache(ctx, store.DBS().Reader); err != nil {
-				logger.Error().Err(err).Msg("Periodic cache refresh failed")
-			}
-		}
-	}()
-
-	signalListener := services.NewSignalListener(logger, webhookCache, store, identityAPI)
-	consumer.Start(ctx, signalListener.ProcessSignals)
-
-	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)
-
-	return webhookCache
-}
-
-func createMonitoringServer() *fiber.App {
-	monApp := fiber.New(fiber.Config{DisableStartupMessage: true})
-
-	monApp.Get("/", func(*fiber.Ctx) error { return nil })
-	monApp.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
-
-	return monApp
+	logger.Info().Msg("Server stopped.")
 }

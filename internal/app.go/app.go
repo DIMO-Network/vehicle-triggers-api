@@ -1,29 +1,38 @@
-package api
+package app
 
 import (
+	"context"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/DIMO-Network/shared/pkg/db"
 	_ "github.com/DIMO-Network/vehicle-triggers-api/docs" // Import Swagger docs
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/gateways"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services"
+	"github.com/IBM/sarama"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/rs/zerolog"
 	fiberSwagger "github.com/swaggo/fiber-swagger"
 )
 
-func healthCheck(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{
-		"code":    200,
-		"message": "server is up",
-	})
+func CreateServers(ctx context.Context, settings *config.Settings, logger zerolog.Logger) (*fiber.App, error) {
+	store := db.NewDbConnectionFromSettings(ctx, &settings.DB, true)
+	store.WaitForDB(logger)
+	identityAPI := gateways.NewIdentityAPIService(settings.IdentityAPIURL, logger)
+
+	webhookCache := startDeviceSignalsConsumer(ctx, logger, settings, identityAPI, store)
+
+	app := CreateFiberApp(logger, store, webhookCache, identityAPI, settings)
+	return app, nil
 }
 
 // Run sets up the API routes and starts the HTTP server.
-func Run(logger zerolog.Logger, store db.Store, webhookCache *services.WebhookCache, identityAPI gateways.IdentityAPI, settings *config.Settings) {
+func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *services.WebhookCache, identityAPI gateways.IdentityAPI, settings *config.Settings) *fiber.App {
 	logger.Info().Msg("Starting Vehicle Triggers API...")
 
 	app := fiber.New()
@@ -72,8 +81,6 @@ func Run(logger zerolog.Logger, store db.Store, webhookCache *services.WebhookCa
 	app.Delete("/v1/webhooks/:webhookId/unsubscribe/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
 	app.Get("/v1/webhooks/vehicles/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.ListSubscriptions)
 
-	app.Get("/health", healthCheck)
-
 	// Catchall route.
 	app.Use(func(c *fiber.Ctx) error {
 		logger.Warn().
@@ -83,9 +90,51 @@ func Run(logger zerolog.Logger, store db.Store, webhookCache *services.WebhookCa
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Not Found"})
 	})
 
-	// Start the server.
-	logger.Info().Msgf("Starting HTTP server on :%s...", settings.Port)
-	if err := app.Listen(":" + settings.Port); err != nil {
-		logger.Fatal().Err(err).Msg("Server failed to start")
+	return app
+}
+
+// startDeviceSignalsConsumer sets up and starts the Kafka consumer for topic.device.signals
+func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings, identityAPI gateways.IdentityAPI, store db.Store) *services.WebhookCache {
+	clusterConfig := sarama.NewConfig()
+	clusterConfig.Version = sarama.V2_8_1_0
+	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+
+	consumerConfig := &kafka.Config{
+		ClusterConfig:   clusterConfig,
+		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
+		Topic:           settings.DeviceSignalsTopic,
+		GroupID:         "vehicle-events",
+		MaxInFlight:     1,
 	}
+
+	consumer, err := kafka.NewConsumer(consumerConfig, &logger)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Could not create device signals consumer")
+	}
+
+	// Initialize the in-memory webhook cache.
+	webhookCache := services.NewWebhookCache(&logger)
+
+	//load all existing webhooks into memory** so GetWebhooks() won't be empty
+	if err := webhookCache.PopulateCache(ctx, store.DBS().Reader); err != nil {
+		logger.Fatal().Err(err).Msg("Unable to populate webhook cache at startup")
+	}
+
+	// Periodically refresh the cache so new/updated webhooks show up without a restart
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := webhookCache.PopulateCache(ctx, store.DBS().Reader); err != nil {
+				logger.Error().Err(err).Msg("Periodic cache refresh failed")
+			}
+		}
+	}()
+
+	signalListener := services.NewSignalListener(logger, webhookCache, store, identityAPI)
+	consumer.Start(ctx, signalListener.ProcessSignals)
+
+	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)
+
+	return webhookCache
 }

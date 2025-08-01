@@ -6,19 +6,14 @@ import (
 
 // Settings contains the application config
 type Settings struct {
-	Environment        string `yaml:"ENVIRONMENT"`
-	Port               string `yaml:"PORT"`
-	GRPCPort           string `yaml:"GRPC_PORT"`
-	LogLevel           string `yaml:"LOG_LEVEL"`
-	ServiceName        string `yaml:"SERVICE_NAME"`
-	IdentityAPIURL     string `yaml:"IDENTITY_API_URL"`
-	KafkaBrokers       string `yaml:"KAFKA_BROKERS"`
-	DeviceSignalsTopic string `yaml:"DEVICE_SIGNALS_TOPIC"`
-	MonitoringPort     string `yaml:"MONITORING_PORT"`
+	Port               int    `env:"PORT"`
+	MonPort            int    `env:"MON_PORT"`
+	EnablePprof        bool   `env:"ENABLE_PPROF"`
+	LogLevel           string `env:"LOG_LEVEL"`
+	ServiceName        string `env:"SERVICE_NAME"`
+	IdentityAPIURL     string `env:"IDENTITY_API_URL"`
+	KafkaBrokers       string `env:"KAFKA_BROKERS"`
+	DeviceSignalsTopic string `env:"DEVICE_SIGNALS_TOPIC"`
 
-	DB db.Settings `yaml:"DB"`
-}
-
-func (s *Settings) IsProduction() bool {
-	return s.Environment == "prod" // this string is set in the helm chart values-prod.yaml
+	DB db.Settings `envPrefix:"DB_"`
 }
