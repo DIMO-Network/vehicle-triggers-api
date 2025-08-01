@@ -79,15 +79,6 @@ func (wc *WebhookCache) PopulateCache(ctx context.Context, exec boil.ContextExec
 			normalized[tokenID][normKey] = append(normalized[tokenID][normKey], hooks...)
 		}
 	}
-	for veh, byNorm := range normalized {
-		for normKey, hooks := range byNorm {
-			wc.logger.Debug().
-				Uint32("vehicle", veh).
-				Str("normalized_key", normKey).
-				Int("hook_count", len(hooks)).
-				Msg("  ↳ Normalized hook")
-		}
-	}
 
 	wc.Update(normalized)
 	return nil
