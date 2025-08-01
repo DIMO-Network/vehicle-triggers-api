@@ -2,9 +2,11 @@ replicaCount: 1
 image:
   repository: dimozone/vehicle-triggers-api
   pullPolicy: IfNotPresent
-  tag: f74653a
+  tag: ec8d3b1
 imagePullSecrets: []
-command: ['/app', '-migrations="up -v"']
+command:
+  - /app
+  - '-migrations="up -v"'
 nameOverride: ''
 fullnameOverride: ''
 serviceAccount:
