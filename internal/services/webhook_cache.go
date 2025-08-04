@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -15,6 +14,8 @@ import (
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"github.com/volatiletech/sqlboiler/v4/types"
 )
+
+var errNoWebhookConfig = errors.New("no webhook configurations found in the database")
 
 type Webhook struct {
 	ID                      string
@@ -48,18 +49,8 @@ func (wc *WebhookCache) PopulateCache(ctx context.Context, exec boil.ContextExec
 	wc.logger.Debug().
 		Int("vehicles_with_hooks", len(rawData)).
 		Msg("Fetched raw hook map from DB")
-	for veh, byName := range rawData {
-		for name, hooks := range byName {
-			wc.logger.Debug().
-				Uint32("vehicle", veh).
-				Str("raw_data_field", name).
-				Int("hook_count", len(hooks)).
-				Msg("  ↳ DB row")
-		}
-	}
-
 	if err != nil {
-		if err.Error() == "no webhook configurations found in the database" {
+		if errors.Is(err, errNoWebhookConfig) {
 			rawData = make(map[uint32]map[string][]Webhook)
 		} else {
 			return err
@@ -123,17 +114,7 @@ func (wc *WebhookCache) Update(newData map[uint32]map[string][]Webhook) {
 	wc.logger.Info().
 		Int("webhook_config_count", total).
 		Msg("Webhook cache updated")
-	// additional logging for debug
-	for tokenID, bySignal := range newData {
-		keys := make([]string, 0, len(bySignal))
-		for signal := range bySignal {
-			keys = append(keys, signal)
-		}
-		wc.logger.Debug().
-			Uint32("vehicle_token", tokenID).
-			Strs("signals", keys).
-			Msg("Cached signals for vehicle")
-	}
+
 }
 
 // fetchEventVehicleWebhooks queries the EventVehicles table (with joined Event) and builds the cache
@@ -143,18 +124,18 @@ func fetchEventVehicleWebhooks(ctx context.Context, exec boil.ContextExecutor) (
 		qm.Load(models.EventVehicleRels.Event),
 	).All(ctx, exec)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load EventVehicles: %w", err)
 	}
 
 	newData := make(map[uint32]map[string][]Webhook)
 	for _, evv := range evVehicles {
 		vehicleTokenID, err := decimalToUint32(evv.VehicleTokenID)
 		if err != nil {
-			return nil, fmt.Errorf("converting token_id: %s", evv.VehicleTokenID.String())
+			return nil, fmt.Errorf("converting token_id '%s': %w", evv.VehicleTokenID.String(), err)
 		}
 		event, err := models.FindEvent(ctx, exec, evv.EventID)
 		if err != nil {
-			return nil, fmt.Errorf("FindEvent failed: %s", evv.EventID)
+			return nil, fmt.Errorf("failed to find event: %w", err)
 		}
 
 		raw := strings.TrimSpace(event.Data)
@@ -178,16 +159,15 @@ func fetchEventVehicleWebhooks(ctx context.Context, exec boil.ContextExecutor) (
 		newData[vehicleTokenID][telemetry] = append(newData[vehicleTokenID][telemetry], wh)
 	}
 	if len(newData) == 0 {
-		return nil, errors.New("no webhook configurations found in the database")
+		return nil, errNoWebhookConfig
 	}
 	return newData, nil
 }
 
 func decimalToUint32(d types.Decimal) (uint32, error) {
-	s := d.String()
-	val, err := strconv.ParseUint(s, 10, 32)
-	if err != nil {
-		return 0, err
+	val, ok := d.Uint64()
+	if !ok {
+		return 0, fmt.Errorf("failed to convert decimal to uint64")
 	}
 	return uint32(val), nil
 }
