@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,8 +16,8 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services"
 	"github.com/IBM/sarama"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/swagger"
 	"github.com/rs/zerolog"
-	fiberSwagger "github.com/swaggo/fiber-swagger"
 )
 
 func CreateServers(ctx context.Context, settings *config.Settings, logger zerolog.Logger) (*fiber.App, error) {
@@ -43,15 +42,10 @@ func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *service
 		DisableStartupMessage: true,
 	})
 
-	app.Get("/swagger/*", fiberSwagger.WrapHandler)
-
-	app.Get("/doc.json", func(c *fiber.Ctx) error {
-		path, _ := filepath.Abs("./docs/swagger.json")
-		return c.SendFile(path)
-	})
+	app.Get("/swagger/*", swagger.HandlerDefault)
 
 	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Welcome to the Vehicle Events API!")
+		return c.SendString("Welcome to the Vehicle Triggers API!")
 	})
 
 	// Create a JWT middleware that verifies developer licenses.
@@ -80,15 +74,6 @@ func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *service
 	app.Delete("/v1/webhooks/:webhookId/unsubscribe/all", jwtMiddleware, vehicleSubscriptionController.UnsubscribeAllVehiclesFromWebhook)
 	app.Delete("/v1/webhooks/:webhookId/unsubscribe/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
 	app.Get("/v1/webhooks/vehicles/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.ListSubscriptions)
-
-	// Catchall route.
-	app.Use(func(c *fiber.Ctx) error {
-		logger.Warn().
-			Str("method", c.Method()).
-			Str("path", c.Path()).
-			Msg("404 Not Found")
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Not Found"})
-	})
 
 	return app
 }
