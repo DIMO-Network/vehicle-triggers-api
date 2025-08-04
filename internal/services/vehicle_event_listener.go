@@ -82,22 +82,11 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		Msg("Received raw Kafka payload")
 	var signal Signal
 	if err := json.Unmarshal(msg.Payload, &signal); err != nil {
-		return errors.Wrap(err, "failed to parse vehicle signal JSON")
+		return fmt.Errorf("failed to parse vehicle signal JSON: %w", err)
 	}
 
-	l.log.Debug().
-		Uint32("token_id", signal.TokenID).
-		Str("signal_name", signal.Name).
-		Float64("value_number", signal.ValueNumber).
-		Str("value_string", signal.ValueString).
-		Msg("Parsed Signal")
-
 	webhooks := l.webhookCache.GetWebhooks(signal.TokenID, signal.Name)
-	l.log.Debug().
-		Uint32("token_id", signal.TokenID).
-		Str("signal_name", signal.Name).
-		Int("cached_hooks", len(webhooks)).
-		Msg("cache lookup")
+
 	if len(webhooks) == 0 {
 		return nil
 	}
@@ -202,7 +191,7 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 	env, err := cel.NewEnv(opts...)
 
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to compile CEL expression: %w", err)
 	}
 
 	ast, issues := env.Compile(trigger)

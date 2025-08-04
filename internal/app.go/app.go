@@ -2,10 +2,11 @@ package app
 
 import (
 	"context"
-	"path/filepath"
+	"errors"
 	"strings"
 	"time"
 
+	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/shared/pkg/db"
 	_ "github.com/DIMO-Network/vehicle-triggers-api/docs" // Import Swagger docs
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
@@ -15,9 +16,8 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services"
 	"github.com/IBM/sarama"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/swagger"
 	"github.com/rs/zerolog"
-	fiberSwagger "github.com/swaggo/fiber-swagger"
 )
 
 func CreateServers(ctx context.Context, settings *config.Settings, logger zerolog.Logger) (*fiber.App, error) {
@@ -35,23 +35,17 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *services.WebhookCache, identityAPI gateways.IdentityAPI, settings *config.Settings) *fiber.App {
 	logger.Info().Msg("Starting Vehicle Triggers API...")
 
-	app := fiber.New()
-
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders: "*",
-	}))
-
-	app.Get("/swagger/*", fiberSwagger.WrapHandler)
-
-	app.Get("/doc.json", func(c *fiber.Ctx) error {
-		path, _ := filepath.Abs("./docs/swagger.json")
-		return c.SendFile(path)
+	app := fiber.New(fiber.Config{
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			return ErrorHandler(c, err)
+		},
+		DisableStartupMessage: true,
 	})
 
+	app.Get("/swagger/*", swagger.HandlerDefault)
+
 	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Welcome to the Vehicle Events API!")
+		return c.SendString("Welcome to the Vehicle Triggers API!")
 	})
 
 	// Create a JWT middleware that verifies developer licenses.
@@ -80,15 +74,6 @@ func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *service
 	app.Delete("/v1/webhooks/:webhookId/unsubscribe/all", jwtMiddleware, vehicleSubscriptionController.UnsubscribeAllVehiclesFromWebhook)
 	app.Delete("/v1/webhooks/:webhookId/unsubscribe/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
 	app.Get("/v1/webhooks/vehicles/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.ListSubscriptions)
-
-	// Catchall route.
-	app.Use(func(c *fiber.Ctx) error {
-		logger.Warn().
-			Str("method", c.Method()).
-			Str("path", c.Path()).
-			Msg("404 Not Found")
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Not Found"})
-	})
 
 	return app
 }
@@ -137,4 +122,38 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)
 
 	return webhookCache
+}
+
+// ErrorHandler custom handler to log recovered errors using our logger and return json instead of string
+func ErrorHandler(ctx *fiber.Ctx, err error) error {
+	code := fiber.StatusInternalServerError // Default 500 statuscode
+	message := "Internal error."
+
+	var fiberErr *fiber.Error
+	var richErr richerrors.Error
+	if errors.As(err, &fiberErr) {
+		code = fiberErr.Code
+		message = fiberErr.Message
+	} else if errors.As(err, &richErr) {
+		message = richErr.ExternalMsg
+		if richErr.Code != 0 {
+			code = richErr.Code
+		}
+	}
+
+	// log all errors except 404
+	if code != fiber.StatusNotFound {
+		logger := zerolog.Ctx(ctx.UserContext())
+		logger.Err(err).Int("httpStatusCode", code).
+			Str("httpPath", strings.TrimPrefix(ctx.Path(), "/")).
+			Str("httpMethod", ctx.Method()).
+			Msg("caught an error from http request")
+	}
+
+	return ctx.Status(code).JSON(codeResp{Code: code, Message: message})
+}
+
+type codeResp struct {
+	Message string `json:"message"`
+	Code    int    `json:"code"`
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/gateways"
 
 	"github.com/DIMO-Network/shared/pkg/db"
@@ -21,8 +22,10 @@ func JWTMiddleware(store db.Store, identityAPI gateways.IdentityAPI, logger zero
 	return func(c *fiber.Ctx) error {
 		tokenString := c.Get("Authorization")
 		if tokenString == "" || !strings.HasPrefix(tokenString, "Bearer ") {
-			fmt.Println("DEBUG: Authorization header missing or malformed")
-			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized")
+			return richerrors.Error{
+				ExternalMsg: "Authorization header missing or malformed",
+				Code:        fiber.StatusUnauthorized,
+			}
 		}
 		// Remove the "Bearer " prefix.
 		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
@@ -30,21 +33,27 @@ func JWTMiddleware(store db.Store, identityAPI gateways.IdentityAPI, logger zero
 		// Extract the ethereum address (developer license) from the JWT.
 		developerLicenseStr, err := ExtractDeveloperLicenseFromToken(tokenString)
 		if err != nil {
-			fmt.Printf("DEBUG: Error extracting developer license: %s\n", err.Error())
-			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized: " + err.Error())
+			return richerrors.Error{
+				ExternalMsg: "Failed to extract developer license",
+				Err:         err,
+				Code:        fiber.StatusUnauthorized,
+			}
 		}
 
 		// Verify that this developer license exists on identity API and in our DB.
 		if err := auth.EnsureDeveloperLicenseExists(developerLicenseStr, identityAPI, store, logger); err != nil {
-			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized: " + err.Error())
+			return fmt.Errorf("failed to ensure developer license exists: %w", err)
 		}
 
 		// Remove "0x" prefix and decode the hex string.
 		licenseHex := strings.TrimPrefix(developerLicenseStr, "0x")
 		developerLicenseBytes, err := hex.DecodeString(licenseHex)
 		if err != nil {
-			fmt.Printf("DEBUG: Error decoding license hex: %s\n", err.Error())
-			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized: invalid developer license format")
+			return richerrors.Error{
+				ExternalMsg: "Invalid developer license format",
+				Err:         err,
+				Code:        fiber.StatusUnauthorized,
+			}
 		}
 
 		// Store the decoded developer license bytes in the request context.

@@ -3,6 +3,7 @@ package controllers
 import (
 	"bytes"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/DIMO-Network/model-garage/pkg/schema"
+	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/utils"
@@ -79,14 +81,20 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	}
 	var payload RequestPayload
 	if err := c.BodyParser(&payload); err != nil {
-		w.logger.Error().Err(err).Msg("Invalid request payload")
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
+		return richerrors.Error{
+			ExternalMsg: "Invalid request payload",
+			Err:         err,
+			Code:        fiber.StatusBadRequest,
+		}
 	}
 
 	parsedURL, err := url.ParseRequestURI(payload.TargetURI)
 	if err != nil {
-		w.logger.Error().Err(err).Msg("Invalid target URI")
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid target URI"})
+		return richerrors.Error{
+			ExternalMsg: "Invalid target URI",
+			Err:         err,
+			Code:        fiber.StatusBadRequest,
+		}
 	}
 
 	// --- Begin URI Validation ---
@@ -95,33 +103,38 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Post(parsedURL.String(), "application/json", bytes.NewBuffer(dummyPayload))
 	if err != nil {
-		w.logger.Error().Err(err).Msg("Failed to call target URI")
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Target URI unreachable"})
+		return richerrors.Error{
+			ExternalMsg: "Failed to call target URI",
+			Err:         err,
+			Code:        fiber.StatusBadRequest,
+		}
 	}
 	defer resp.Body.Close() //nolint:errcheck
 	if resp.StatusCode != http.StatusOK {
-		w.logger.Error().Msgf("Target URI responded with status %d", resp.StatusCode)
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": fmt.Sprintf("Target URI did not return status 200 (got %d)", resp.StatusCode)})
+		return richerrors.Error{
+			ExternalMsg: fmt.Sprintf("Target URI did not return status 200 (got %d)", resp.StatusCode),
+			Code:        fiber.StatusBadRequest,
+		}
 	}
 
 	// 3. Verify that the target URI returns the expected verification token.
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		w.logger.Error().Err(err).Msg("Failed to read response from target URI")
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to verify target URI"})
+		return richerrors.Error{
+			ExternalMsg: "Failed to read response from target URI",
+			Err:         err,
+			Code:        fiber.StatusBadRequest,
+		}
 	}
-
-	w.logger.Debug().
-		Str("target_uri", parsedURL.String()).
-		Str("expected_token", payload.VerificationToken).
-		Str("returned_body_raw", string(bodyBytes)).
-		Str("returned_body_trimmed", strings.TrimSpace(string(bodyBytes))).
-		Msg("URI verification response details")
 
 	responseToken := strings.TrimSpace(string(bodyBytes))
 	if responseToken != payload.VerificationToken {
-		w.logger.Error().Msgf("Verification token mismatch. Expected '%s', got '%s'", payload.VerificationToken, responseToken)
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Target URI verification failed: token mismatch"})
+		err := fmt.Errorf("verification token mismatch. Expected '%s', got '%s'", payload.VerificationToken, responseToken)
+		return richerrors.Error{
+			ExternalMsg: err.Error(),
+			Err:         err,
+			Code:        fiber.StatusBadRequest,
+		}
 	}
 	// --- End URI Validation ---
 
@@ -146,8 +159,11 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	}
 
 	if err := event.Insert(c.Context(), w.store.DBS().Writer, boil.Infer()); err != nil {
-		w.logger.Error().Err(err).Msg("Failed to insert webhook into database")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to register webhook"})
+		return richerrors.Error{
+			ExternalMsg: "Failed to add webhook",
+			Err:         err,
+			Code:        fiber.StatusInternalServerError,
+		}
 	}
 
 	w.logger.Info().Str("id", event.ID).Msg("Webhook registered successfully")
@@ -169,8 +185,11 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 
 	devLicense, ok := c.Locals("developer_license_address").([]byte)
 	if !ok {
-		w.logger.Error().Msg("Developer license not found in request context")
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+		return richerrors.Error{
+			ExternalMsg: "Developer license not found in request",
+			Err:         fmt.Errorf("developer license not found in request context"),
+			Code:        fiber.StatusInternalServerError,
+		}
 	}
 
 	events, err := models.Events(
@@ -179,15 +198,17 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 	).All(c.Context(), w.store.DBS().Reader)
 
 	if err != nil {
-		w.logger.Error().Err(err).Msg("Failed to retrieve webhooks")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve webhooks"})
+		return richerrors.Error{
+			ExternalMsg: "Failed to retrieve webhooks",
+			Err:         err,
+			Code:        fiber.StatusInternalServerError,
+		}
 	}
 
 	if events == nil {
 		events = make([]*models.Event, 0)
 	}
 
-	w.logger.Info().Int("event_count", len(events)).Msg("Returning webhooks")
 	return c.JSON(events)
 }
 
@@ -209,19 +230,28 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	webhookId := c.Params("webhookId")
 	devLicense, ok := c.Locals("developer_license_address").([]byte)
 	if !ok {
-		w.logger.Error().Msg("Developer license not found in request context")
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+		return richerrors.Error{
+			ExternalMsg: "Developer license not found in request",
+			Err:         fmt.Errorf("developer license not found in request context"),
+			Code:        fiber.StatusInternalServerError,
+		}
 	}
 
 	event, err := models.Events(
 		qm.Where("id = ? AND developer_license_address = ?", webhookId, devLicense),
 	).One(c.Context(), w.store.DBS().Reader)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Webhook not found"})
+		if errors.Is(err, sql.ErrNoRows) {
+			return richerrors.Error{
+				ExternalMsg: "Webhook not found",
+				Code:        fiber.StatusNotFound,
+			}
 		}
-		w.logger.Error().Err(err).Msg("Failed to retrieve webhook")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve webhook"})
+		return richerrors.Error{
+			ExternalMsg: "Failed to retrieve webhook",
+			Err:         err,
+			Code:        fiber.StatusInternalServerError,
+		}
 	}
 
 	type RequestPayload struct {
@@ -266,8 +296,11 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	}
 
 	if _, err := event.Update(c.Context(), w.store.DBS().Writer, boil.Infer()); err != nil {
-		w.logger.Error().Err(err).Msg("Failed to update webhook")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update webhook"})
+		return richerrors.Error{
+			ExternalMsg: "Failed to update webhook",
+			Err:         err,
+			Code:        fiber.StatusInternalServerError,
+		}
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Webhook updated successfully", "id": event.ID})
@@ -288,24 +321,36 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 	webhookId := c.Params("webhookId")
 	devLicense, ok := c.Locals("developer_license_address").([]byte)
 	if !ok {
-		w.logger.Error().Msg("Developer license not found in request context")
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+		return richerrors.Error{
+			ExternalMsg: "Developer license not found in request",
+			Err:         fmt.Errorf("developer license not found in request context"),
+			Code:        fiber.StatusInternalServerError,
+		}
 	}
 
 	event, err := models.Events(
 		qm.Where("id = ? AND developer_license_address = ?", webhookId, devLicense),
 	).One(c.Context(), w.store.DBS().Reader)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Webhook not found"})
+		if errors.Is(err, sql.ErrNoRows) {
+			return richerrors.Error{
+				ExternalMsg: "Webhook not found",
+				Code:        fiber.StatusNotFound,
+			}
 		}
-		w.logger.Error().Err(err).Msg("Failed to retrieve webhook")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve webhook"})
+		return richerrors.Error{
+			ExternalMsg: "Failed to retrieve webhook",
+			Err:         err,
+			Code:        fiber.StatusInternalServerError,
+		}
 	}
 
 	if _, err := event.Delete(c.Context(), w.store.DBS().Writer); err != nil {
-		w.logger.Error().Err(err).Msg("Failed to delete webhook")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete webhook"})
+		return richerrors.Error{
+			ExternalMsg: "Failed to delete webhook",
+			Err:         err,
+			Code:        fiber.StatusInternalServerError,
+		}
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Webhook deleted successfully"})
@@ -325,8 +370,11 @@ func (w *WebhookController) GetSignalNames(c *fiber.Ctx) error {
 
 	vssSignals, err := schema.LoadSignalsCSV(dimoVss)
 	if err != nil {
-		w.logger.Error().Err(err).Msg("Failed to load VSS signals")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to load signals"})
+		return richerrors.Error{
+			ExternalMsg: "Failed to load VSS signals",
+			Err:         err,
+			Code:        fiber.StatusInternalServerError,
+		}
 	}
 
 	type ValidaSignal struct {
@@ -354,11 +402,18 @@ func (w *WebhookController) BuildCEL(c *fiber.Ctx) error {
 	var payload CelRequestPayload
 
 	if err := c.BodyParser(&payload); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
+		return richerrors.Error{
+			ExternalMsg: "Invalid request payload",
+			Err:         err,
+			Code:        fiber.StatusBadRequest,
+		}
 	}
 
 	if payload.Logic != "AND" && payload.Logic != "OR" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid logic. Must be AND or OR."})
+		return richerrors.Error{
+			ExternalMsg: "Invalid logic. Must be AND or OR.",
+			Code:        fiber.StatusBadRequest,
+		}
 	}
 
 	conditions := []string{}
