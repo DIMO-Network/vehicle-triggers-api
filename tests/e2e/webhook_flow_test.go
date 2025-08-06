@@ -34,14 +34,14 @@ func TestWebhookFlow(t *testing.T) {
 	// Step 1: Create a webhook
 	t.Log("Step 1: Creating webhook")
 	webhookPayload := map[string]any{
-		"service":            "Telemetry",
-		"metricName":         "speed",
-		"condition":          "valueNumber > 20",
-		"coolDownPeriod":     10,
-		"description":        "Alert when vehicle speed exceeds 20 kph",
-		"target_uri":         webhookReceiver.URL(),
-		"status":             "Active",
-		"verification_token": "test-verification-token",
+		"service":           "Telemetry",
+		"metricName":        "speed",
+		"condition":         "valueNumber > 20",
+		"coolDownPeriod":    10,
+		"description":       "Alert when vehicle speed exceeds 20 kph",
+		"targetURI":         webhookReceiver.URL(),
+		"status":            "Active",
+		"verificationToken": "test-verification-token",
 	}
 
 	webhookBody, err := json.Marshal(webhookPayload)

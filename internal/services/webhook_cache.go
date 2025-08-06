@@ -103,20 +103,20 @@ func (wc *WebhookCache) Update(newData map[uint32]map[string][]Webhook) {
 // fetchEventVehicleWebhooks queries the EventVehicles table (with joined Event) and builds the cache
 // It uses Event.Data as the telemetry identifier
 func fetchEventVehicleWebhooks(ctx context.Context, exec boil.ContextExecutor) (map[uint32]map[string][]Webhook, error) {
-	evVehicles, err := models.EventVehicles(
-		qm.Load(models.EventVehicleRels.Event),
+	subs, err := models.VehicleSubscriptions(
+		qm.Load(models.VehicleSubscriptionRels.Trigger),
 	).All(ctx, exec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load EventVehicles: %w", err)
 	}
 
 	newData := make(map[uint32]map[string][]Webhook)
-	for _, evv := range evVehicles {
+	for _, evv := range subs {
 		vehicleTokenID, err := decimalToUint32(evv.VehicleTokenID)
 		if err != nil {
 			return nil, fmt.Errorf("converting token_id '%s': %w", evv.VehicleTokenID.String(), err)
 		}
-		event, err := models.FindTrigger(ctx, exec, evv.EventID)
+		event, err := models.FindTrigger(ctx, exec, evv.TriggerID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to find event: %w", err)
 		}

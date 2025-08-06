@@ -16,6 +16,7 @@ import (
 	tokenexchange "github.com/DIMO-Network/vehicle-triggers-api/internal/clients/token-exchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ericlagergren/decimal"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/cel-go/cel"
 	celtypes "github.com/google/cel-go/common/types"
@@ -25,6 +26,7 @@ import (
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
+	"github.com/volatiletech/sqlboiler/v4/types"
 	sqltypes "github.com/volatiletech/sqlboiler/v4/types"
 )
 
@@ -108,24 +110,22 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 			l.log.Info().Msgf("permissions revoked for license %x on vehicle %d", wh.DeveloperLicenseAddress, signal.TokenID)
 			var dec sqltypes.Decimal
 			if err := dec.Scan(fmt.Sprint(signal.TokenID)); err == nil {
-				// 1) Delete the EventVehicle row and check its error
-				if delCount, err := models.EventVehicles(
-					qm.Where(
-						"event_id = ? AND vehicle_token_id = ? AND developer_license_address = ?",
-						wh.ID, dec, wh.DeveloperLicenseAddress,
-					),
+				// 1) Delete the TriggerSubscription row and check its error
+				if delCount, err := models.VehicleSubscriptions(
+					models.VehicleSubscriptionWhere.TriggerID.EQ(wh.ID),
+					models.VehicleSubscriptionWhere.VehicleTokenID.EQ(dec),
 				).DeleteAll(context.Background(), l.store.DBS().Writer); err != nil {
 					l.log.Error().
 						Err(err).
 						Str("event_id", wh.ID).
 						Uint32("vehicle_token", signal.TokenID).
-						Msg("Failed to delete EventVehicle subscription")
+						Msg("Failed to delete TriggerSubscription subscription")
 				} else {
 					l.log.Debug().
 						Str("event_id", wh.ID).
 						Uint32("vehicle_token", signal.TokenID).
 						Int("rows_deleted", int(delCount)).
-						Msg("Successfully removed EventVehicle subscription")
+						Msg("Successfully removed TriggerSubscription subscription")
 				}
 
 				// 2) Refresh the cache and check its error
@@ -133,10 +133,6 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 					l.log.Error().
 						Err(err).
 						Msg("Failed to refresh webhook cache after permission revocation")
-				} else {
-					l.log.Debug().
-						Uint32("vehicle_token", signal.TokenID).
-						Msg("Webhook cache refreshed after permission revocation")
 				}
 			}
 
@@ -230,8 +226,10 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 
 func (l *SignalListener) checkCooldown(webhook Webhook, tokenID uint32) (bool, error) {
 	cooldown := webhook.CooldownPeriod
+	tokenIDDecimal := types.NewDecimal(decimal.New(int64(tokenID), 0))
 	logs, err := models.EventLogs(
-		qm.Where("event_id = ? AND vehicle_token_id = ?", webhook.ID, tokenID),
+		models.EventLogWhere.EventID.EQ(webhook.ID),
+		models.EventLogWhere.VehicleTokenID.EQ(tokenIDDecimal),
 		qm.OrderBy("last_triggered_at DESC"),
 		qm.Limit(1),
 	).All(context.Background(), l.store.DBS().Reader)

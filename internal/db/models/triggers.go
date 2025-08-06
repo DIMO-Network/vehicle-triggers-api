@@ -224,17 +224,17 @@ var TriggerWhere = struct {
 
 // TriggerRels is where relationship names are stored.
 var TriggerRels = struct {
-	EventEventLogs     string
-	EventEventVehicles string
+	EventEventLogs       string
+	VehicleSubscriptions string
 }{
-	EventEventLogs:     "EventEventLogs",
-	EventEventVehicles: "EventEventVehicles",
+	EventEventLogs:       "EventEventLogs",
+	VehicleSubscriptions: "VehicleSubscriptions",
 }
 
 // triggerR is where relationships are stored.
 type triggerR struct {
-	EventEventLogs     EventLogSlice     `boil:"EventEventLogs" json:"EventEventLogs" toml:"EventEventLogs" yaml:"EventEventLogs"`
-	EventEventVehicles EventVehicleSlice `boil:"EventEventVehicles" json:"EventEventVehicles" toml:"EventEventVehicles" yaml:"EventEventVehicles"`
+	EventEventLogs       EventLogSlice            `boil:"EventEventLogs" json:"EventEventLogs" toml:"EventEventLogs" yaml:"EventEventLogs"`
+	VehicleSubscriptions VehicleSubscriptionSlice `boil:"VehicleSubscriptions" json:"VehicleSubscriptions" toml:"VehicleSubscriptions" yaml:"VehicleSubscriptions"`
 }
 
 // NewStruct creates a new relationship struct
@@ -258,20 +258,20 @@ func (r *triggerR) GetEventEventLogs() EventLogSlice {
 	return r.EventEventLogs
 }
 
-func (o *Trigger) GetEventEventVehicles() EventVehicleSlice {
+func (o *Trigger) GetVehicleSubscriptions() VehicleSubscriptionSlice {
 	if o == nil {
 		return nil
 	}
 
-	return o.R.GetEventEventVehicles()
+	return o.R.GetVehicleSubscriptions()
 }
 
-func (r *triggerR) GetEventEventVehicles() EventVehicleSlice {
+func (r *triggerR) GetVehicleSubscriptions() VehicleSubscriptionSlice {
 	if r == nil {
 		return nil
 	}
 
-	return r.EventEventVehicles
+	return r.VehicleSubscriptions
 }
 
 // triggerL is where Load methods for each relationship are stored.
@@ -604,18 +604,18 @@ func (o *Trigger) EventEventLogs(mods ...qm.QueryMod) eventLogQuery {
 	return EventLogs(queryMods...)
 }
 
-// EventEventVehicles retrieves all the event_vehicle's EventVehicles with an executor via event_id column.
-func (o *Trigger) EventEventVehicles(mods ...qm.QueryMod) eventVehicleQuery {
+// VehicleSubscriptions retrieves all the vehicle_subscription's VehicleSubscriptions with an executor.
+func (o *Trigger) VehicleSubscriptions(mods ...qm.QueryMod) vehicleSubscriptionQuery {
 	var queryMods []qm.QueryMod
 	if len(mods) != 0 {
 		queryMods = append(queryMods, mods...)
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"vehicle_events_api\".\"event_vehicles\".\"event_id\"=?", o.ID),
+		qm.Where("\"vehicle_events_api\".\"vehicle_subscriptions\".\"trigger_id\"=?", o.ID),
 	)
 
-	return EventVehicles(queryMods...)
+	return VehicleSubscriptions(queryMods...)
 }
 
 // LoadEventEventLogs allows an eager lookup of values, cached into the
@@ -731,9 +731,9 @@ func (triggerL) LoadEventEventLogs(ctx context.Context, e boil.ContextExecutor, 
 	return nil
 }
 
-// LoadEventEventVehicles allows an eager lookup of values, cached into the
+// LoadVehicleSubscriptions allows an eager lookup of values, cached into the
 // loaded structs of the objects. This is for a 1-M or N-M relationship.
-func (triggerL) LoadEventEventVehicles(ctx context.Context, e boil.ContextExecutor, singular bool, maybeTrigger interface{}, mods queries.Applicator) error {
+func (triggerL) LoadVehicleSubscriptions(ctx context.Context, e boil.ContextExecutor, singular bool, maybeTrigger interface{}, mods queries.Applicator) error {
 	var slice []*Trigger
 	var object *Trigger
 
@@ -786,8 +786,8 @@ func (triggerL) LoadEventEventVehicles(ctx context.Context, e boil.ContextExecut
 	}
 
 	query := NewQuery(
-		qm.From(`vehicle_events_api.event_vehicles`),
-		qm.WhereIn(`vehicle_events_api.event_vehicles.event_id in ?`, argsSlice...),
+		qm.From(`vehicle_events_api.vehicle_subscriptions`),
+		qm.WhereIn(`vehicle_events_api.vehicle_subscriptions.trigger_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -795,22 +795,22 @@ func (triggerL) LoadEventEventVehicles(ctx context.Context, e boil.ContextExecut
 
 	results, err := query.QueryContext(ctx, e)
 	if err != nil {
-		return errors.Wrap(err, "failed to eager load event_vehicles")
+		return errors.Wrap(err, "failed to eager load vehicle_subscriptions")
 	}
 
-	var resultSlice []*EventVehicle
+	var resultSlice []*VehicleSubscription
 	if err = queries.Bind(results, &resultSlice); err != nil {
-		return errors.Wrap(err, "failed to bind eager loaded slice event_vehicles")
+		return errors.Wrap(err, "failed to bind eager loaded slice vehicle_subscriptions")
 	}
 
 	if err = results.Close(); err != nil {
-		return errors.Wrap(err, "failed to close results in eager load on event_vehicles")
+		return errors.Wrap(err, "failed to close results in eager load on vehicle_subscriptions")
 	}
 	if err = results.Err(); err != nil {
-		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for event_vehicles")
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for vehicle_subscriptions")
 	}
 
-	if len(eventVehicleAfterSelectHooks) != 0 {
+	if len(vehicleSubscriptionAfterSelectHooks) != 0 {
 		for _, obj := range resultSlice {
 			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
 				return err
@@ -818,24 +818,24 @@ func (triggerL) LoadEventEventVehicles(ctx context.Context, e boil.ContextExecut
 		}
 	}
 	if singular {
-		object.R.EventEventVehicles = resultSlice
+		object.R.VehicleSubscriptions = resultSlice
 		for _, foreign := range resultSlice {
 			if foreign.R == nil {
-				foreign.R = &eventVehicleR{}
+				foreign.R = &vehicleSubscriptionR{}
 			}
-			foreign.R.Event = object
+			foreign.R.Trigger = object
 		}
 		return nil
 	}
 
 	for _, foreign := range resultSlice {
 		for _, local := range slice {
-			if local.ID == foreign.EventID {
-				local.R.EventEventVehicles = append(local.R.EventEventVehicles, foreign)
+			if local.ID == foreign.TriggerID {
+				local.R.VehicleSubscriptions = append(local.R.VehicleSubscriptions, foreign)
 				if foreign.R == nil {
-					foreign.R = &eventVehicleR{}
+					foreign.R = &vehicleSubscriptionR{}
 				}
-				foreign.R.Event = local
+				foreign.R.Trigger = local
 				break
 			}
 		}
@@ -897,25 +897,25 @@ func (o *Trigger) AddEventEventLogs(ctx context.Context, exec boil.ContextExecut
 	return nil
 }
 
-// AddEventEventVehicles adds the given related objects to the existing relationships
+// AddVehicleSubscriptions adds the given related objects to the existing relationships
 // of the trigger, optionally inserting them as new records.
-// Appends related to o.R.EventEventVehicles.
-// Sets related.R.Event appropriately.
-func (o *Trigger) AddEventEventVehicles(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*EventVehicle) error {
+// Appends related to o.R.VehicleSubscriptions.
+// Sets related.R.Trigger appropriately.
+func (o *Trigger) AddVehicleSubscriptions(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*VehicleSubscription) error {
 	var err error
 	for _, rel := range related {
 		if insert {
-			rel.EventID = o.ID
+			rel.TriggerID = o.ID
 			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
 				return errors.Wrap(err, "failed to insert into foreign table")
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"vehicle_events_api\".\"event_vehicles\" SET %s WHERE %s",
-				strmangle.SetParamNames("\"", "\"", 1, []string{"event_id"}),
-				strmangle.WhereClause("\"", "\"", 2, eventVehiclePrimaryKeyColumns),
+				"UPDATE \"vehicle_events_api\".\"vehicle_subscriptions\" SET %s WHERE %s",
+				strmangle.SetParamNames("\"", "\"", 1, []string{"trigger_id"}),
+				strmangle.WhereClause("\"", "\"", 2, vehicleSubscriptionPrimaryKeyColumns),
 			)
-			values := []interface{}{o.ID, rel.VehicleTokenID, rel.EventID}
+			values := []interface{}{o.ID, rel.VehicleTokenID, rel.TriggerID}
 
 			if boil.IsDebug(ctx) {
 				writer := boil.DebugWriterFrom(ctx)
@@ -926,25 +926,25 @@ func (o *Trigger) AddEventEventVehicles(ctx context.Context, exec boil.ContextEx
 				return errors.Wrap(err, "failed to update foreign table")
 			}
 
-			rel.EventID = o.ID
+			rel.TriggerID = o.ID
 		}
 	}
 
 	if o.R == nil {
 		o.R = &triggerR{
-			EventEventVehicles: related,
+			VehicleSubscriptions: related,
 		}
 	} else {
-		o.R.EventEventVehicles = append(o.R.EventEventVehicles, related...)
+		o.R.VehicleSubscriptions = append(o.R.VehicleSubscriptions, related...)
 	}
 
 	for _, rel := range related {
 		if rel.R == nil {
-			rel.R = &eventVehicleR{
-				Event: o,
+			rel.R = &vehicleSubscriptionR{
+				Trigger: o,
 			}
 		} else {
-			rel.R.Event = o
+			rel.R.Trigger = o
 		}
 	}
 	return nil

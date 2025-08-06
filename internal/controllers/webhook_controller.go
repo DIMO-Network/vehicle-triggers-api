@@ -174,7 +174,7 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 	}
 
 	events, err := models.Triggers(
-		qm.Where("developer_license_address = ?", devLicense),
+		models.TriggerWhere.DeveloperLicenseAddress.EQ(devLicense),
 		qm.OrderBy("id"),
 	).All(c.Context(), w.store.DBS().Reader)
 
@@ -230,7 +230,8 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	}
 
 	event, err := models.Triggers(
-		qm.Where("id = ? AND developer_license_address = ?", webhookId, devLicense),
+		models.TriggerWhere.ID.EQ(webhookId),
+		models.TriggerWhere.DeveloperLicenseAddress.EQ(devLicense),
 	).One(c.Context(), w.store.DBS().Reader)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -306,8 +307,11 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 		}
 	}
 
+	_ = devLicense // TODO(kevin): verify that the developer license is the owner of the webhook
+
 	event, err := models.Triggers(
-		qm.Where("id = ? AND developer_license_address = ?", webhookId, devLicense),
+		models.TriggerWhere.ID.EQ(webhookId),
+		models.TriggerWhere.DeveloperLicenseAddress.EQ(devLicense),
 	).One(c.Context(), w.store.DBS().Reader)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
