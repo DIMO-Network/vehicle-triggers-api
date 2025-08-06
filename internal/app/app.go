@@ -69,6 +69,12 @@ func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *service
 
 	app.Post("/build-cel", webhookController.BuildCEL)
 
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"data": "Server is up and running",
+		})
+	})
+
 	// Webhook CRUD
 	app.Get("/v1/webhooks", jwtMiddleware, webhookController.ListWebhooks)
 	app.Post("/v1/webhooks", jwtMiddleware, webhookController.RegisterWebhook)

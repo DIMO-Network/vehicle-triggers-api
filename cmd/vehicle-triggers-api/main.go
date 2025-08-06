@@ -14,7 +14,7 @@ import (
 	"github.com/DIMO-Network/server-garage/pkg/logging"
 	"github.com/DIMO-Network/server-garage/pkg/monserver"
 	"github.com/DIMO-Network/server-garage/pkg/runner"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/app.go"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/app"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/migrations"
 	"github.com/rs/zerolog"
