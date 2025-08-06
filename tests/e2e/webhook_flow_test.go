@@ -17,6 +17,7 @@ import (
 )
 
 func TestWebhookFlow(t *testing.T) {
+	t.Parallel()
 	tc := GetTestServices(t)
 
 	// Create the main application

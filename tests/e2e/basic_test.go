@@ -11,6 +11,7 @@ import (
 )
 
 func TestBasic(t *testing.T) {
+	t.Parallel()
 	tc := GetTestServices(t)
 	fiberApp, err := app.CreateServers(t.Context(), &tc.Settings, zerolog.New(os.Stdout))
 	if err != nil {
