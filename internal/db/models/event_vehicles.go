@@ -24,74 +24,51 @@ import (
 
 // EventVehicle is an object representing the database table.
 type EventVehicle struct {
-	VehicleTokenID             types.Decimal `boil:"vehicle_token_id" json:"vehicle_token_id" toml:"vehicle_token_id" yaml:"vehicle_token_id"`
-	EventID                    string        `boil:"event_id" json:"event_id" toml:"event_id" yaml:"event_id"`
-	DeveloperLicenseAddress    []byte        `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
-	CreatedAt                  time.Time     `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	UpdatedAt                  time.Time     `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
-	DeveloperLicenseAddressHex []byte        `boil:"developer_license_address_hex" json:"developer_license_address_hex" toml:"developer_license_address_hex" yaml:"developer_license_address_hex"`
+	VehicleTokenID types.Decimal `boil:"vehicle_token_id" json:"vehicle_token_id" toml:"vehicle_token_id" yaml:"vehicle_token_id"`
+	EventID        string        `boil:"event_id" json:"event_id" toml:"event_id" yaml:"event_id"`
+	CreatedAt      time.Time     `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	UpdatedAt      time.Time     `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
 
 	R *eventVehicleR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L eventVehicleL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var EventVehicleColumns = struct {
-	VehicleTokenID             string
-	EventID                    string
-	DeveloperLicenseAddress    string
-	CreatedAt                  string
-	UpdatedAt                  string
-	DeveloperLicenseAddressHex string
+	VehicleTokenID string
+	EventID        string
+	CreatedAt      string
+	UpdatedAt      string
 }{
-	VehicleTokenID:             "vehicle_token_id",
-	EventID:                    "event_id",
-	DeveloperLicenseAddress:    "developer_license_address",
-	CreatedAt:                  "created_at",
-	UpdatedAt:                  "updated_at",
-	DeveloperLicenseAddressHex: "developer_license_address_hex",
+	VehicleTokenID: "vehicle_token_id",
+	EventID:        "event_id",
+	CreatedAt:      "created_at",
+	UpdatedAt:      "updated_at",
 }
 
 var EventVehicleTableColumns = struct {
-	VehicleTokenID             string
-	EventID                    string
-	DeveloperLicenseAddress    string
-	CreatedAt                  string
-	UpdatedAt                  string
-	DeveloperLicenseAddressHex string
+	VehicleTokenID string
+	EventID        string
+	CreatedAt      string
+	UpdatedAt      string
 }{
-	VehicleTokenID:             "event_vehicles.vehicle_token_id",
-	EventID:                    "event_vehicles.event_id",
-	DeveloperLicenseAddress:    "event_vehicles.developer_license_address",
-	CreatedAt:                  "event_vehicles.created_at",
-	UpdatedAt:                  "event_vehicles.updated_at",
-	DeveloperLicenseAddressHex: "event_vehicles.developer_license_address_hex",
+	VehicleTokenID: "event_vehicles.vehicle_token_id",
+	EventID:        "event_vehicles.event_id",
+	CreatedAt:      "event_vehicles.created_at",
+	UpdatedAt:      "event_vehicles.updated_at",
 }
 
 // Generated where
 
-type whereHelper__byte struct{ field string }
-
-func (w whereHelper__byte) EQ(x []byte) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.EQ, x) }
-func (w whereHelper__byte) NEQ(x []byte) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.NEQ, x) }
-func (w whereHelper__byte) LT(x []byte) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.LT, x) }
-func (w whereHelper__byte) LTE(x []byte) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.LTE, x) }
-func (w whereHelper__byte) GT(x []byte) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.GT, x) }
-func (w whereHelper__byte) GTE(x []byte) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.GTE, x) }
-
 var EventVehicleWhere = struct {
-	VehicleTokenID             whereHelpertypes_Decimal
-	EventID                    whereHelperstring
-	DeveloperLicenseAddress    whereHelper__byte
-	CreatedAt                  whereHelpertime_Time
-	UpdatedAt                  whereHelpertime_Time
-	DeveloperLicenseAddressHex whereHelper__byte
+	VehicleTokenID whereHelpertypes_Decimal
+	EventID        whereHelperstring
+	CreatedAt      whereHelpertime_Time
+	UpdatedAt      whereHelpertime_Time
 }{
-	VehicleTokenID:             whereHelpertypes_Decimal{field: "\"vehicle_events_api\".\"event_vehicles\".\"vehicle_token_id\""},
-	EventID:                    whereHelperstring{field: "\"vehicle_events_api\".\"event_vehicles\".\"event_id\""},
-	DeveloperLicenseAddress:    whereHelper__byte{field: "\"vehicle_events_api\".\"event_vehicles\".\"developer_license_address\""},
-	CreatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_vehicles\".\"created_at\""},
-	UpdatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_vehicles\".\"updated_at\""},
-	DeveloperLicenseAddressHex: whereHelper__byte{field: "\"vehicle_events_api\".\"event_vehicles\".\"developer_license_address_hex\""},
+	VehicleTokenID: whereHelpertypes_Decimal{field: "\"vehicle_events_api\".\"event_vehicles\".\"vehicle_token_id\""},
+	EventID:        whereHelperstring{field: "\"vehicle_events_api\".\"event_vehicles\".\"event_id\""},
+	CreatedAt:      whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_vehicles\".\"created_at\""},
+	UpdatedAt:      whereHelpertime_Time{field: "\"vehicle_events_api\".\"event_vehicles\".\"updated_at\""},
 }
 
 // EventVehicleRels is where relationship names are stored.
@@ -131,10 +108,10 @@ func (r *eventVehicleR) GetEvent() *Event {
 type eventVehicleL struct{}
 
 var (
-	eventVehicleAllColumns            = []string{"vehicle_token_id", "event_id", "developer_license_address", "created_at", "updated_at", "developer_license_address_hex"}
-	eventVehicleColumnsWithoutDefault = []string{"vehicle_token_id", "event_id", "developer_license_address", "developer_license_address_hex"}
+	eventVehicleAllColumns            = []string{"vehicle_token_id", "event_id", "created_at", "updated_at"}
+	eventVehicleColumnsWithoutDefault = []string{"vehicle_token_id", "event_id"}
 	eventVehicleColumnsWithDefault    = []string{"created_at", "updated_at"}
-	eventVehiclePrimaryKeyColumns     = []string{"vehicle_token_id", "event_id", "developer_license_address"}
+	eventVehiclePrimaryKeyColumns     = []string{"vehicle_token_id", "event_id"}
 	eventVehicleGeneratedColumns      = []string{}
 )
 
@@ -590,7 +567,7 @@ func (o *EventVehicle) SetEvent(ctx context.Context, exec boil.ContextExecutor, 
 		strmangle.SetParamNames("\"", "\"", 1, []string{"event_id"}),
 		strmangle.WhereClause("\"", "\"", 2, eventVehiclePrimaryKeyColumns),
 	)
-	values := []interface{}{related.ID, o.VehicleTokenID, o.EventID, o.DeveloperLicenseAddress}
+	values := []interface{}{related.ID, o.VehicleTokenID, o.EventID}
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -634,7 +611,7 @@ func EventVehicles(mods ...qm.QueryMod) eventVehicleQuery {
 
 // FindEventVehicle retrieves a single record by ID with an executor.
 // If selectCols is empty Find will return all columns.
-func FindEventVehicle(ctx context.Context, exec boil.ContextExecutor, vehicleTokenID types.Decimal, eventID string, developerLicenseAddress []byte, selectCols ...string) (*EventVehicle, error) {
+func FindEventVehicle(ctx context.Context, exec boil.ContextExecutor, vehicleTokenID types.Decimal, eventID string, selectCols ...string) (*EventVehicle, error) {
 	eventVehicleObj := &EventVehicle{}
 
 	sel := "*"
@@ -642,10 +619,10 @@ func FindEventVehicle(ctx context.Context, exec boil.ContextExecutor, vehicleTok
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"vehicle_events_api\".\"event_vehicles\" where \"vehicle_token_id\"=$1 AND \"event_id\"=$2 AND \"developer_license_address\"=$3", sel,
+		"select %s from \"vehicle_events_api\".\"event_vehicles\" where \"vehicle_token_id\"=$1 AND \"event_id\"=$2", sel,
 	)
 
-	q := queries.Raw(query, vehicleTokenID, eventID, developerLicenseAddress)
+	q := queries.Raw(query, vehicleTokenID, eventID)
 
 	err := q.Bind(ctx, exec, eventVehicleObj)
 	if err != nil {
@@ -1027,7 +1004,7 @@ func (o *EventVehicle) Delete(ctx context.Context, exec boil.ContextExecutor) (i
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), eventVehiclePrimaryKeyMapping)
-	sql := "DELETE FROM \"vehicle_events_api\".\"event_vehicles\" WHERE \"vehicle_token_id\"=$1 AND \"event_id\"=$2 AND \"developer_license_address\"=$3"
+	sql := "DELETE FROM \"vehicle_events_api\".\"event_vehicles\" WHERE \"vehicle_token_id\"=$1 AND \"event_id\"=$2"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1124,7 +1101,7 @@ func (o EventVehicleSlice) DeleteAll(ctx context.Context, exec boil.ContextExecu
 // Reload refetches the object from the database
 // using the primary keys with an executor.
 func (o *EventVehicle) Reload(ctx context.Context, exec boil.ContextExecutor) error {
-	ret, err := FindEventVehicle(ctx, exec, o.VehicleTokenID, o.EventID, o.DeveloperLicenseAddress)
+	ret, err := FindEventVehicle(ctx, exec, o.VehicleTokenID, o.EventID)
 	if err != nil {
 		return err
 	}
@@ -1163,16 +1140,16 @@ func (o *EventVehicleSlice) ReloadAll(ctx context.Context, exec boil.ContextExec
 }
 
 // EventVehicleExists checks if the EventVehicle row exists.
-func EventVehicleExists(ctx context.Context, exec boil.ContextExecutor, vehicleTokenID types.Decimal, eventID string, developerLicenseAddress []byte) (bool, error) {
+func EventVehicleExists(ctx context.Context, exec boil.ContextExecutor, vehicleTokenID types.Decimal, eventID string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"vehicle_events_api\".\"event_vehicles\" where \"vehicle_token_id\"=$1 AND \"event_id\"=$2 AND \"developer_license_address\"=$3 limit 1)"
+	sql := "select exists(select 1 from \"vehicle_events_api\".\"event_vehicles\" where \"vehicle_token_id\"=$1 AND \"event_id\"=$2 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
 		fmt.Fprintln(writer, sql)
-		fmt.Fprintln(writer, vehicleTokenID, eventID, developerLicenseAddress)
+		fmt.Fprintln(writer, vehicleTokenID, eventID)
 	}
-	row := exec.QueryRowContext(ctx, sql, vehicleTokenID, eventID, developerLicenseAddress)
+	row := exec.QueryRowContext(ctx, sql, vehicleTokenID, eventID)
 
 	err := row.Scan(&exists)
 	if err != nil {
@@ -1184,5 +1161,5 @@ func EventVehicleExists(ctx context.Context, exec boil.ContextExecutor, vehicleT
 
 // Exists checks if the EventVehicle row exists.
 func (o *EventVehicle) Exists(ctx context.Context, exec boil.ContextExecutor) (bool, error) {
-	return EventVehicleExists(ctx, exec, o.VehicleTokenID, o.EventID, o.DeveloperLicenseAddress)
+	return EventVehicleExists(ctx, exec, o.VehicleTokenID, o.EventID)
 }

@@ -132,6 +132,15 @@ func (w whereHelperint) NIN(slice []int) qm.QueryMod {
 	return qm.WhereNotIn(fmt.Sprintf("%s NOT IN ?", w.field), values...)
 }
 
+type whereHelper__byte struct{ field string }
+
+func (w whereHelper__byte) EQ(x []byte) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.EQ, x) }
+func (w whereHelper__byte) NEQ(x []byte) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.NEQ, x) }
+func (w whereHelper__byte) LT(x []byte) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.LT, x) }
+func (w whereHelper__byte) LTE(x []byte) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.LTE, x) }
+func (w whereHelper__byte) GT(x []byte) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.GT, x) }
+func (w whereHelper__byte) GTE(x []byte) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.GTE, x) }
+
 type whereHelpernull_String struct{ field string }
 
 func (w whereHelpernull_String) EQ(x null.String) qm.QueryMod {
@@ -913,7 +922,7 @@ func (o *Event) AddEventVehicles(ctx context.Context, exec boil.ContextExecutor,
 				strmangle.SetParamNames("\"", "\"", 1, []string{"event_id"}),
 				strmangle.WhereClause("\"", "\"", 2, eventVehiclePrimaryKeyColumns),
 			)
-			values := []interface{}{o.ID, rel.VehicleTokenID, rel.EventID, rel.DeveloperLicenseAddress}
+			values := []interface{}{o.ID, rel.VehicleTokenID, rel.EventID}
 
 			if boil.IsDebug(ctx) {
 				writer := boil.DebugWriterFrom(ctx)

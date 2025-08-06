@@ -76,10 +76,12 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		v.logger.Error().Err(err).Msg("Invalid vehicle token ID format")
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid token format"})
 	}
+
 	dl, err := getDevLicense(c, v.logger)
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+	// TODO(kevin): verify that the developer license is the owner of the webhook
 
 	hasPerm, err := v.tokenExchangeClient.HasVehiclePermissions(c.Context(), tokenID.Int(new(big.Int)), common.HexToAddress(hex.EncodeToString(dl)), []string{
 		"privilege:GetNonLocationHistory",
@@ -94,12 +96,10 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 	}
 
 	ev := &models.EventVehicle{
-		VehicleTokenID:             tokenID,
-		EventID:                    webhookID,
-		DeveloperLicenseAddress:    dl,
-		DeveloperLicenseAddressHex: []byte(hex.EncodeToString(dl)),
-		CreatedAt:                  time.Now(),
-		UpdatedAt:                  time.Now(),
+		VehicleTokenID: tokenID,
+		EventID:        webhookID,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 	if err := ev.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
 		v.logger.Error().Err(err).Msg("Failed to assign vehicle")
@@ -130,6 +130,8 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromCSV(c *fiber.Ctx) e
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+
+	_ = dl // TODO(kevin): verify that the developer license is the owner of the webhook
 
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
@@ -179,12 +181,10 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromCSV(c *fiber.Ctx) e
 		}
 
 		ev := &models.EventVehicle{
-			VehicleTokenID:             dec,
-			EventID:                    webhookID,
-			DeveloperLicenseAddress:    dl,
-			DeveloperLicenseAddressHex: []byte(hex.EncodeToString(dl)),
-			CreatedAt:                  time.Now(),
-			UpdatedAt:                  time.Now(),
+			VehicleTokenID: dec,
+			EventID:        webhookID,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
 		}
 		if err := ev.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
 			v.logger.Error().Err(err).Msgf("Failed to assign vehicle from CSV: %v", tokenStr)
@@ -215,6 +215,7 @@ func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromCSV(c *fiber.Ctx)
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+	_ = dl // TODO(kevin): verify that the developer license is the owner of the webhook
 
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
@@ -262,7 +263,6 @@ func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromCSV(c *fiber.Ctx)
 		res, err := models.EventVehicles(
 			models.EventVehicleWhere.EventID.EQ(webhookID),
 			models.EventVehicleWhere.VehicleTokenID.EQ(dec),
-			models.EventVehicleWhere.DeveloperLicenseAddress.EQ(dl),
 		).DeleteAll(c.Context(), v.store.DBS().Writer)
 
 		if err != nil {
@@ -330,6 +330,7 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+	_ = dl // TODO(kevin): verify that the developer license is the owner of the webhook
 
 	vehicles, err := v.identityAPI.GetSharedVehicles(c.Context(), dl)
 	if err != nil {
@@ -354,12 +355,10 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 	for _, veh := range vehicles {
 		dec := types.NewDecimal(new(types.Decimal).SetBigMantScale(veh.TokenID, 0))
 		ev := &models.EventVehicle{
-			VehicleTokenID:             dec,
-			EventID:                    webhookID,
-			DeveloperLicenseAddress:    dl,
-			DeveloperLicenseAddressHex: []byte(hex.EncodeToString(dl)),
-			CreatedAt:                  time.Now(),
-			UpdatedAt:                  time.Now(),
+			VehicleTokenID: dec,
+			EventID:        webhookID,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
 		}
 		if err := ev.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
 			v.logger.Error().Err(err).Msgf("Failed to subscribe %v", veh.TokenID.String())

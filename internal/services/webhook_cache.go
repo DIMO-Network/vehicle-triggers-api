@@ -153,7 +153,7 @@ func fetchEventVehicleWebhooks(ctx context.Context, exec boil.ContextExecutor) (
 			CooldownPeriod:          event.CooldownPeriod,
 			Data:                    telemetry,
 			Setup:                   event.Setup,
-			DeveloperLicenseAddress: evv.DeveloperLicenseAddress,
+			DeveloperLicenseAddress: event.DeveloperLicenseAddress,
 		}
 
 		newData[vehicleTokenID][telemetry] = append(newData[vehicleTokenID][telemetry], wh)

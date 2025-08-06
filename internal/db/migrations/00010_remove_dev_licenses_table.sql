@@ -6,6 +6,16 @@ SELECT 'up SQL query';
 ALTER TABLE events DROP CONSTRAINT IF EXISTS fk_dev_license;
 ALTER TABLE event_vehicles DROP CONSTRAINT IF EXISTS fk_vehicle_license;
 
+-- Drop the primary key constraint from event_vehicles (it includes developer_license_address)
+ALTER TABLE event_vehicles DROP CONSTRAINT IF EXISTS event_vehicles_pkey;
+
+-- Remove developer license columns from event_vehicles table
+ALTER TABLE event_vehicles DROP COLUMN IF EXISTS developer_license_address;
+ALTER TABLE event_vehicles DROP COLUMN IF EXISTS developer_license_address_hex;
+
+-- Recreate the primary key with only vehicle_token_id and event_id
+ALTER TABLE event_vehicles ADD CONSTRAINT event_vehicles_pkey PRIMARY KEY (vehicle_token_id, event_id);
+
 -- Now drop the table
 DROP TABLE IF EXISTS developer_licenses;
 
@@ -29,6 +39,11 @@ ALTER TABLE events ADD CONSTRAINT fk_dev_license
     FOREIGN KEY (developer_license_address) 
     REFERENCES developer_licenses (license_address) ON DELETE CASCADE;
 
+-- Recreate the event_vehicles columns and constraints
+ALTER TABLE event_vehicles DROP CONSTRAINT IF EXISTS event_vehicles_pkey;
+ALTER TABLE event_vehicles ADD COLUMN developer_license_address BYTEA NOT NULL;
+ALTER TABLE event_vehicles ADD COLUMN developer_license_address_hex BYTEA NOT NULL;
+ALTER TABLE event_vehicles ADD CONSTRAINT event_vehicles_pkey PRIMARY KEY (vehicle_token_id, event_id, developer_license_address);
 ALTER TABLE event_vehicles ADD CONSTRAINT fk_vehicle_license 
     FOREIGN KEY (developer_license_address) 
     REFERENCES developer_licenses (license_address) ON DELETE CASCADE;
