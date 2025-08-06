@@ -4,11 +4,11 @@
 package models
 
 var TableNames = struct {
-	EventLogs            string
+	TriggerLogs          string
 	Triggers             string
 	VehicleSubscriptions string
 }{
-	EventLogs:            "event_logs",
+	TriggerLogs:          "trigger_logs",
 	Triggers:             "triggers",
 	VehicleSubscriptions: "vehicle_subscriptions",
 }

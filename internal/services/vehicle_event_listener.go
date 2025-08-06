@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"net/http"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/DIMO-Network/shared/pkg/db"
@@ -20,24 +19,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/cel-go/cel"
 	celtypes "github.com/google/cel-go/common/types"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/teris-io/shortid"
-	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"github.com/volatiletech/sqlboiler/v4/types"
 	sqltypes "github.com/volatiletech/sqlboiler/v4/types"
 )
-
-func generateShortID(logger zerolog.Logger) string {
-	id, err := shortid.Generate()
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to generate short ID")
-		return ""
-	}
-	return strings.TrimSpace(id)
-}
 
 var reIntLit = regexp.MustCompile(`\b\d+\b`)
 
@@ -227,9 +216,9 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 func (l *SignalListener) checkCooldown(webhook Webhook, tokenID uint32) (bool, error) {
 	cooldown := webhook.CooldownPeriod
 	tokenIDDecimal := types.NewDecimal(decimal.New(int64(tokenID), 0))
-	logs, err := models.EventLogs(
-		models.EventLogWhere.EventID.EQ(webhook.ID),
-		models.EventLogWhere.VehicleTokenID.EQ(tokenIDDecimal),
+	logs, err := models.TriggerLogs(
+		models.TriggerLogWhere.TriggerID.EQ(webhook.ID),
+		models.TriggerLogWhere.VehicleTokenID.EQ(tokenIDDecimal),
 		qm.OrderBy("last_triggered_at DESC"),
 		qm.Limit(1),
 	).All(context.Background(), l.store.DBS().Reader)
@@ -253,16 +242,14 @@ func (l *SignalListener) logWebhookTrigger(eventID string, tokenID uint32) error
 		l.log.Error().Err(err).Msg("failed to convert tokenID")
 		return err
 	}
-	eventLog := &models.EventLog{
-		ID:               generateShortID(l.log),
-		EventID:          eventID,
-		VehicleTokenID:   dec,
-		SnapshotData:     []byte("{}"),
-		HTTPResponseCode: null.IntFrom(0),
-		LastTriggeredAt:  time.Now(),
-		EventType:        "vehicle.signal",
-		PermissionStatus: "Granted",
-		CreatedAt:        time.Now(),
+	now := time.Now()
+	eventLog := &models.TriggerLog{
+		ID:              uuid.New().String(),
+		TriggerID:       eventID,
+		VehicleTokenID:  dec,
+		SnapshotData:    []byte("{}"),
+		LastTriggeredAt: now,
+		CreatedAt:       now,
 	}
 	if err := eventLog.Insert(context.Background(), l.store.DBS().Writer, boil.Infer()); err != nil {
 		l.log.Error().Err(err).Msg("Error inserting EventLog")

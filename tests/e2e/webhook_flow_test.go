@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/app"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -33,15 +35,15 @@ func TestWebhookFlow(t *testing.T) {
 
 	// Step 1: Create a webhook
 	t.Log("Step 1: Creating webhook")
-	webhookPayload := map[string]any{
-		"service":           "Telemetry",
-		"metricName":        "speed",
-		"condition":         "valueNumber > 20",
-		"coolDownPeriod":    10,
-		"description":       "Alert when vehicle speed exceeds 20 kph",
-		"targetURI":         webhookReceiver.URL(),
-		"status":            "Active",
-		"verificationToken": "test-verification-token",
+	webhookPayload := controllers.RegisterWebhookRequest{
+		Service:           "Telemetry",
+		MetricName:        "speed",
+		Condition:         "valueNumber > 20",
+		CoolDownPeriod:    10,
+		Description:       "Alert when vehicle speed exceeds 20 kph",
+		TargetURI:         webhookReceiver.URL(),
+		Status:            "Active",
+		VerificationToken: "test-verification-token",
 	}
 
 	webhookBody, err := json.Marshal(webhookPayload)
@@ -124,15 +126,15 @@ func TestWebhookFlow(t *testing.T) {
 	// Step 3: Send a signal to Kafka to trigger the webhook
 	t.Log("Step 3: Sending signal to Kafka")
 
-	signalPayload := map[string]any{
-		"tokenId":      12345, // Same as vehicleTokenID
-		"timestamp":    time.Now().Format(time.RFC3339),
-		"name":         "speed",
-		"valueNumber":  25.0, // Above the 20 threshold to trigger the webhook
-		"valueString":  "",
-		"source":       "test-source",
-		"producer":     "test-producer",
-		"cloudEventId": "test-event-id",
+	signalPayload := vss.Signal{
+		TokenID:      12345, // Same as vehicleTokenID
+		Timestamp:    time.Now(),
+		Name:         "speed",
+		ValueNumber:  25.0, // Above the 20 threshold to trigger the webhook
+		ValueString:  "",
+		Source:       "test-source",
+		Producer:     "test-producer",
+		CloudEventID: "test-event-id",
 	}
 
 	err = tc.Kafka.PushJSONToTopic(tc.Settings.DeviceSignalsTopic, signalPayload)

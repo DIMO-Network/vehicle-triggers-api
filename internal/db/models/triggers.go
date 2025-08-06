@@ -136,62 +136,6 @@ func (w whereHelper__byte) LTE(x []byte) qm.QueryMod { return qmhelper.Where(w.f
 func (w whereHelper__byte) GT(x []byte) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.GT, x) }
 func (w whereHelper__byte) GTE(x []byte) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.GTE, x) }
 
-type whereHelpernull_String struct{ field string }
-
-func (w whereHelpernull_String) EQ(x null.String) qm.QueryMod {
-	return qmhelper.WhereNullEQ(w.field, false, x)
-}
-func (w whereHelpernull_String) NEQ(x null.String) qm.QueryMod {
-	return qmhelper.WhereNullEQ(w.field, true, x)
-}
-func (w whereHelpernull_String) LT(x null.String) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.LT, x)
-}
-func (w whereHelpernull_String) LTE(x null.String) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.LTE, x)
-}
-func (w whereHelpernull_String) GT(x null.String) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.GT, x)
-}
-func (w whereHelpernull_String) GTE(x null.String) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.GTE, x)
-}
-func (w whereHelpernull_String) LIKE(x null.String) qm.QueryMod {
-	return qm.Where(w.field+" LIKE ?", x)
-}
-func (w whereHelpernull_String) NLIKE(x null.String) qm.QueryMod {
-	return qm.Where(w.field+" NOT LIKE ?", x)
-}
-func (w whereHelpernull_String) ILIKE(x null.String) qm.QueryMod {
-	return qm.Where(w.field+" ILIKE ?", x)
-}
-func (w whereHelpernull_String) NILIKE(x null.String) qm.QueryMod {
-	return qm.Where(w.field+" NOT ILIKE ?", x)
-}
-func (w whereHelpernull_String) SIMILAR(x null.String) qm.QueryMod {
-	return qm.Where(w.field+" SIMILAR TO ?", x)
-}
-func (w whereHelpernull_String) NSIMILAR(x null.String) qm.QueryMod {
-	return qm.Where(w.field+" NOT SIMILAR TO ?", x)
-}
-func (w whereHelpernull_String) IN(slice []string) qm.QueryMod {
-	values := make([]interface{}, 0, len(slice))
-	for _, value := range slice {
-		values = append(values, value)
-	}
-	return qm.WhereIn(fmt.Sprintf("%s IN ?", w.field), values...)
-}
-func (w whereHelpernull_String) NIN(slice []string) qm.QueryMod {
-	values := make([]interface{}, 0, len(slice))
-	for _, value := range slice {
-		values = append(values, value)
-	}
-	return qm.WhereNotIn(fmt.Sprintf("%s NOT IN ?", w.field), values...)
-}
-
-func (w whereHelpernull_String) IsNull() qm.QueryMod    { return qmhelper.WhereIsNull(w.field) }
-func (w whereHelpernull_String) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
-
 var TriggerWhere = struct {
 	ID                         whereHelperstring
 	Service                    whereHelperstring
@@ -224,16 +168,16 @@ var TriggerWhere = struct {
 
 // TriggerRels is where relationship names are stored.
 var TriggerRels = struct {
-	EventEventLogs       string
+	TriggerLogs          string
 	VehicleSubscriptions string
 }{
-	EventEventLogs:       "EventEventLogs",
+	TriggerLogs:          "TriggerLogs",
 	VehicleSubscriptions: "VehicleSubscriptions",
 }
 
 // triggerR is where relationships are stored.
 type triggerR struct {
-	EventEventLogs       EventLogSlice            `boil:"EventEventLogs" json:"EventEventLogs" toml:"EventEventLogs" yaml:"EventEventLogs"`
+	TriggerLogs          TriggerLogSlice          `boil:"TriggerLogs" json:"TriggerLogs" toml:"TriggerLogs" yaml:"TriggerLogs"`
 	VehicleSubscriptions VehicleSubscriptionSlice `boil:"VehicleSubscriptions" json:"VehicleSubscriptions" toml:"VehicleSubscriptions" yaml:"VehicleSubscriptions"`
 }
 
@@ -242,20 +186,20 @@ func (*triggerR) NewStruct() *triggerR {
 	return &triggerR{}
 }
 
-func (o *Trigger) GetEventEventLogs() EventLogSlice {
+func (o *Trigger) GetTriggerLogs() TriggerLogSlice {
 	if o == nil {
 		return nil
 	}
 
-	return o.R.GetEventEventLogs()
+	return o.R.GetTriggerLogs()
 }
 
-func (r *triggerR) GetEventEventLogs() EventLogSlice {
+func (r *triggerR) GetTriggerLogs() TriggerLogSlice {
 	if r == nil {
 		return nil
 	}
 
-	return r.EventEventLogs
+	return r.TriggerLogs
 }
 
 func (o *Trigger) GetVehicleSubscriptions() VehicleSubscriptionSlice {
@@ -590,18 +534,18 @@ func (q triggerQuery) Exists(ctx context.Context, exec boil.ContextExecutor) (bo
 	return count > 0, nil
 }
 
-// EventEventLogs retrieves all the event_log's EventLogs with an executor via event_id column.
-func (o *Trigger) EventEventLogs(mods ...qm.QueryMod) eventLogQuery {
+// TriggerLogs retrieves all the trigger_log's TriggerLogs with an executor.
+func (o *Trigger) TriggerLogs(mods ...qm.QueryMod) triggerLogQuery {
 	var queryMods []qm.QueryMod
 	if len(mods) != 0 {
 		queryMods = append(queryMods, mods...)
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"vehicle_events_api\".\"event_logs\".\"event_id\"=?", o.ID),
+		qm.Where("\"vehicle_events_api\".\"trigger_logs\".\"trigger_id\"=?", o.ID),
 	)
 
-	return EventLogs(queryMods...)
+	return TriggerLogs(queryMods...)
 }
 
 // VehicleSubscriptions retrieves all the vehicle_subscription's VehicleSubscriptions with an executor.
@@ -618,9 +562,9 @@ func (o *Trigger) VehicleSubscriptions(mods ...qm.QueryMod) vehicleSubscriptionQ
 	return VehicleSubscriptions(queryMods...)
 }
 
-// LoadEventEventLogs allows an eager lookup of values, cached into the
+// LoadTriggerLogs allows an eager lookup of values, cached into the
 // loaded structs of the objects. This is for a 1-M or N-M relationship.
-func (triggerL) LoadEventEventLogs(ctx context.Context, e boil.ContextExecutor, singular bool, maybeTrigger interface{}, mods queries.Applicator) error {
+func (triggerL) LoadTriggerLogs(ctx context.Context, e boil.ContextExecutor, singular bool, maybeTrigger interface{}, mods queries.Applicator) error {
 	var slice []*Trigger
 	var object *Trigger
 
@@ -673,8 +617,8 @@ func (triggerL) LoadEventEventLogs(ctx context.Context, e boil.ContextExecutor, 
 	}
 
 	query := NewQuery(
-		qm.From(`vehicle_events_api.event_logs`),
-		qm.WhereIn(`vehicle_events_api.event_logs.event_id in ?`, argsSlice...),
+		qm.From(`vehicle_events_api.trigger_logs`),
+		qm.WhereIn(`vehicle_events_api.trigger_logs.trigger_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -682,22 +626,22 @@ func (triggerL) LoadEventEventLogs(ctx context.Context, e boil.ContextExecutor, 
 
 	results, err := query.QueryContext(ctx, e)
 	if err != nil {
-		return errors.Wrap(err, "failed to eager load event_logs")
+		return errors.Wrap(err, "failed to eager load trigger_logs")
 	}
 
-	var resultSlice []*EventLog
+	var resultSlice []*TriggerLog
 	if err = queries.Bind(results, &resultSlice); err != nil {
-		return errors.Wrap(err, "failed to bind eager loaded slice event_logs")
+		return errors.Wrap(err, "failed to bind eager loaded slice trigger_logs")
 	}
 
 	if err = results.Close(); err != nil {
-		return errors.Wrap(err, "failed to close results in eager load on event_logs")
+		return errors.Wrap(err, "failed to close results in eager load on trigger_logs")
 	}
 	if err = results.Err(); err != nil {
-		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for event_logs")
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for trigger_logs")
 	}
 
-	if len(eventLogAfterSelectHooks) != 0 {
+	if len(triggerLogAfterSelectHooks) != 0 {
 		for _, obj := range resultSlice {
 			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
 				return err
@@ -705,24 +649,24 @@ func (triggerL) LoadEventEventLogs(ctx context.Context, e boil.ContextExecutor, 
 		}
 	}
 	if singular {
-		object.R.EventEventLogs = resultSlice
+		object.R.TriggerLogs = resultSlice
 		for _, foreign := range resultSlice {
 			if foreign.R == nil {
-				foreign.R = &eventLogR{}
+				foreign.R = &triggerLogR{}
 			}
-			foreign.R.Event = object
+			foreign.R.Trigger = object
 		}
 		return nil
 	}
 
 	for _, foreign := range resultSlice {
 		for _, local := range slice {
-			if local.ID == foreign.EventID {
-				local.R.EventEventLogs = append(local.R.EventEventLogs, foreign)
+			if local.ID == foreign.TriggerID {
+				local.R.TriggerLogs = append(local.R.TriggerLogs, foreign)
 				if foreign.R == nil {
-					foreign.R = &eventLogR{}
+					foreign.R = &triggerLogR{}
 				}
-				foreign.R.Event = local
+				foreign.R.Trigger = local
 				break
 			}
 		}
@@ -844,23 +788,23 @@ func (triggerL) LoadVehicleSubscriptions(ctx context.Context, e boil.ContextExec
 	return nil
 }
 
-// AddEventEventLogs adds the given related objects to the existing relationships
+// AddTriggerLogs adds the given related objects to the existing relationships
 // of the trigger, optionally inserting them as new records.
-// Appends related to o.R.EventEventLogs.
-// Sets related.R.Event appropriately.
-func (o *Trigger) AddEventEventLogs(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*EventLog) error {
+// Appends related to o.R.TriggerLogs.
+// Sets related.R.Trigger appropriately.
+func (o *Trigger) AddTriggerLogs(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*TriggerLog) error {
 	var err error
 	for _, rel := range related {
 		if insert {
-			rel.EventID = o.ID
+			rel.TriggerID = o.ID
 			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
 				return errors.Wrap(err, "failed to insert into foreign table")
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"vehicle_events_api\".\"event_logs\" SET %s WHERE %s",
-				strmangle.SetParamNames("\"", "\"", 1, []string{"event_id"}),
-				strmangle.WhereClause("\"", "\"", 2, eventLogPrimaryKeyColumns),
+				"UPDATE \"vehicle_events_api\".\"trigger_logs\" SET %s WHERE %s",
+				strmangle.SetParamNames("\"", "\"", 1, []string{"trigger_id"}),
+				strmangle.WhereClause("\"", "\"", 2, triggerLogPrimaryKeyColumns),
 			)
 			values := []interface{}{o.ID, rel.ID}
 
@@ -873,25 +817,25 @@ func (o *Trigger) AddEventEventLogs(ctx context.Context, exec boil.ContextExecut
 				return errors.Wrap(err, "failed to update foreign table")
 			}
 
-			rel.EventID = o.ID
+			rel.TriggerID = o.ID
 		}
 	}
 
 	if o.R == nil {
 		o.R = &triggerR{
-			EventEventLogs: related,
+			TriggerLogs: related,
 		}
 	} else {
-		o.R.EventEventLogs = append(o.R.EventEventLogs, related...)
+		o.R.TriggerLogs = append(o.R.TriggerLogs, related...)
 	}
 
 	for _, rel := range related {
 		if rel.R == nil {
-			rel.R = &eventLogR{
-				Event: o,
+			rel.R = &triggerLogR{
+				Trigger: o,
 			}
 		} else {
-			rel.R.Event = o
+			rel.R.Trigger = o
 		}
 	}
 	return nil
