@@ -6,15 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/DIMO-Network/shared/pkg/db"
+	tokenexchange "github.com/DIMO-Network/vehicle-triggers-api/internal/clients/token-exchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/gateways"
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/cel-go/cel"
 	celtypes "github.com/google/cel-go/common/types"
 	"github.com/pkg/errors"
@@ -53,18 +55,19 @@ type Signal struct {
 }
 
 type SignalListener struct {
-	log          zerolog.Logger
-	webhookCache *WebhookCache
-	store        db.Store
-	identityAPI  gateways.IdentityAPI
+	log                 zerolog.Logger
+	webhookCache        *WebhookCache
+	store               db.Store
+	tokenExchangeClient *tokenexchange.Client
 }
 
-func NewSignalListener(logger zerolog.Logger, wc *WebhookCache, store db.Store, identityAPI gateways.IdentityAPI) *SignalListener {
+func NewSignalListener(logger zerolog.Logger, wc *WebhookCache, store db.Store, tokenExchangeAPI *tokenexchange.Client) *SignalListener {
 	return &SignalListener{
-		log:          logger,
-		webhookCache: wc,
-		store:        store,
-		identityAPI:  identityAPI}
+		log:                 logger,
+		webhookCache:        wc,
+		store:               store,
+		tokenExchangeClient: tokenExchangeAPI,
+	}
 }
 
 func (l *SignalListener) ProcessSignals(messages <-chan *message.Message) {
@@ -92,7 +95,11 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 	}
 
 	for _, wh := range webhooks {
-		hasPerm, err := l.identityAPI.HasVehiclePermissions(fmt.Sprint(signal.TokenID), wh.DeveloperLicenseAddress)
+		bigTokenID := big.NewInt(int64(signal.TokenID))
+		hasPerm, err := l.tokenExchangeClient.HasVehiclePermissions(context.Background(), bigTokenID, common.BytesToAddress(wh.DeveloperLicenseAddress), []string{
+			"privilege:GetNonLocationHistory",
+			"privilege:GetLocationHistory",
+		})
 		if err != nil {
 			l.log.Error().Err(err).Msg("permission check failed")
 			continue

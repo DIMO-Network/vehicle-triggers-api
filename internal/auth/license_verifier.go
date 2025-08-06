@@ -11,8 +11,8 @@ import (
 
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/shared/pkg/db"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/gateways"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 	"github.com/volatiletech/sqlboiler/v4/boil"
@@ -21,8 +21,8 @@ import (
 
 // EnsureDeveloperLicenseExists verifies the clientID against identity API.
 // If valid and not already in our DB, it inserts a new DeveloperLicense record.
-func EnsureDeveloperLicenseExists(clientID string, api gateways.IdentityAPI, store db.Store, logger zerolog.Logger) error {
-	valid, tokenID, err := api.VerifyDeveloperLicense(clientID)
+func EnsureDeveloperLicenseExists(ctx context.Context, clientID string, identityClient *identity.Client, store db.Store, logger zerolog.Logger) error {
+	valid, tokenID, err := identityClient.VerifyDeveloperLicense(ctx, clientID)
 	if err != nil {
 		return richerrors.Error{
 			ExternalMsg: "Failed to verify developer license with identity API",
