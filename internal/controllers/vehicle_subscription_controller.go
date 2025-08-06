@@ -11,7 +11,7 @@ import (
 
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
-	tokenexchange "github.com/DIMO-Network/vehicle-triggers-api/internal/clients/token-exchange"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services"
 	"github.com/ethereum/go-ethereum/common"

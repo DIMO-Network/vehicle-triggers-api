@@ -77,6 +77,7 @@ func GetTestServices(t *testing.T) *TestServices {
 	})
 	srvcLock.Unlock()
 	testServices.TeardownIfLastTest(t)
+	testServices.Postgres.TeardownIfLastTest(t)
 	return testServices
 }
 
@@ -87,7 +88,6 @@ func (tc *TestServices) TeardownIfLastTest(t *testing.T) {
 		if refs != 0 {
 			return
 		}
-		tc.Postgres.Close()
 		tc.Identity.Close()
 		tc.Auth.Close()
 		if err := tc.Kafka.Close(); err != nil {

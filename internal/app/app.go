@@ -11,7 +11,7 @@ import (
 	"github.com/DIMO-Network/shared/pkg/db"
 	_ "github.com/DIMO-Network/vehicle-triggers-api/docs" // Import Swagger docs
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
-	tokenexchange "github.com/DIMO-Network/vehicle-triggers-api/internal/clients/token-exchange"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"

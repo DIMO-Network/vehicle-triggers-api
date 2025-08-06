@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/DIMO-Network/shared/pkg/db"
-	tokenexchange "github.com/DIMO-Network/vehicle-triggers-api/internal/clients/token-exchange"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ericlagergren/decimal"
@@ -25,7 +25,6 @@ import (
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"github.com/volatiletech/sqlboiler/v4/types"
-	sqltypes "github.com/volatiletech/sqlboiler/v4/types"
 )
 
 var reIntLit = regexp.MustCompile(`\b\d+\b`)
@@ -97,7 +96,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		}
 		if !hasPerm {
 			l.log.Info().Msgf("permissions revoked for license %x on vehicle %d", wh.DeveloperLicenseAddress, signal.TokenID)
-			var dec sqltypes.Decimal
+			var dec types.Decimal
 			if err := dec.Scan(fmt.Sprint(signal.TokenID)); err == nil {
 				// 1) Delete the TriggerSubscription row and check its error
 				if delCount, err := models.VehicleSubscriptions(
@@ -237,7 +236,7 @@ func (l *SignalListener) checkCooldown(webhook Webhook, tokenID uint32) (bool, e
 }
 
 func (l *SignalListener) logWebhookTrigger(eventID string, tokenID uint32) error {
-	var dec sqltypes.Decimal
+	var dec types.Decimal
 	if err := dec.Scan(fmt.Sprint(tokenID)); err != nil {
 		l.log.Error().Err(err).Msg("failed to convert tokenID")
 		return err
