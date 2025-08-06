@@ -17,8 +17,8 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/utils"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/teris-io/shortid"
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
@@ -27,15 +27,6 @@ import (
 type WebhookController struct {
 	store  db.Store
 	logger zerolog.Logger
-}
-
-func generateShortID(logger zerolog.Logger) string {
-	id, err := shortid.Generate()
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to generate short ID")
-		return ""
-	}
-	return strings.TrimSpace(id)
 }
 
 func NewWebhookController(store db.Store, logger zerolog.Logger) *WebhookController {
@@ -146,7 +137,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	}
 
 	event := &models.Event{
-		ID:                      generateShortID(w.logger),
+		ID:                      uuid.New().String(),
 		Service:                 payload.Service,
 		Data:                    normalized,
 		Trigger:                 payload.Trigger,
