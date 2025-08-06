@@ -248,7 +248,7 @@ var EventLogRels = struct {
 
 // eventLogR is where relationships are stored.
 type eventLogR struct {
-	Event *Event `boil:"Event" json:"Event" toml:"Event" yaml:"Event"`
+	Event *Trigger `boil:"Event" json:"Event" toml:"Event" yaml:"Event"`
 }
 
 // NewStruct creates a new relationship struct
@@ -256,7 +256,7 @@ func (*eventLogR) NewStruct() *eventLogR {
 	return &eventLogR{}
 }
 
-func (o *EventLog) GetEvent() *Event {
+func (o *EventLog) GetEvent() *Trigger {
 	if o == nil {
 		return nil
 	}
@@ -264,7 +264,7 @@ func (o *EventLog) GetEvent() *Event {
 	return o.R.GetEvent()
 }
 
-func (r *eventLogR) GetEvent() *Event {
+func (r *eventLogR) GetEvent() *Trigger {
 	if r == nil {
 		return nil
 	}
@@ -589,14 +589,14 @@ func (q eventLogQuery) Exists(ctx context.Context, exec boil.ContextExecutor) (b
 }
 
 // Event pointed to by the foreign key.
-func (o *EventLog) Event(mods ...qm.QueryMod) eventQuery {
+func (o *EventLog) Event(mods ...qm.QueryMod) triggerQuery {
 	queryMods := []qm.QueryMod{
 		qm.Where("\"id\" = ?", o.EventID),
 	}
 
 	queryMods = append(queryMods, mods...)
 
-	return Events(queryMods...)
+	return Triggers(queryMods...)
 }
 
 // LoadEvent allows an eager lookup of values, cached into the
@@ -657,8 +657,8 @@ func (eventLogL) LoadEvent(ctx context.Context, e boil.ContextExecutor, singular
 	}
 
 	query := NewQuery(
-		qm.From(`vehicle_events_api.events`),
-		qm.WhereIn(`vehicle_events_api.events.id in ?`, argsSlice...),
+		qm.From(`vehicle_events_api.triggers`),
+		qm.WhereIn(`vehicle_events_api.triggers.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -666,22 +666,22 @@ func (eventLogL) LoadEvent(ctx context.Context, e boil.ContextExecutor, singular
 
 	results, err := query.QueryContext(ctx, e)
 	if err != nil {
-		return errors.Wrap(err, "failed to eager load Event")
+		return errors.Wrap(err, "failed to eager load Trigger")
 	}
 
-	var resultSlice []*Event
+	var resultSlice []*Trigger
 	if err = queries.Bind(results, &resultSlice); err != nil {
-		return errors.Wrap(err, "failed to bind eager loaded slice Event")
+		return errors.Wrap(err, "failed to bind eager loaded slice Trigger")
 	}
 
 	if err = results.Close(); err != nil {
-		return errors.Wrap(err, "failed to close results of eager load for events")
+		return errors.Wrap(err, "failed to close results of eager load for triggers")
 	}
 	if err = results.Err(); err != nil {
-		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for events")
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for triggers")
 	}
 
-	if len(eventAfterSelectHooks) != 0 {
+	if len(triggerAfterSelectHooks) != 0 {
 		for _, obj := range resultSlice {
 			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
 				return err
@@ -697,9 +697,9 @@ func (eventLogL) LoadEvent(ctx context.Context, e boil.ContextExecutor, singular
 		foreign := resultSlice[0]
 		object.R.Event = foreign
 		if foreign.R == nil {
-			foreign.R = &eventR{}
+			foreign.R = &triggerR{}
 		}
-		foreign.R.EventLogs = append(foreign.R.EventLogs, object)
+		foreign.R.EventEventLogs = append(foreign.R.EventEventLogs, object)
 		return nil
 	}
 
@@ -708,9 +708,9 @@ func (eventLogL) LoadEvent(ctx context.Context, e boil.ContextExecutor, singular
 			if local.EventID == foreign.ID {
 				local.R.Event = foreign
 				if foreign.R == nil {
-					foreign.R = &eventR{}
+					foreign.R = &triggerR{}
 				}
-				foreign.R.EventLogs = append(foreign.R.EventLogs, local)
+				foreign.R.EventEventLogs = append(foreign.R.EventEventLogs, local)
 				break
 			}
 		}
@@ -721,8 +721,8 @@ func (eventLogL) LoadEvent(ctx context.Context, e boil.ContextExecutor, singular
 
 // SetEvent of the eventLog to the related item.
 // Sets o.R.Event to related.
-// Adds o to related.R.EventLogs.
-func (o *EventLog) SetEvent(ctx context.Context, exec boil.ContextExecutor, insert bool, related *Event) error {
+// Adds o to related.R.EventEventLogs.
+func (o *EventLog) SetEvent(ctx context.Context, exec boil.ContextExecutor, insert bool, related *Trigger) error {
 	var err error
 	if insert {
 		if err = related.Insert(ctx, exec, boil.Infer()); err != nil {
@@ -756,11 +756,11 @@ func (o *EventLog) SetEvent(ctx context.Context, exec boil.ContextExecutor, inse
 	}
 
 	if related.R == nil {
-		related.R = &eventR{
-			EventLogs: EventLogSlice{o},
+		related.R = &triggerR{
+			EventEventLogs: EventLogSlice{o},
 		}
 	} else {
-		related.R.EventLogs = append(related.R.EventLogs, o)
+		related.R.EventEventLogs = append(related.R.EventEventLogs, o)
 	}
 
 	return nil

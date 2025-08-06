@@ -35,9 +35,9 @@ func TestWebhookFlow(t *testing.T) {
 	t.Log("Step 1: Creating webhook")
 	webhookPayload := map[string]any{
 		"service":            "Telemetry",
-		"data":               "speed",
-		"trigger":            "valueNumber > 20",
-		"setup":              "Realtime",
+		"metricName":         "speed",
+		"condition":          "valueNumber > 20",
+		"coolDownPeriod":     10,
 		"description":        "Alert when vehicle speed exceeds 20 kph",
 		"target_uri":         webhookReceiver.URL(),
 		"status":             "Active",

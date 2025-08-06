@@ -22,13 +22,12 @@ import (
 	"github.com/volatiletech/strmangle"
 )
 
-// Event is an object representing the database table.
-type Event struct {
+// Trigger is an object representing the database table.
+type Trigger struct {
 	ID                         string      `boil:"id" json:"id" toml:"id" yaml:"id"`
 	Service                    string      `boil:"service" json:"service" toml:"service" yaml:"service"`
-	Data                       string      `boil:"data" json:"data" toml:"data" yaml:"data"`
-	Trigger                    string      `boil:"trigger" json:"trigger" toml:"trigger" yaml:"trigger"`
-	Setup                      string      `boil:"setup" json:"setup" toml:"setup" yaml:"setup"`
+	MetricName                 string      `boil:"metric_name" json:"metric_name" toml:"metric_name" yaml:"metric_name"`
+	Condition                  string      `boil:"condition" json:"condition" toml:"condition" yaml:"condition"`
 	TargetURI                  string      `boil:"target_uri" json:"target_uri" toml:"target_uri" yaml:"target_uri"`
 	CooldownPeriod             int         `boil:"cooldown_period" json:"cooldown_period" toml:"cooldown_period" yaml:"cooldown_period"`
 	DeveloperLicenseAddress    []byte      `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
@@ -39,16 +38,15 @@ type Event struct {
 	FailureCount               int         `boil:"failure_count" json:"failure_count" toml:"failure_count" yaml:"failure_count"`
 	DeveloperLicenseAddressHex []byte      `boil:"developer_license_address_hex" json:"developer_license_address_hex" toml:"developer_license_address_hex" yaml:"developer_license_address_hex"`
 
-	R *eventR `boil:"-" json:"-" toml:"-" yaml:"-"`
-	L eventL  `boil:"-" json:"-" toml:"-" yaml:"-"`
+	R *triggerR `boil:"-" json:"-" toml:"-" yaml:"-"`
+	L triggerL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
-var EventColumns = struct {
+var TriggerColumns = struct {
 	ID                         string
 	Service                    string
-	Data                       string
-	Trigger                    string
-	Setup                      string
+	MetricName                 string
+	Condition                  string
 	TargetURI                  string
 	CooldownPeriod             string
 	DeveloperLicenseAddress    string
@@ -61,9 +59,8 @@ var EventColumns = struct {
 }{
 	ID:                         "id",
 	Service:                    "service",
-	Data:                       "data",
-	Trigger:                    "trigger",
-	Setup:                      "setup",
+	MetricName:                 "metric_name",
+	Condition:                  "condition",
 	TargetURI:                  "target_uri",
 	CooldownPeriod:             "cooldown_period",
 	DeveloperLicenseAddress:    "developer_license_address",
@@ -75,12 +72,11 @@ var EventColumns = struct {
 	DeveloperLicenseAddressHex: "developer_license_address_hex",
 }
 
-var EventTableColumns = struct {
+var TriggerTableColumns = struct {
 	ID                         string
 	Service                    string
-	Data                       string
-	Trigger                    string
-	Setup                      string
+	MetricName                 string
+	Condition                  string
 	TargetURI                  string
 	CooldownPeriod             string
 	DeveloperLicenseAddress    string
@@ -91,20 +87,19 @@ var EventTableColumns = struct {
 	FailureCount               string
 	DeveloperLicenseAddressHex string
 }{
-	ID:                         "events.id",
-	Service:                    "events.service",
-	Data:                       "events.data",
-	Trigger:                    "events.trigger",
-	Setup:                      "events.setup",
-	TargetURI:                  "events.target_uri",
-	CooldownPeriod:             "events.cooldown_period",
-	DeveloperLicenseAddress:    "events.developer_license_address",
-	CreatedAt:                  "events.created_at",
-	UpdatedAt:                  "events.updated_at",
-	Status:                     "events.status",
-	Description:                "events.description",
-	FailureCount:               "events.failure_count",
-	DeveloperLicenseAddressHex: "events.developer_license_address_hex",
+	ID:                         "triggers.id",
+	Service:                    "triggers.service",
+	MetricName:                 "triggers.metric_name",
+	Condition:                  "triggers.condition",
+	TargetURI:                  "triggers.target_uri",
+	CooldownPeriod:             "triggers.cooldown_period",
+	DeveloperLicenseAddress:    "triggers.developer_license_address",
+	CreatedAt:                  "triggers.created_at",
+	UpdatedAt:                  "triggers.updated_at",
+	Status:                     "triggers.status",
+	Description:                "triggers.description",
+	FailureCount:               "triggers.failure_count",
+	DeveloperLicenseAddressHex: "triggers.developer_license_address_hex",
 }
 
 // Generated where
@@ -197,12 +192,11 @@ func (w whereHelpernull_String) NIN(slice []string) qm.QueryMod {
 func (w whereHelpernull_String) IsNull() qm.QueryMod    { return qmhelper.WhereIsNull(w.field) }
 func (w whereHelpernull_String) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
 
-var EventWhere = struct {
+var TriggerWhere = struct {
 	ID                         whereHelperstring
 	Service                    whereHelperstring
-	Data                       whereHelperstring
-	Trigger                    whereHelperstring
-	Setup                      whereHelperstring
+	MetricName                 whereHelperstring
+	Condition                  whereHelperstring
 	TargetURI                  whereHelperstring
 	CooldownPeriod             whereHelperint
 	DeveloperLicenseAddress    whereHelper__byte
@@ -213,108 +207,107 @@ var EventWhere = struct {
 	FailureCount               whereHelperint
 	DeveloperLicenseAddressHex whereHelper__byte
 }{
-	ID:                         whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"id\""},
-	Service:                    whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"service\""},
-	Data:                       whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"data\""},
-	Trigger:                    whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"trigger\""},
-	Setup:                      whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"setup\""},
-	TargetURI:                  whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"target_uri\""},
-	CooldownPeriod:             whereHelperint{field: "\"vehicle_events_api\".\"events\".\"cooldown_period\""},
-	DeveloperLicenseAddress:    whereHelper__byte{field: "\"vehicle_events_api\".\"events\".\"developer_license_address\""},
-	CreatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"events\".\"created_at\""},
-	UpdatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"events\".\"updated_at\""},
-	Status:                     whereHelperstring{field: "\"vehicle_events_api\".\"events\".\"status\""},
-	Description:                whereHelpernull_String{field: "\"vehicle_events_api\".\"events\".\"description\""},
-	FailureCount:               whereHelperint{field: "\"vehicle_events_api\".\"events\".\"failure_count\""},
-	DeveloperLicenseAddressHex: whereHelper__byte{field: "\"vehicle_events_api\".\"events\".\"developer_license_address_hex\""},
+	ID:                         whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"id\""},
+	Service:                    whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"service\""},
+	MetricName:                 whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"metric_name\""},
+	Condition:                  whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"condition\""},
+	TargetURI:                  whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"target_uri\""},
+	CooldownPeriod:             whereHelperint{field: "\"vehicle_events_api\".\"triggers\".\"cooldown_period\""},
+	DeveloperLicenseAddress:    whereHelper__byte{field: "\"vehicle_events_api\".\"triggers\".\"developer_license_address\""},
+	CreatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"triggers\".\"created_at\""},
+	UpdatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"triggers\".\"updated_at\""},
+	Status:                     whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"status\""},
+	Description:                whereHelpernull_String{field: "\"vehicle_events_api\".\"triggers\".\"description\""},
+	FailureCount:               whereHelperint{field: "\"vehicle_events_api\".\"triggers\".\"failure_count\""},
+	DeveloperLicenseAddressHex: whereHelper__byte{field: "\"vehicle_events_api\".\"triggers\".\"developer_license_address_hex\""},
 }
 
-// EventRels is where relationship names are stored.
-var EventRels = struct {
-	EventLogs     string
-	EventVehicles string
+// TriggerRels is where relationship names are stored.
+var TriggerRels = struct {
+	EventEventLogs     string
+	EventEventVehicles string
 }{
-	EventLogs:     "EventLogs",
-	EventVehicles: "EventVehicles",
+	EventEventLogs:     "EventEventLogs",
+	EventEventVehicles: "EventEventVehicles",
 }
 
-// eventR is where relationships are stored.
-type eventR struct {
-	EventLogs     EventLogSlice     `boil:"EventLogs" json:"EventLogs" toml:"EventLogs" yaml:"EventLogs"`
-	EventVehicles EventVehicleSlice `boil:"EventVehicles" json:"EventVehicles" toml:"EventVehicles" yaml:"EventVehicles"`
+// triggerR is where relationships are stored.
+type triggerR struct {
+	EventEventLogs     EventLogSlice     `boil:"EventEventLogs" json:"EventEventLogs" toml:"EventEventLogs" yaml:"EventEventLogs"`
+	EventEventVehicles EventVehicleSlice `boil:"EventEventVehicles" json:"EventEventVehicles" toml:"EventEventVehicles" yaml:"EventEventVehicles"`
 }
 
 // NewStruct creates a new relationship struct
-func (*eventR) NewStruct() *eventR {
-	return &eventR{}
+func (*triggerR) NewStruct() *triggerR {
+	return &triggerR{}
 }
 
-func (o *Event) GetEventLogs() EventLogSlice {
+func (o *Trigger) GetEventEventLogs() EventLogSlice {
 	if o == nil {
 		return nil
 	}
 
-	return o.R.GetEventLogs()
+	return o.R.GetEventEventLogs()
 }
 
-func (r *eventR) GetEventLogs() EventLogSlice {
+func (r *triggerR) GetEventEventLogs() EventLogSlice {
 	if r == nil {
 		return nil
 	}
 
-	return r.EventLogs
+	return r.EventEventLogs
 }
 
-func (o *Event) GetEventVehicles() EventVehicleSlice {
+func (o *Trigger) GetEventEventVehicles() EventVehicleSlice {
 	if o == nil {
 		return nil
 	}
 
-	return o.R.GetEventVehicles()
+	return o.R.GetEventEventVehicles()
 }
 
-func (r *eventR) GetEventVehicles() EventVehicleSlice {
+func (r *triggerR) GetEventEventVehicles() EventVehicleSlice {
 	if r == nil {
 		return nil
 	}
 
-	return r.EventVehicles
+	return r.EventEventVehicles
 }
 
-// eventL is where Load methods for each relationship are stored.
-type eventL struct{}
+// triggerL is where Load methods for each relationship are stored.
+type triggerL struct{}
 
 var (
-	eventAllColumns            = []string{"id", "service", "data", "trigger", "setup", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description", "failure_count", "developer_license_address_hex"}
-	eventColumnsWithoutDefault = []string{"id", "service", "data", "trigger", "setup", "target_uri", "developer_license_address", "status", "developer_license_address_hex"}
-	eventColumnsWithDefault    = []string{"cooldown_period", "created_at", "updated_at", "description", "failure_count"}
-	eventPrimaryKeyColumns     = []string{"id"}
-	eventGeneratedColumns      = []string{}
+	triggerAllColumns            = []string{"id", "service", "metric_name", "condition", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description", "failure_count", "developer_license_address_hex"}
+	triggerColumnsWithoutDefault = []string{"id", "service", "metric_name", "condition", "target_uri", "developer_license_address", "status", "developer_license_address_hex"}
+	triggerColumnsWithDefault    = []string{"cooldown_period", "created_at", "updated_at", "description", "failure_count"}
+	triggerPrimaryKeyColumns     = []string{"id"}
+	triggerGeneratedColumns      = []string{}
 )
 
 type (
-	// EventSlice is an alias for a slice of pointers to Event.
-	// This should almost always be used instead of []Event.
-	EventSlice []*Event
-	// EventHook is the signature for custom Event hook methods
-	EventHook func(context.Context, boil.ContextExecutor, *Event) error
+	// TriggerSlice is an alias for a slice of pointers to Trigger.
+	// This should almost always be used instead of []Trigger.
+	TriggerSlice []*Trigger
+	// TriggerHook is the signature for custom Trigger hook methods
+	TriggerHook func(context.Context, boil.ContextExecutor, *Trigger) error
 
-	eventQuery struct {
+	triggerQuery struct {
 		*queries.Query
 	}
 )
 
 // Cache for insert, update and upsert
 var (
-	eventType                 = reflect.TypeOf(&Event{})
-	eventMapping              = queries.MakeStructMapping(eventType)
-	eventPrimaryKeyMapping, _ = queries.BindMapping(eventType, eventMapping, eventPrimaryKeyColumns)
-	eventInsertCacheMut       sync.RWMutex
-	eventInsertCache          = make(map[string]insertCache)
-	eventUpdateCacheMut       sync.RWMutex
-	eventUpdateCache          = make(map[string]updateCache)
-	eventUpsertCacheMut       sync.RWMutex
-	eventUpsertCache          = make(map[string]insertCache)
+	triggerType                 = reflect.TypeOf(&Trigger{})
+	triggerMapping              = queries.MakeStructMapping(triggerType)
+	triggerPrimaryKeyMapping, _ = queries.BindMapping(triggerType, triggerMapping, triggerPrimaryKeyColumns)
+	triggerInsertCacheMut       sync.RWMutex
+	triggerInsertCache          = make(map[string]insertCache)
+	triggerUpdateCacheMut       sync.RWMutex
+	triggerUpdateCache          = make(map[string]updateCache)
+	triggerUpsertCacheMut       sync.RWMutex
+	triggerUpsertCache          = make(map[string]insertCache)
 )
 
 var (
@@ -325,36 +318,36 @@ var (
 	_ = qmhelper.Where
 )
 
-var eventAfterSelectMu sync.Mutex
-var eventAfterSelectHooks []EventHook
+var triggerAfterSelectMu sync.Mutex
+var triggerAfterSelectHooks []TriggerHook
 
-var eventBeforeInsertMu sync.Mutex
-var eventBeforeInsertHooks []EventHook
-var eventAfterInsertMu sync.Mutex
-var eventAfterInsertHooks []EventHook
+var triggerBeforeInsertMu sync.Mutex
+var triggerBeforeInsertHooks []TriggerHook
+var triggerAfterInsertMu sync.Mutex
+var triggerAfterInsertHooks []TriggerHook
 
-var eventBeforeUpdateMu sync.Mutex
-var eventBeforeUpdateHooks []EventHook
-var eventAfterUpdateMu sync.Mutex
-var eventAfterUpdateHooks []EventHook
+var triggerBeforeUpdateMu sync.Mutex
+var triggerBeforeUpdateHooks []TriggerHook
+var triggerAfterUpdateMu sync.Mutex
+var triggerAfterUpdateHooks []TriggerHook
 
-var eventBeforeDeleteMu sync.Mutex
-var eventBeforeDeleteHooks []EventHook
-var eventAfterDeleteMu sync.Mutex
-var eventAfterDeleteHooks []EventHook
+var triggerBeforeDeleteMu sync.Mutex
+var triggerBeforeDeleteHooks []TriggerHook
+var triggerAfterDeleteMu sync.Mutex
+var triggerAfterDeleteHooks []TriggerHook
 
-var eventBeforeUpsertMu sync.Mutex
-var eventBeforeUpsertHooks []EventHook
-var eventAfterUpsertMu sync.Mutex
-var eventAfterUpsertHooks []EventHook
+var triggerBeforeUpsertMu sync.Mutex
+var triggerBeforeUpsertHooks []TriggerHook
+var triggerAfterUpsertMu sync.Mutex
+var triggerAfterUpsertHooks []TriggerHook
 
 // doAfterSelectHooks executes all "after Select" hooks.
-func (o *Event) doAfterSelectHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
+func (o *Trigger) doAfterSelectHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
 	if boil.HooksAreSkipped(ctx) {
 		return nil
 	}
 
-	for _, hook := range eventAfterSelectHooks {
+	for _, hook := range triggerAfterSelectHooks {
 		if err := hook(ctx, exec, o); err != nil {
 			return err
 		}
@@ -364,12 +357,12 @@ func (o *Event) doAfterSelectHooks(ctx context.Context, exec boil.ContextExecuto
 }
 
 // doBeforeInsertHooks executes all "before insert" hooks.
-func (o *Event) doBeforeInsertHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
+func (o *Trigger) doBeforeInsertHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
 	if boil.HooksAreSkipped(ctx) {
 		return nil
 	}
 
-	for _, hook := range eventBeforeInsertHooks {
+	for _, hook := range triggerBeforeInsertHooks {
 		if err := hook(ctx, exec, o); err != nil {
 			return err
 		}
@@ -379,12 +372,12 @@ func (o *Event) doBeforeInsertHooks(ctx context.Context, exec boil.ContextExecut
 }
 
 // doAfterInsertHooks executes all "after Insert" hooks.
-func (o *Event) doAfterInsertHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
+func (o *Trigger) doAfterInsertHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
 	if boil.HooksAreSkipped(ctx) {
 		return nil
 	}
 
-	for _, hook := range eventAfterInsertHooks {
+	for _, hook := range triggerAfterInsertHooks {
 		if err := hook(ctx, exec, o); err != nil {
 			return err
 		}
@@ -394,12 +387,12 @@ func (o *Event) doAfterInsertHooks(ctx context.Context, exec boil.ContextExecuto
 }
 
 // doBeforeUpdateHooks executes all "before Update" hooks.
-func (o *Event) doBeforeUpdateHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
+func (o *Trigger) doBeforeUpdateHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
 	if boil.HooksAreSkipped(ctx) {
 		return nil
 	}
 
-	for _, hook := range eventBeforeUpdateHooks {
+	for _, hook := range triggerBeforeUpdateHooks {
 		if err := hook(ctx, exec, o); err != nil {
 			return err
 		}
@@ -409,12 +402,12 @@ func (o *Event) doBeforeUpdateHooks(ctx context.Context, exec boil.ContextExecut
 }
 
 // doAfterUpdateHooks executes all "after Update" hooks.
-func (o *Event) doAfterUpdateHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
+func (o *Trigger) doAfterUpdateHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
 	if boil.HooksAreSkipped(ctx) {
 		return nil
 	}
 
-	for _, hook := range eventAfterUpdateHooks {
+	for _, hook := range triggerAfterUpdateHooks {
 		if err := hook(ctx, exec, o); err != nil {
 			return err
 		}
@@ -424,12 +417,12 @@ func (o *Event) doAfterUpdateHooks(ctx context.Context, exec boil.ContextExecuto
 }
 
 // doBeforeDeleteHooks executes all "before Delete" hooks.
-func (o *Event) doBeforeDeleteHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
+func (o *Trigger) doBeforeDeleteHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
 	if boil.HooksAreSkipped(ctx) {
 		return nil
 	}
 
-	for _, hook := range eventBeforeDeleteHooks {
+	for _, hook := range triggerBeforeDeleteHooks {
 		if err := hook(ctx, exec, o); err != nil {
 			return err
 		}
@@ -439,12 +432,12 @@ func (o *Event) doBeforeDeleteHooks(ctx context.Context, exec boil.ContextExecut
 }
 
 // doAfterDeleteHooks executes all "after Delete" hooks.
-func (o *Event) doAfterDeleteHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
+func (o *Trigger) doAfterDeleteHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
 	if boil.HooksAreSkipped(ctx) {
 		return nil
 	}
 
-	for _, hook := range eventAfterDeleteHooks {
+	for _, hook := range triggerAfterDeleteHooks {
 		if err := hook(ctx, exec, o); err != nil {
 			return err
 		}
@@ -454,12 +447,12 @@ func (o *Event) doAfterDeleteHooks(ctx context.Context, exec boil.ContextExecuto
 }
 
 // doBeforeUpsertHooks executes all "before Upsert" hooks.
-func (o *Event) doBeforeUpsertHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
+func (o *Trigger) doBeforeUpsertHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
 	if boil.HooksAreSkipped(ctx) {
 		return nil
 	}
 
-	for _, hook := range eventBeforeUpsertHooks {
+	for _, hook := range triggerBeforeUpsertHooks {
 		if err := hook(ctx, exec, o); err != nil {
 			return err
 		}
@@ -469,12 +462,12 @@ func (o *Event) doBeforeUpsertHooks(ctx context.Context, exec boil.ContextExecut
 }
 
 // doAfterUpsertHooks executes all "after Upsert" hooks.
-func (o *Event) doAfterUpsertHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
+func (o *Trigger) doAfterUpsertHooks(ctx context.Context, exec boil.ContextExecutor) (err error) {
 	if boil.HooksAreSkipped(ctx) {
 		return nil
 	}
 
-	for _, hook := range eventAfterUpsertHooks {
+	for _, hook := range triggerAfterUpsertHooks {
 		if err := hook(ctx, exec, o); err != nil {
 			return err
 		}
@@ -483,51 +476,51 @@ func (o *Event) doAfterUpsertHooks(ctx context.Context, exec boil.ContextExecuto
 	return nil
 }
 
-// AddEventHook registers your hook function for all future operations.
-func AddEventHook(hookPoint boil.HookPoint, eventHook EventHook) {
+// AddTriggerHook registers your hook function for all future operations.
+func AddTriggerHook(hookPoint boil.HookPoint, triggerHook TriggerHook) {
 	switch hookPoint {
 	case boil.AfterSelectHook:
-		eventAfterSelectMu.Lock()
-		eventAfterSelectHooks = append(eventAfterSelectHooks, eventHook)
-		eventAfterSelectMu.Unlock()
+		triggerAfterSelectMu.Lock()
+		triggerAfterSelectHooks = append(triggerAfterSelectHooks, triggerHook)
+		triggerAfterSelectMu.Unlock()
 	case boil.BeforeInsertHook:
-		eventBeforeInsertMu.Lock()
-		eventBeforeInsertHooks = append(eventBeforeInsertHooks, eventHook)
-		eventBeforeInsertMu.Unlock()
+		triggerBeforeInsertMu.Lock()
+		triggerBeforeInsertHooks = append(triggerBeforeInsertHooks, triggerHook)
+		triggerBeforeInsertMu.Unlock()
 	case boil.AfterInsertHook:
-		eventAfterInsertMu.Lock()
-		eventAfterInsertHooks = append(eventAfterInsertHooks, eventHook)
-		eventAfterInsertMu.Unlock()
+		triggerAfterInsertMu.Lock()
+		triggerAfterInsertHooks = append(triggerAfterInsertHooks, triggerHook)
+		triggerAfterInsertMu.Unlock()
 	case boil.BeforeUpdateHook:
-		eventBeforeUpdateMu.Lock()
-		eventBeforeUpdateHooks = append(eventBeforeUpdateHooks, eventHook)
-		eventBeforeUpdateMu.Unlock()
+		triggerBeforeUpdateMu.Lock()
+		triggerBeforeUpdateHooks = append(triggerBeforeUpdateHooks, triggerHook)
+		triggerBeforeUpdateMu.Unlock()
 	case boil.AfterUpdateHook:
-		eventAfterUpdateMu.Lock()
-		eventAfterUpdateHooks = append(eventAfterUpdateHooks, eventHook)
-		eventAfterUpdateMu.Unlock()
+		triggerAfterUpdateMu.Lock()
+		triggerAfterUpdateHooks = append(triggerAfterUpdateHooks, triggerHook)
+		triggerAfterUpdateMu.Unlock()
 	case boil.BeforeDeleteHook:
-		eventBeforeDeleteMu.Lock()
-		eventBeforeDeleteHooks = append(eventBeforeDeleteHooks, eventHook)
-		eventBeforeDeleteMu.Unlock()
+		triggerBeforeDeleteMu.Lock()
+		triggerBeforeDeleteHooks = append(triggerBeforeDeleteHooks, triggerHook)
+		triggerBeforeDeleteMu.Unlock()
 	case boil.AfterDeleteHook:
-		eventAfterDeleteMu.Lock()
-		eventAfterDeleteHooks = append(eventAfterDeleteHooks, eventHook)
-		eventAfterDeleteMu.Unlock()
+		triggerAfterDeleteMu.Lock()
+		triggerAfterDeleteHooks = append(triggerAfterDeleteHooks, triggerHook)
+		triggerAfterDeleteMu.Unlock()
 	case boil.BeforeUpsertHook:
-		eventBeforeUpsertMu.Lock()
-		eventBeforeUpsertHooks = append(eventBeforeUpsertHooks, eventHook)
-		eventBeforeUpsertMu.Unlock()
+		triggerBeforeUpsertMu.Lock()
+		triggerBeforeUpsertHooks = append(triggerBeforeUpsertHooks, triggerHook)
+		triggerBeforeUpsertMu.Unlock()
 	case boil.AfterUpsertHook:
-		eventAfterUpsertMu.Lock()
-		eventAfterUpsertHooks = append(eventAfterUpsertHooks, eventHook)
-		eventAfterUpsertMu.Unlock()
+		triggerAfterUpsertMu.Lock()
+		triggerAfterUpsertHooks = append(triggerAfterUpsertHooks, triggerHook)
+		triggerAfterUpsertMu.Unlock()
 	}
 }
 
-// One returns a single event record from the query.
-func (q eventQuery) One(ctx context.Context, exec boil.ContextExecutor) (*Event, error) {
-	o := &Event{}
+// One returns a single trigger record from the query.
+func (q triggerQuery) One(ctx context.Context, exec boil.ContextExecutor) (*Trigger, error) {
+	o := &Trigger{}
 
 	queries.SetLimit(q.Query, 1)
 
@@ -536,7 +529,7 @@ func (q eventQuery) One(ctx context.Context, exec boil.ContextExecutor) (*Event,
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, sql.ErrNoRows
 		}
-		return nil, errors.Wrap(err, "models: failed to execute a one query for events")
+		return nil, errors.Wrap(err, "models: failed to execute a one query for triggers")
 	}
 
 	if err := o.doAfterSelectHooks(ctx, exec); err != nil {
@@ -546,16 +539,16 @@ func (q eventQuery) One(ctx context.Context, exec boil.ContextExecutor) (*Event,
 	return o, nil
 }
 
-// All returns all Event records from the query.
-func (q eventQuery) All(ctx context.Context, exec boil.ContextExecutor) (EventSlice, error) {
-	var o []*Event
+// All returns all Trigger records from the query.
+func (q triggerQuery) All(ctx context.Context, exec boil.ContextExecutor) (TriggerSlice, error) {
+	var o []*Trigger
 
 	err := q.Bind(ctx, exec, &o)
 	if err != nil {
-		return nil, errors.Wrap(err, "models: failed to assign all query results to Event slice")
+		return nil, errors.Wrap(err, "models: failed to assign all query results to Trigger slice")
 	}
 
-	if len(eventAfterSelectHooks) != 0 {
+	if len(triggerAfterSelectHooks) != 0 {
 		for _, obj := range o {
 			if err := obj.doAfterSelectHooks(ctx, exec); err != nil {
 				return o, err
@@ -566,8 +559,8 @@ func (q eventQuery) All(ctx context.Context, exec boil.ContextExecutor) (EventSl
 	return o, nil
 }
 
-// Count returns the count of all Event records in the query.
-func (q eventQuery) Count(ctx context.Context, exec boil.ContextExecutor) (int64, error) {
+// Count returns the count of all Trigger records in the query.
+func (q triggerQuery) Count(ctx context.Context, exec boil.ContextExecutor) (int64, error) {
 	var count int64
 
 	queries.SetSelect(q.Query, nil)
@@ -575,14 +568,14 @@ func (q eventQuery) Count(ctx context.Context, exec boil.ContextExecutor) (int64
 
 	err := q.Query.QueryRowContext(ctx, exec).Scan(&count)
 	if err != nil {
-		return 0, errors.Wrap(err, "models: failed to count events rows")
+		return 0, errors.Wrap(err, "models: failed to count triggers rows")
 	}
 
 	return count, nil
 }
 
 // Exists checks if the row exists in the table.
-func (q eventQuery) Exists(ctx context.Context, exec boil.ContextExecutor) (bool, error) {
+func (q triggerQuery) Exists(ctx context.Context, exec boil.ContextExecutor) (bool, error) {
 	var count int64
 
 	queries.SetSelect(q.Query, nil)
@@ -591,14 +584,14 @@ func (q eventQuery) Exists(ctx context.Context, exec boil.ContextExecutor) (bool
 
 	err := q.Query.QueryRowContext(ctx, exec).Scan(&count)
 	if err != nil {
-		return false, errors.Wrap(err, "models: failed to check if events exists")
+		return false, errors.Wrap(err, "models: failed to check if triggers exists")
 	}
 
 	return count > 0, nil
 }
 
-// EventLogs retrieves all the event_log's EventLogs with an executor.
-func (o *Event) EventLogs(mods ...qm.QueryMod) eventLogQuery {
+// EventEventLogs retrieves all the event_log's EventLogs with an executor via event_id column.
+func (o *Trigger) EventEventLogs(mods ...qm.QueryMod) eventLogQuery {
 	var queryMods []qm.QueryMod
 	if len(mods) != 0 {
 		queryMods = append(queryMods, mods...)
@@ -611,8 +604,8 @@ func (o *Event) EventLogs(mods ...qm.QueryMod) eventLogQuery {
 	return EventLogs(queryMods...)
 }
 
-// EventVehicles retrieves all the event_vehicle's EventVehicles with an executor.
-func (o *Event) EventVehicles(mods ...qm.QueryMod) eventVehicleQuery {
+// EventEventVehicles retrieves all the event_vehicle's EventVehicles with an executor via event_id column.
+func (o *Trigger) EventEventVehicles(mods ...qm.QueryMod) eventVehicleQuery {
 	var queryMods []qm.QueryMod
 	if len(mods) != 0 {
 		queryMods = append(queryMods, mods...)
@@ -625,30 +618,30 @@ func (o *Event) EventVehicles(mods ...qm.QueryMod) eventVehicleQuery {
 	return EventVehicles(queryMods...)
 }
 
-// LoadEventLogs allows an eager lookup of values, cached into the
+// LoadEventEventLogs allows an eager lookup of values, cached into the
 // loaded structs of the objects. This is for a 1-M or N-M relationship.
-func (eventL) LoadEventLogs(ctx context.Context, e boil.ContextExecutor, singular bool, maybeEvent interface{}, mods queries.Applicator) error {
-	var slice []*Event
-	var object *Event
+func (triggerL) LoadEventEventLogs(ctx context.Context, e boil.ContextExecutor, singular bool, maybeTrigger interface{}, mods queries.Applicator) error {
+	var slice []*Trigger
+	var object *Trigger
 
 	if singular {
 		var ok bool
-		object, ok = maybeEvent.(*Event)
+		object, ok = maybeTrigger.(*Trigger)
 		if !ok {
-			object = new(Event)
-			ok = queries.SetFromEmbeddedStruct(&object, &maybeEvent)
+			object = new(Trigger)
+			ok = queries.SetFromEmbeddedStruct(&object, &maybeTrigger)
 			if !ok {
-				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeEvent))
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeTrigger))
 			}
 		}
 	} else {
-		s, ok := maybeEvent.(*[]*Event)
+		s, ok := maybeTrigger.(*[]*Trigger)
 		if ok {
 			slice = *s
 		} else {
-			ok = queries.SetFromEmbeddedStruct(&slice, maybeEvent)
+			ok = queries.SetFromEmbeddedStruct(&slice, maybeTrigger)
 			if !ok {
-				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeEvent))
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeTrigger))
 			}
 		}
 	}
@@ -656,13 +649,13 @@ func (eventL) LoadEventLogs(ctx context.Context, e boil.ContextExecutor, singula
 	args := make(map[interface{}]struct{})
 	if singular {
 		if object.R == nil {
-			object.R = &eventR{}
+			object.R = &triggerR{}
 		}
 		args[object.ID] = struct{}{}
 	} else {
 		for _, obj := range slice {
 			if obj.R == nil {
-				obj.R = &eventR{}
+				obj.R = &triggerR{}
 			}
 			args[obj.ID] = struct{}{}
 		}
@@ -712,7 +705,7 @@ func (eventL) LoadEventLogs(ctx context.Context, e boil.ContextExecutor, singula
 		}
 	}
 	if singular {
-		object.R.EventLogs = resultSlice
+		object.R.EventEventLogs = resultSlice
 		for _, foreign := range resultSlice {
 			if foreign.R == nil {
 				foreign.R = &eventLogR{}
@@ -725,7 +718,7 @@ func (eventL) LoadEventLogs(ctx context.Context, e boil.ContextExecutor, singula
 	for _, foreign := range resultSlice {
 		for _, local := range slice {
 			if local.ID == foreign.EventID {
-				local.R.EventLogs = append(local.R.EventLogs, foreign)
+				local.R.EventEventLogs = append(local.R.EventEventLogs, foreign)
 				if foreign.R == nil {
 					foreign.R = &eventLogR{}
 				}
@@ -738,30 +731,30 @@ func (eventL) LoadEventLogs(ctx context.Context, e boil.ContextExecutor, singula
 	return nil
 }
 
-// LoadEventVehicles allows an eager lookup of values, cached into the
+// LoadEventEventVehicles allows an eager lookup of values, cached into the
 // loaded structs of the objects. This is for a 1-M or N-M relationship.
-func (eventL) LoadEventVehicles(ctx context.Context, e boil.ContextExecutor, singular bool, maybeEvent interface{}, mods queries.Applicator) error {
-	var slice []*Event
-	var object *Event
+func (triggerL) LoadEventEventVehicles(ctx context.Context, e boil.ContextExecutor, singular bool, maybeTrigger interface{}, mods queries.Applicator) error {
+	var slice []*Trigger
+	var object *Trigger
 
 	if singular {
 		var ok bool
-		object, ok = maybeEvent.(*Event)
+		object, ok = maybeTrigger.(*Trigger)
 		if !ok {
-			object = new(Event)
-			ok = queries.SetFromEmbeddedStruct(&object, &maybeEvent)
+			object = new(Trigger)
+			ok = queries.SetFromEmbeddedStruct(&object, &maybeTrigger)
 			if !ok {
-				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeEvent))
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeTrigger))
 			}
 		}
 	} else {
-		s, ok := maybeEvent.(*[]*Event)
+		s, ok := maybeTrigger.(*[]*Trigger)
 		if ok {
 			slice = *s
 		} else {
-			ok = queries.SetFromEmbeddedStruct(&slice, maybeEvent)
+			ok = queries.SetFromEmbeddedStruct(&slice, maybeTrigger)
 			if !ok {
-				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeEvent))
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeTrigger))
 			}
 		}
 	}
@@ -769,13 +762,13 @@ func (eventL) LoadEventVehicles(ctx context.Context, e boil.ContextExecutor, sin
 	args := make(map[interface{}]struct{})
 	if singular {
 		if object.R == nil {
-			object.R = &eventR{}
+			object.R = &triggerR{}
 		}
 		args[object.ID] = struct{}{}
 	} else {
 		for _, obj := range slice {
 			if obj.R == nil {
-				obj.R = &eventR{}
+				obj.R = &triggerR{}
 			}
 			args[obj.ID] = struct{}{}
 		}
@@ -825,7 +818,7 @@ func (eventL) LoadEventVehicles(ctx context.Context, e boil.ContextExecutor, sin
 		}
 	}
 	if singular {
-		object.R.EventVehicles = resultSlice
+		object.R.EventEventVehicles = resultSlice
 		for _, foreign := range resultSlice {
 			if foreign.R == nil {
 				foreign.R = &eventVehicleR{}
@@ -838,7 +831,7 @@ func (eventL) LoadEventVehicles(ctx context.Context, e boil.ContextExecutor, sin
 	for _, foreign := range resultSlice {
 		for _, local := range slice {
 			if local.ID == foreign.EventID {
-				local.R.EventVehicles = append(local.R.EventVehicles, foreign)
+				local.R.EventEventVehicles = append(local.R.EventEventVehicles, foreign)
 				if foreign.R == nil {
 					foreign.R = &eventVehicleR{}
 				}
@@ -851,11 +844,11 @@ func (eventL) LoadEventVehicles(ctx context.Context, e boil.ContextExecutor, sin
 	return nil
 }
 
-// AddEventLogs adds the given related objects to the existing relationships
-// of the event, optionally inserting them as new records.
-// Appends related to o.R.EventLogs.
+// AddEventEventLogs adds the given related objects to the existing relationships
+// of the trigger, optionally inserting them as new records.
+// Appends related to o.R.EventEventLogs.
 // Sets related.R.Event appropriately.
-func (o *Event) AddEventLogs(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*EventLog) error {
+func (o *Trigger) AddEventEventLogs(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*EventLog) error {
 	var err error
 	for _, rel := range related {
 		if insert {
@@ -885,11 +878,11 @@ func (o *Event) AddEventLogs(ctx context.Context, exec boil.ContextExecutor, ins
 	}
 
 	if o.R == nil {
-		o.R = &eventR{
-			EventLogs: related,
+		o.R = &triggerR{
+			EventEventLogs: related,
 		}
 	} else {
-		o.R.EventLogs = append(o.R.EventLogs, related...)
+		o.R.EventEventLogs = append(o.R.EventEventLogs, related...)
 	}
 
 	for _, rel := range related {
@@ -904,11 +897,11 @@ func (o *Event) AddEventLogs(ctx context.Context, exec boil.ContextExecutor, ins
 	return nil
 }
 
-// AddEventVehicles adds the given related objects to the existing relationships
-// of the event, optionally inserting them as new records.
-// Appends related to o.R.EventVehicles.
+// AddEventEventVehicles adds the given related objects to the existing relationships
+// of the trigger, optionally inserting them as new records.
+// Appends related to o.R.EventEventVehicles.
 // Sets related.R.Event appropriately.
-func (o *Event) AddEventVehicles(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*EventVehicle) error {
+func (o *Trigger) AddEventEventVehicles(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*EventVehicle) error {
 	var err error
 	for _, rel := range related {
 		if insert {
@@ -938,11 +931,11 @@ func (o *Event) AddEventVehicles(ctx context.Context, exec boil.ContextExecutor,
 	}
 
 	if o.R == nil {
-		o.R = &eventR{
-			EventVehicles: related,
+		o.R = &triggerR{
+			EventEventVehicles: related,
 		}
 	} else {
-		o.R.EventVehicles = append(o.R.EventVehicles, related...)
+		o.R.EventEventVehicles = append(o.R.EventEventVehicles, related...)
 	}
 
 	for _, rel := range related {
@@ -957,52 +950,52 @@ func (o *Event) AddEventVehicles(ctx context.Context, exec boil.ContextExecutor,
 	return nil
 }
 
-// Events retrieves all the records using an executor.
-func Events(mods ...qm.QueryMod) eventQuery {
-	mods = append(mods, qm.From("\"vehicle_events_api\".\"events\""))
+// Triggers retrieves all the records using an executor.
+func Triggers(mods ...qm.QueryMod) triggerQuery {
+	mods = append(mods, qm.From("\"vehicle_events_api\".\"triggers\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"vehicle_events_api\".\"events\".*"})
+		queries.SetSelect(q, []string{"\"vehicle_events_api\".\"triggers\".*"})
 	}
 
-	return eventQuery{q}
+	return triggerQuery{q}
 }
 
-// FindEvent retrieves a single record by ID with an executor.
+// FindTrigger retrieves a single record by ID with an executor.
 // If selectCols is empty Find will return all columns.
-func FindEvent(ctx context.Context, exec boil.ContextExecutor, iD string, selectCols ...string) (*Event, error) {
-	eventObj := &Event{}
+func FindTrigger(ctx context.Context, exec boil.ContextExecutor, iD string, selectCols ...string) (*Trigger, error) {
+	triggerObj := &Trigger{}
 
 	sel := "*"
 	if len(selectCols) > 0 {
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"vehicle_events_api\".\"events\" where \"id\"=$1", sel,
+		"select %s from \"vehicle_events_api\".\"triggers\" where \"id\"=$1", sel,
 	)
 
 	q := queries.Raw(query, iD)
 
-	err := q.Bind(ctx, exec, eventObj)
+	err := q.Bind(ctx, exec, triggerObj)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, sql.ErrNoRows
 		}
-		return nil, errors.Wrap(err, "models: unable to select from events")
+		return nil, errors.Wrap(err, "models: unable to select from triggers")
 	}
 
-	if err = eventObj.doAfterSelectHooks(ctx, exec); err != nil {
-		return eventObj, err
+	if err = triggerObj.doAfterSelectHooks(ctx, exec); err != nil {
+		return triggerObj, err
 	}
 
-	return eventObj, nil
+	return triggerObj, nil
 }
 
 // Insert a single record using an executor.
 // See boil.Columns.InsertColumnSet documentation to understand column list inference for inserts.
-func (o *Event) Insert(ctx context.Context, exec boil.ContextExecutor, columns boil.Columns) error {
+func (o *Trigger) Insert(ctx context.Context, exec boil.ContextExecutor, columns boil.Columns) error {
 	if o == nil {
-		return errors.New("models: no events provided for insertion")
+		return errors.New("models: no triggers provided for insertion")
 	}
 
 	var err error
@@ -1021,33 +1014,33 @@ func (o *Event) Insert(ctx context.Context, exec boil.ContextExecutor, columns b
 		return err
 	}
 
-	nzDefaults := queries.NonZeroDefaultSet(eventColumnsWithDefault, o)
+	nzDefaults := queries.NonZeroDefaultSet(triggerColumnsWithDefault, o)
 
 	key := makeCacheKey(columns, nzDefaults)
-	eventInsertCacheMut.RLock()
-	cache, cached := eventInsertCache[key]
-	eventInsertCacheMut.RUnlock()
+	triggerInsertCacheMut.RLock()
+	cache, cached := triggerInsertCache[key]
+	triggerInsertCacheMut.RUnlock()
 
 	if !cached {
 		wl, returnColumns := columns.InsertColumnSet(
-			eventAllColumns,
-			eventColumnsWithDefault,
-			eventColumnsWithoutDefault,
+			triggerAllColumns,
+			triggerColumnsWithDefault,
+			triggerColumnsWithoutDefault,
 			nzDefaults,
 		)
 
-		cache.valueMapping, err = queries.BindMapping(eventType, eventMapping, wl)
+		cache.valueMapping, err = queries.BindMapping(triggerType, triggerMapping, wl)
 		if err != nil {
 			return err
 		}
-		cache.retMapping, err = queries.BindMapping(eventType, eventMapping, returnColumns)
+		cache.retMapping, err = queries.BindMapping(triggerType, triggerMapping, returnColumns)
 		if err != nil {
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"vehicle_events_api\".\"events\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"vehicle_events_api\".\"triggers\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"vehicle_events_api\".\"events\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"vehicle_events_api\".\"triggers\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -1075,22 +1068,22 @@ func (o *Event) Insert(ctx context.Context, exec boil.ContextExecutor, columns b
 	}
 
 	if err != nil {
-		return errors.Wrap(err, "models: unable to insert into events")
+		return errors.Wrap(err, "models: unable to insert into triggers")
 	}
 
 	if !cached {
-		eventInsertCacheMut.Lock()
-		eventInsertCache[key] = cache
-		eventInsertCacheMut.Unlock()
+		triggerInsertCacheMut.Lock()
+		triggerInsertCache[key] = cache
+		triggerInsertCacheMut.Unlock()
 	}
 
 	return o.doAfterInsertHooks(ctx, exec)
 }
 
-// Update uses an executor to update the Event.
+// Update uses an executor to update the Trigger.
 // See boil.Columns.UpdateColumnSet documentation to understand column list inference for updates.
 // Update does not automatically update the record in case of default values. Use .Reload() to refresh the records.
-func (o *Event) Update(ctx context.Context, exec boil.ContextExecutor, columns boil.Columns) (int64, error) {
+func (o *Trigger) Update(ctx context.Context, exec boil.ContextExecutor, columns boil.Columns) (int64, error) {
 	if !boil.TimestampsAreSkipped(ctx) {
 		currTime := time.Now().In(boil.GetLocation())
 
@@ -1102,28 +1095,28 @@ func (o *Event) Update(ctx context.Context, exec boil.ContextExecutor, columns b
 		return 0, err
 	}
 	key := makeCacheKey(columns, nil)
-	eventUpdateCacheMut.RLock()
-	cache, cached := eventUpdateCache[key]
-	eventUpdateCacheMut.RUnlock()
+	triggerUpdateCacheMut.RLock()
+	cache, cached := triggerUpdateCache[key]
+	triggerUpdateCacheMut.RUnlock()
 
 	if !cached {
 		wl := columns.UpdateColumnSet(
-			eventAllColumns,
-			eventPrimaryKeyColumns,
+			triggerAllColumns,
+			triggerPrimaryKeyColumns,
 		)
 
 		if !columns.IsWhitelist() {
 			wl = strmangle.SetComplement(wl, []string{"created_at"})
 		}
 		if len(wl) == 0 {
-			return 0, errors.New("models: unable to update events, could not build whitelist")
+			return 0, errors.New("models: unable to update triggers, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"vehicle_events_api\".\"events\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"vehicle_events_api\".\"triggers\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
-			strmangle.WhereClause("\"", "\"", len(wl)+1, eventPrimaryKeyColumns),
+			strmangle.WhereClause("\"", "\"", len(wl)+1, triggerPrimaryKeyColumns),
 		)
-		cache.valueMapping, err = queries.BindMapping(eventType, eventMapping, append(wl, eventPrimaryKeyColumns...))
+		cache.valueMapping, err = queries.BindMapping(triggerType, triggerMapping, append(wl, triggerPrimaryKeyColumns...))
 		if err != nil {
 			return 0, err
 		}
@@ -1139,42 +1132,42 @@ func (o *Event) Update(ctx context.Context, exec boil.ContextExecutor, columns b
 	var result sql.Result
 	result, err = exec.ExecContext(ctx, cache.query, values...)
 	if err != nil {
-		return 0, errors.Wrap(err, "models: unable to update events row")
+		return 0, errors.Wrap(err, "models: unable to update triggers row")
 	}
 
 	rowsAff, err := result.RowsAffected()
 	if err != nil {
-		return 0, errors.Wrap(err, "models: failed to get rows affected by update for events")
+		return 0, errors.Wrap(err, "models: failed to get rows affected by update for triggers")
 	}
 
 	if !cached {
-		eventUpdateCacheMut.Lock()
-		eventUpdateCache[key] = cache
-		eventUpdateCacheMut.Unlock()
+		triggerUpdateCacheMut.Lock()
+		triggerUpdateCache[key] = cache
+		triggerUpdateCacheMut.Unlock()
 	}
 
 	return rowsAff, o.doAfterUpdateHooks(ctx, exec)
 }
 
 // UpdateAll updates all rows with the specified column values.
-func (q eventQuery) UpdateAll(ctx context.Context, exec boil.ContextExecutor, cols M) (int64, error) {
+func (q triggerQuery) UpdateAll(ctx context.Context, exec boil.ContextExecutor, cols M) (int64, error) {
 	queries.SetUpdate(q.Query, cols)
 
 	result, err := q.Query.ExecContext(ctx, exec)
 	if err != nil {
-		return 0, errors.Wrap(err, "models: unable to update all for events")
+		return 0, errors.Wrap(err, "models: unable to update all for triggers")
 	}
 
 	rowsAff, err := result.RowsAffected()
 	if err != nil {
-		return 0, errors.Wrap(err, "models: unable to retrieve rows affected for events")
+		return 0, errors.Wrap(err, "models: unable to retrieve rows affected for triggers")
 	}
 
 	return rowsAff, nil
 }
 
 // UpdateAll updates all rows with the specified column values, using an executor.
-func (o EventSlice) UpdateAll(ctx context.Context, exec boil.ContextExecutor, cols M) (int64, error) {
+func (o TriggerSlice) UpdateAll(ctx context.Context, exec boil.ContextExecutor, cols M) (int64, error) {
 	ln := int64(len(o))
 	if ln == 0 {
 		return 0, nil
@@ -1196,13 +1189,13 @@ func (o EventSlice) UpdateAll(ctx context.Context, exec boil.ContextExecutor, co
 
 	// Append all of the primary key values for each column
 	for _, obj := range o {
-		pkeyArgs := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(obj)), eventPrimaryKeyMapping)
+		pkeyArgs := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(obj)), triggerPrimaryKeyMapping)
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"vehicle_events_api\".\"events\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"vehicle_events_api\".\"triggers\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
-		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, eventPrimaryKeyColumns, len(o)))
+		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, triggerPrimaryKeyColumns, len(o)))
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1211,21 +1204,21 @@ func (o EventSlice) UpdateAll(ctx context.Context, exec boil.ContextExecutor, co
 	}
 	result, err := exec.ExecContext(ctx, sql, args...)
 	if err != nil {
-		return 0, errors.Wrap(err, "models: unable to update all in event slice")
+		return 0, errors.Wrap(err, "models: unable to update all in trigger slice")
 	}
 
 	rowsAff, err := result.RowsAffected()
 	if err != nil {
-		return 0, errors.Wrap(err, "models: unable to retrieve rows affected all in update all event")
+		return 0, errors.Wrap(err, "models: unable to retrieve rows affected all in update all trigger")
 	}
 	return rowsAff, nil
 }
 
 // Upsert attempts an insert using an executor, and does an update or ignore on conflict.
 // See boil.Columns documentation for how to properly use updateColumns and insertColumns.
-func (o *Event) Upsert(ctx context.Context, exec boil.ContextExecutor, updateOnConflict bool, conflictColumns []string, updateColumns, insertColumns boil.Columns, opts ...UpsertOptionFunc) error {
+func (o *Trigger) Upsert(ctx context.Context, exec boil.ContextExecutor, updateOnConflict bool, conflictColumns []string, updateColumns, insertColumns boil.Columns, opts ...UpsertOptionFunc) error {
 	if o == nil {
-		return errors.New("models: no events provided for upsert")
+		return errors.New("models: no triggers provided for upsert")
 	}
 	if !boil.TimestampsAreSkipped(ctx) {
 		currTime := time.Now().In(boil.GetLocation())
@@ -1240,7 +1233,7 @@ func (o *Event) Upsert(ctx context.Context, exec boil.ContextExecutor, updateOnC
 		return err
 	}
 
-	nzDefaults := queries.NonZeroDefaultSet(eventColumnsWithDefault, o)
+	nzDefaults := queries.NonZeroDefaultSet(triggerColumnsWithDefault, o)
 
 	// Build cache key in-line uglily - mysql vs psql problems
 	buf := strmangle.GetBuffer()
@@ -1270,48 +1263,48 @@ func (o *Event) Upsert(ctx context.Context, exec boil.ContextExecutor, updateOnC
 	key := buf.String()
 	strmangle.PutBuffer(buf)
 
-	eventUpsertCacheMut.RLock()
-	cache, cached := eventUpsertCache[key]
-	eventUpsertCacheMut.RUnlock()
+	triggerUpsertCacheMut.RLock()
+	cache, cached := triggerUpsertCache[key]
+	triggerUpsertCacheMut.RUnlock()
 
 	var err error
 
 	if !cached {
 		insert, _ := insertColumns.InsertColumnSet(
-			eventAllColumns,
-			eventColumnsWithDefault,
-			eventColumnsWithoutDefault,
+			triggerAllColumns,
+			triggerColumnsWithDefault,
+			triggerColumnsWithoutDefault,
 			nzDefaults,
 		)
 
 		update := updateColumns.UpdateColumnSet(
-			eventAllColumns,
-			eventPrimaryKeyColumns,
+			triggerAllColumns,
+			triggerPrimaryKeyColumns,
 		)
 
 		if updateOnConflict && len(update) == 0 {
-			return errors.New("models: unable to upsert events, could not build update column list")
+			return errors.New("models: unable to upsert triggers, could not build update column list")
 		}
 
-		ret := strmangle.SetComplement(eventAllColumns, strmangle.SetIntersect(insert, update))
+		ret := strmangle.SetComplement(triggerAllColumns, strmangle.SetIntersect(insert, update))
 
 		conflict := conflictColumns
 		if len(conflict) == 0 && updateOnConflict && len(update) != 0 {
-			if len(eventPrimaryKeyColumns) == 0 {
-				return errors.New("models: unable to upsert events, could not build conflict column list")
+			if len(triggerPrimaryKeyColumns) == 0 {
+				return errors.New("models: unable to upsert triggers, could not build conflict column list")
 			}
 
-			conflict = make([]string, len(eventPrimaryKeyColumns))
-			copy(conflict, eventPrimaryKeyColumns)
+			conflict = make([]string, len(triggerPrimaryKeyColumns))
+			copy(conflict, triggerPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"vehicle_events_api\".\"events\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"vehicle_events_api\".\"triggers\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
-		cache.valueMapping, err = queries.BindMapping(eventType, eventMapping, insert)
+		cache.valueMapping, err = queries.BindMapping(triggerType, triggerMapping, insert)
 		if err != nil {
 			return err
 		}
 		if len(ret) != 0 {
-			cache.retMapping, err = queries.BindMapping(eventType, eventMapping, ret)
+			cache.retMapping, err = queries.BindMapping(triggerType, triggerMapping, ret)
 			if err != nil {
 				return err
 			}
@@ -1339,31 +1332,31 @@ func (o *Event) Upsert(ctx context.Context, exec boil.ContextExecutor, updateOnC
 		_, err = exec.ExecContext(ctx, cache.query, vals...)
 	}
 	if err != nil {
-		return errors.Wrap(err, "models: unable to upsert events")
+		return errors.Wrap(err, "models: unable to upsert triggers")
 	}
 
 	if !cached {
-		eventUpsertCacheMut.Lock()
-		eventUpsertCache[key] = cache
-		eventUpsertCacheMut.Unlock()
+		triggerUpsertCacheMut.Lock()
+		triggerUpsertCache[key] = cache
+		triggerUpsertCacheMut.Unlock()
 	}
 
 	return o.doAfterUpsertHooks(ctx, exec)
 }
 
-// Delete deletes a single Event record with an executor.
+// Delete deletes a single Trigger record with an executor.
 // Delete will match against the primary key column to find the record to delete.
-func (o *Event) Delete(ctx context.Context, exec boil.ContextExecutor) (int64, error) {
+func (o *Trigger) Delete(ctx context.Context, exec boil.ContextExecutor) (int64, error) {
 	if o == nil {
-		return 0, errors.New("models: no Event provided for delete")
+		return 0, errors.New("models: no Trigger provided for delete")
 	}
 
 	if err := o.doBeforeDeleteHooks(ctx, exec); err != nil {
 		return 0, err
 	}
 
-	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), eventPrimaryKeyMapping)
-	sql := "DELETE FROM \"vehicle_events_api\".\"events\" WHERE \"id\"=$1"
+	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), triggerPrimaryKeyMapping)
+	sql := "DELETE FROM \"vehicle_events_api\".\"triggers\" WHERE \"id\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1372,12 +1365,12 @@ func (o *Event) Delete(ctx context.Context, exec boil.ContextExecutor) (int64, e
 	}
 	result, err := exec.ExecContext(ctx, sql, args...)
 	if err != nil {
-		return 0, errors.Wrap(err, "models: unable to delete from events")
+		return 0, errors.Wrap(err, "models: unable to delete from triggers")
 	}
 
 	rowsAff, err := result.RowsAffected()
 	if err != nil {
-		return 0, errors.Wrap(err, "models: failed to get rows affected by delete for events")
+		return 0, errors.Wrap(err, "models: failed to get rows affected by delete for triggers")
 	}
 
 	if err := o.doAfterDeleteHooks(ctx, exec); err != nil {
@@ -1388,33 +1381,33 @@ func (o *Event) Delete(ctx context.Context, exec boil.ContextExecutor) (int64, e
 }
 
 // DeleteAll deletes all matching rows.
-func (q eventQuery) DeleteAll(ctx context.Context, exec boil.ContextExecutor) (int64, error) {
+func (q triggerQuery) DeleteAll(ctx context.Context, exec boil.ContextExecutor) (int64, error) {
 	if q.Query == nil {
-		return 0, errors.New("models: no eventQuery provided for delete all")
+		return 0, errors.New("models: no triggerQuery provided for delete all")
 	}
 
 	queries.SetDelete(q.Query)
 
 	result, err := q.Query.ExecContext(ctx, exec)
 	if err != nil {
-		return 0, errors.Wrap(err, "models: unable to delete all from events")
+		return 0, errors.Wrap(err, "models: unable to delete all from triggers")
 	}
 
 	rowsAff, err := result.RowsAffected()
 	if err != nil {
-		return 0, errors.Wrap(err, "models: failed to get rows affected by deleteall for events")
+		return 0, errors.Wrap(err, "models: failed to get rows affected by deleteall for triggers")
 	}
 
 	return rowsAff, nil
 }
 
 // DeleteAll deletes all rows in the slice, using an executor.
-func (o EventSlice) DeleteAll(ctx context.Context, exec boil.ContextExecutor) (int64, error) {
+func (o TriggerSlice) DeleteAll(ctx context.Context, exec boil.ContextExecutor) (int64, error) {
 	if len(o) == 0 {
 		return 0, nil
 	}
 
-	if len(eventBeforeDeleteHooks) != 0 {
+	if len(triggerBeforeDeleteHooks) != 0 {
 		for _, obj := range o {
 			if err := obj.doBeforeDeleteHooks(ctx, exec); err != nil {
 				return 0, err
@@ -1424,12 +1417,12 @@ func (o EventSlice) DeleteAll(ctx context.Context, exec boil.ContextExecutor) (i
 
 	var args []interface{}
 	for _, obj := range o {
-		pkeyArgs := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(obj)), eventPrimaryKeyMapping)
+		pkeyArgs := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(obj)), triggerPrimaryKeyMapping)
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"vehicle_events_api\".\"events\" WHERE " +
-		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, eventPrimaryKeyColumns, len(o))
+	sql := "DELETE FROM \"vehicle_events_api\".\"triggers\" WHERE " +
+		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, triggerPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1438,15 +1431,15 @@ func (o EventSlice) DeleteAll(ctx context.Context, exec boil.ContextExecutor) (i
 	}
 	result, err := exec.ExecContext(ctx, sql, args...)
 	if err != nil {
-		return 0, errors.Wrap(err, "models: unable to delete all from event slice")
+		return 0, errors.Wrap(err, "models: unable to delete all from trigger slice")
 	}
 
 	rowsAff, err := result.RowsAffected()
 	if err != nil {
-		return 0, errors.Wrap(err, "models: failed to get rows affected by deleteall for events")
+		return 0, errors.Wrap(err, "models: failed to get rows affected by deleteall for triggers")
 	}
 
-	if len(eventAfterDeleteHooks) != 0 {
+	if len(triggerAfterDeleteHooks) != 0 {
 		for _, obj := range o {
 			if err := obj.doAfterDeleteHooks(ctx, exec); err != nil {
 				return 0, err
@@ -1459,8 +1452,8 @@ func (o EventSlice) DeleteAll(ctx context.Context, exec boil.ContextExecutor) (i
 
 // Reload refetches the object from the database
 // using the primary keys with an executor.
-func (o *Event) Reload(ctx context.Context, exec boil.ContextExecutor) error {
-	ret, err := FindEvent(ctx, exec, o.ID)
+func (o *Trigger) Reload(ctx context.Context, exec boil.ContextExecutor) error {
+	ret, err := FindTrigger(ctx, exec, o.ID)
 	if err != nil {
 		return err
 	}
@@ -1471,26 +1464,26 @@ func (o *Event) Reload(ctx context.Context, exec boil.ContextExecutor) error {
 
 // ReloadAll refetches every row with matching primary key column values
 // and overwrites the original object slice with the newly updated slice.
-func (o *EventSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor) error {
+func (o *TriggerSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor) error {
 	if o == nil || len(*o) == 0 {
 		return nil
 	}
 
-	slice := EventSlice{}
+	slice := TriggerSlice{}
 	var args []interface{}
 	for _, obj := range *o {
-		pkeyArgs := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(obj)), eventPrimaryKeyMapping)
+		pkeyArgs := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(obj)), triggerPrimaryKeyMapping)
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"vehicle_events_api\".\"events\".* FROM \"vehicle_events_api\".\"events\" WHERE " +
-		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, eventPrimaryKeyColumns, len(*o))
+	sql := "SELECT \"vehicle_events_api\".\"triggers\".* FROM \"vehicle_events_api\".\"triggers\" WHERE " +
+		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, triggerPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
 
 	err := q.Bind(ctx, exec, &slice)
 	if err != nil {
-		return errors.Wrap(err, "models: unable to reload all in EventSlice")
+		return errors.Wrap(err, "models: unable to reload all in TriggerSlice")
 	}
 
 	*o = slice
@@ -1498,10 +1491,10 @@ func (o *EventSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor) e
 	return nil
 }
 
-// EventExists checks if the Event row exists.
-func EventExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
+// TriggerExists checks if the Trigger row exists.
+func TriggerExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"vehicle_events_api\".\"events\" where \"id\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"vehicle_events_api\".\"triggers\" where \"id\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1512,13 +1505,13 @@ func EventExists(ctx context.Context, exec boil.ContextExecutor, iD string) (boo
 
 	err := row.Scan(&exists)
 	if err != nil {
-		return false, errors.Wrap(err, "models: unable to check if events exists")
+		return false, errors.Wrap(err, "models: unable to check if triggers exists")
 	}
 
 	return exists, nil
 }
 
-// Exists checks if the Event row exists.
-func (o *Event) Exists(ctx context.Context, exec boil.ContextExecutor) (bool, error) {
-	return EventExists(ctx, exec, o.ID)
+// Exists checks if the Trigger row exists.
+func (o *Trigger) Exists(ctx context.Context, exec boil.ContextExecutor) (bool, error) {
+	return TriggerExists(ctx, exec, o.ID)
 }

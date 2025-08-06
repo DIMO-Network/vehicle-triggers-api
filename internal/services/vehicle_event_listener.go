@@ -152,7 +152,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 			continue
 		}
 
-		shouldFire, err := l.evaluateCondition(wh.Trigger, &signal, wh.Data)
+		shouldFire, err := l.evaluateCondition(wh.Condition, &signal, wh.MetricName)
 		if err != nil {
 			l.log.Error().Err(err).Msg("failed to evaluate CEL condition")
 			continue
@@ -160,7 +160,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		if shouldFire {
 			l.log.Info().
 				Str("webhook_url", wh.URL).
-				Str("trigger", wh.Trigger).
+				Str("trigger", wh.Condition).
 				Msg("Webhook triggered.")
 			if err := l.sendWebhookNotification(wh, &signal); err != nil {
 				l.log.Error().Err(err).Msg("failed to send webhook")
@@ -172,7 +172,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		} else {
 			l.log.Debug().
 				Str("webhook_url", wh.URL).
-				Str("trigger", wh.Trigger).
+				Str("trigger", wh.Condition).
 				Msg("Condition not met; skipping webhook.")
 		}
 	}
@@ -230,25 +230,19 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 
 func (l *SignalListener) checkCooldown(webhook Webhook, tokenID uint32) (bool, error) {
 	cooldown := webhook.CooldownPeriod
-	if cooldown == 0 && strings.EqualFold(webhook.Setup, "Hourly") {
-		cooldown = 3600
-	}
 	logs, err := models.EventLogs(
 		qm.Where("event_id = ? AND vehicle_token_id = ?", webhook.ID, tokenID),
 		qm.OrderBy("last_triggered_at DESC"),
 		qm.Limit(1),
 	).All(context.Background(), l.store.DBS().Reader)
 	if err != nil {
-		l.log.Error().Err(err).Msg("Error retrieving EventLogs")
-		return false, err
+		return false, fmt.Errorf("failed to retrieve event logs: %w", err)
 	}
 	if len(logs) == 0 {
-		l.log.Debug().Msg("No previous EventLog found; cooldown passed")
 		return true, nil
 	}
 	lastTriggered := logs[0].LastTriggeredAt
 	diff := time.Since(lastTriggered)
-	l.log.Debug().Msgf("Last triggered %v ago, required cooldown: %vs", diff.Seconds(), cooldown)
 	if diff >= time.Duration(cooldown)*time.Second {
 		return true, nil
 	}
@@ -321,7 +315,7 @@ func (l *SignalListener) handleWebhookFailure(webhookID string) {
 		return
 	}
 	ctx := context.Background()
-	event, err := models.FindEvent(ctx, l.store.DBS().Reader, webhookID)
+	event, err := models.FindTrigger(ctx, l.store.DBS().Reader, webhookID)
 	if err != nil {
 		l.log.Error().Err(err).Msg("handleWebhookFailure: could not fetch event")
 		return
@@ -344,7 +338,7 @@ func (l *SignalListener) resetWebhookFailure(webhookID string) {
 		return
 	}
 	ctx := context.Background()
-	event, err := models.FindEvent(ctx, l.store.DBS().Reader, webhookID)
+	event, err := models.FindTrigger(ctx, l.store.DBS().Reader, webhookID)
 	if err != nil {
 		l.log.Error().Err(err).Msg("resetWebhookFailure: could not fetch event")
 		return

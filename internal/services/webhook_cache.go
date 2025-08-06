@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/utils"
 	"github.com/rs/zerolog"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
@@ -20,10 +18,9 @@ var errNoWebhookConfig = errors.New("no webhook configurations found in the data
 type Webhook struct {
 	ID                      string
 	URL                     string
-	Trigger                 string
+	Condition               string
 	CooldownPeriod          int
-	Data                    string
-	Setup                   string
+	MetricName              string
 	DeveloperLicenseAddress []byte
 }
 
@@ -45,33 +42,19 @@ var FetchWebhooksFromDBFunc = fetchEventVehicleWebhooks
 
 // PopulateCache builds the cache from the database
 func (wc *WebhookCache) PopulateCache(ctx context.Context, exec boil.ContextExecutor) error {
-	rawData, err := FetchWebhooksFromDBFunc(ctx, exec)
+	webhooks, err := FetchWebhooksFromDBFunc(ctx, exec)
 	wc.logger.Debug().
-		Int("vehicles_with_hooks", len(rawData)).
+		Int("vehicles_with_hooks", len(webhooks)).
 		Msg("Fetched raw hook map from DB")
 	if err != nil {
 		if errors.Is(err, errNoWebhookConfig) {
-			rawData = make(map[uint32]map[string][]Webhook)
+			webhooks = make(map[uint32]map[string][]Webhook)
 		} else {
 			return err
 		}
 	}
 
-	// normalize keys
-	normalized := make(map[uint32]map[string][]Webhook)
-	for tokenID, hooksByRaw := range rawData {
-		normalized[tokenID] = make(map[string][]Webhook)
-		for rawName, hooks := range hooksByRaw {
-			normKey := utils.NormalizeSignalName(rawName)
-			// update Data field to normalized name as well
-			for i := range hooks {
-				hooks[i].Data = normKey
-			}
-			normalized[tokenID][normKey] = append(normalized[tokenID][normKey], hooks...)
-		}
-	}
-
-	wc.Update(normalized)
+	wc.Update(webhooks)
 	return nil
 }
 
@@ -133,30 +116,27 @@ func fetchEventVehicleWebhooks(ctx context.Context, exec boil.ContextExecutor) (
 		if err != nil {
 			return nil, fmt.Errorf("converting token_id '%s': %w", evv.VehicleTokenID.String(), err)
 		}
-		event, err := models.FindEvent(ctx, exec, evv.EventID)
+		event, err := models.FindTrigger(ctx, exec, evv.EventID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to find event: %w", err)
 		}
 
-		raw := strings.TrimSpace(event.Data)
-		if raw == "" {
-			return nil, fmt.Errorf("event.Data empty for event %s (vehicle_token_id %d)", event.ID, vehicleTokenID)
+		if event.MetricName == "" {
+			return nil, fmt.Errorf("event.MetricName empty for event %s (vehicle_token_id %d)", event.ID, vehicleTokenID)
 		}
-		telemetry := utils.NormalizeSignalName(raw)
 		if newData[vehicleTokenID] == nil {
 			newData[vehicleTokenID] = make(map[string][]Webhook)
 		}
 		wh := Webhook{
 			ID:                      event.ID,
 			URL:                     event.TargetURI,
-			Trigger:                 event.Trigger,
+			Condition:               event.Condition,
 			CooldownPeriod:          event.CooldownPeriod,
-			Data:                    telemetry,
-			Setup:                   event.Setup,
+			MetricName:              event.MetricName,
 			DeveloperLicenseAddress: event.DeveloperLicenseAddress,
 		}
 
-		newData[vehicleTokenID][telemetry] = append(newData[vehicleTokenID][telemetry], wh)
+		newData[vehicleTokenID][event.MetricName] = append(newData[vehicleTokenID][event.MetricName], wh)
 	}
 	if len(newData) == 0 {
 		return nil, errNoWebhookConfig

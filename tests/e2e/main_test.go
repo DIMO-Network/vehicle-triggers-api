@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/tests"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/rs/zerolog"
 )
 
 var (
@@ -30,6 +32,8 @@ func GetTestServices(t *testing.T) *TestServices {
 	t.Helper()
 	srvcLock.Lock()
 	globalTestContainer.Do(func() {
+		logger := zerolog.New(os.Stdout).Level(zerolog.WarnLevel)
+		zerolog.DefaultContextLogger = &logger
 		settings := config.Settings{
 			Port:    8080,
 			MonPort: 9090,

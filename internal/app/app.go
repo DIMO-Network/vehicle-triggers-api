@@ -70,8 +70,6 @@ func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *service
 	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger, identityClient, tokenExchangeClient, webhookCache)
 	logger.Info().Msg("Registering routes...")
 
-	app.Post("/build-cel", webhookController.BuildCEL)
-
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"data": "Server is up and running",
