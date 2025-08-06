@@ -81,7 +81,7 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	hasPerm, err := v.tokenExchangeClient.HasVehiclePermissions(c.Context(), tokenID.Big.Int(new(big.Int)), common.HexToAddress(hex.EncodeToString(dl)), []string{
+	hasPerm, err := v.tokenExchangeClient.HasVehiclePermissions(c.Context(), tokenID.Int(new(big.Int)), common.HexToAddress(hex.EncodeToString(dl)), []string{
 		"privilege:GetNonLocationHistory",
 		"privilege:GetLocationHistory",
 	})
