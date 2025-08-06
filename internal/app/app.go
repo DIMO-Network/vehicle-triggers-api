@@ -31,7 +31,10 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		return nil, fmt.Errorf("failed to create token exchange API: %w", err)
 	}
 
-	webhookCache := startDeviceSignalsConsumer(ctx, logger, settings, tokenExchangeAPI, store)
+	webhookCache, err := startDeviceSignalsConsumer(ctx, logger, settings, tokenExchangeAPI, store)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start device signals consumer: %w", err)
+	}
 
 	identityClient, err := identity.New(settings.IdentityAPIURL, logger)
 	if err != nil {
@@ -69,6 +72,12 @@ func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *service
 
 	app.Post("/build-cel", webhookController.BuildCEL)
 
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"data": "Server is up and running",
+		})
+	})
+
 	// Webhook CRUD
 	app.Get("/v1/webhooks", jwtMiddleware, webhookController.ListWebhooks)
 	app.Post("/v1/webhooks", jwtMiddleware, webhookController.RegisterWebhook)
@@ -90,7 +99,7 @@ func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *service
 }
 
 // startDeviceSignalsConsumer sets up and starts the Kafka consumer for topic.device.signals
-func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, store db.Store) *services.WebhookCache {
+func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, store db.Store) (*services.WebhookCache, error) {
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
@@ -105,7 +114,7 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 
 	consumer, err := kafka.NewConsumer(consumerConfig, &logger)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Could not create device signals consumer")
+		return nil, fmt.Errorf("failed to create device signals consumer: %w", err)
 	}
 
 	// Initialize the in-memory webhook cache.
@@ -113,7 +122,7 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 
 	//load all existing webhooks into memory** so GetWebhooks() won't be empty
 	if err := webhookCache.PopulateCache(ctx, store.DBS().Reader); err != nil {
-		logger.Fatal().Err(err).Msg("Unable to populate webhook cache at startup")
+		return nil, fmt.Errorf("failed to populate webhook cache at startup: %w", err)
 	}
 
 	// Periodically refresh the cache so new/updated webhooks show up without a restart
@@ -132,7 +141,7 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 
 	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)
 
-	return webhookCache
+	return webhookCache, nil
 }
 
 // ErrorHandler custom handler to log recovered errors using our logger and return json instead of string

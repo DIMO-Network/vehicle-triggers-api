@@ -48,7 +48,7 @@ tidy: ## tidy the go mod
 	@go mod tidy
 
 test: ## run tests
-	@go test ./...
+	@go test ./... -v
 
 lint: ## run linter
 	@PATH=$$PATH golangci-lint run --timeout 10m
