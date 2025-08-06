@@ -69,6 +69,15 @@ var EventVehicleTableColumns = struct {
 
 // Generated where
 
+type whereHelper__byte struct{ field string }
+
+func (w whereHelper__byte) EQ(x []byte) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.EQ, x) }
+func (w whereHelper__byte) NEQ(x []byte) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.NEQ, x) }
+func (w whereHelper__byte) LT(x []byte) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.LT, x) }
+func (w whereHelper__byte) LTE(x []byte) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.LTE, x) }
+func (w whereHelper__byte) GT(x []byte) qm.QueryMod  { return qmhelper.Where(w.field, qmhelper.GT, x) }
+func (w whereHelper__byte) GTE(x []byte) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.GTE, x) }
+
 var EventVehicleWhere = struct {
 	VehicleTokenID             whereHelpertypes_Decimal
 	EventID                    whereHelperstring
@@ -87,17 +96,14 @@ var EventVehicleWhere = struct {
 
 // EventVehicleRels is where relationship names are stored.
 var EventVehicleRels = struct {
-	Event                                   string
-	DeveloperLicenseAddressDeveloperLicense string
+	Event string
 }{
-	Event:                                   "Event",
-	DeveloperLicenseAddressDeveloperLicense: "DeveloperLicenseAddressDeveloperLicense",
+	Event: "Event",
 }
 
 // eventVehicleR is where relationships are stored.
 type eventVehicleR struct {
-	Event                                   *Event            `boil:"Event" json:"Event" toml:"Event" yaml:"Event"`
-	DeveloperLicenseAddressDeveloperLicense *DeveloperLicense `boil:"DeveloperLicenseAddressDeveloperLicense" json:"DeveloperLicenseAddressDeveloperLicense" toml:"DeveloperLicenseAddressDeveloperLicense" yaml:"DeveloperLicenseAddressDeveloperLicense"`
+	Event *Event `boil:"Event" json:"Event" toml:"Event" yaml:"Event"`
 }
 
 // NewStruct creates a new relationship struct
@@ -119,22 +125,6 @@ func (r *eventVehicleR) GetEvent() *Event {
 	}
 
 	return r.Event
-}
-
-func (o *EventVehicle) GetDeveloperLicenseAddressDeveloperLicense() *DeveloperLicense {
-	if o == nil {
-		return nil
-	}
-
-	return o.R.GetDeveloperLicenseAddressDeveloperLicense()
-}
-
-func (r *eventVehicleR) GetDeveloperLicenseAddressDeveloperLicense() *DeveloperLicense {
-	if r == nil {
-		return nil
-	}
-
-	return r.DeveloperLicenseAddressDeveloperLicense
 }
 
 // eventVehicleL is where Load methods for each relationship are stored.
@@ -464,17 +454,6 @@ func (o *EventVehicle) Event(mods ...qm.QueryMod) eventQuery {
 	return Events(queryMods...)
 }
 
-// DeveloperLicenseAddressDeveloperLicense pointed to by the foreign key.
-func (o *EventVehicle) DeveloperLicenseAddressDeveloperLicense(mods ...qm.QueryMod) developerLicenseQuery {
-	queryMods := []qm.QueryMod{
-		qm.Where("\"license_address\" = ?", o.DeveloperLicenseAddress),
-	}
-
-	queryMods = append(queryMods, mods...)
-
-	return DeveloperLicenses(queryMods...)
-}
-
 // LoadEvent allows an eager lookup of values, cached into the
 // loaded structs of the objects. This is for an N-1 relationship.
 func (eventVehicleL) LoadEvent(ctx context.Context, e boil.ContextExecutor, singular bool, maybeEventVehicle interface{}, mods queries.Applicator) error {
@@ -595,130 +574,6 @@ func (eventVehicleL) LoadEvent(ctx context.Context, e boil.ContextExecutor, sing
 	return nil
 }
 
-// LoadDeveloperLicenseAddressDeveloperLicense allows an eager lookup of values, cached into the
-// loaded structs of the objects. This is for an N-1 relationship.
-func (eventVehicleL) LoadDeveloperLicenseAddressDeveloperLicense(ctx context.Context, e boil.ContextExecutor, singular bool, maybeEventVehicle interface{}, mods queries.Applicator) error {
-	var slice []*EventVehicle
-	var object *EventVehicle
-
-	if singular {
-		var ok bool
-		object, ok = maybeEventVehicle.(*EventVehicle)
-		if !ok {
-			object = new(EventVehicle)
-			ok = queries.SetFromEmbeddedStruct(&object, &maybeEventVehicle)
-			if !ok {
-				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeEventVehicle))
-			}
-		}
-	} else {
-		s, ok := maybeEventVehicle.(*[]*EventVehicle)
-		if ok {
-			slice = *s
-		} else {
-			ok = queries.SetFromEmbeddedStruct(&slice, maybeEventVehicle)
-			if !ok {
-				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeEventVehicle))
-			}
-		}
-	}
-
-	args := make(map[interface{}]struct{})
-	if singular {
-		if object.R == nil {
-			object.R = &eventVehicleR{}
-		}
-		if !queries.IsNil(object.DeveloperLicenseAddress) {
-			args[object.DeveloperLicenseAddress] = struct{}{}
-		}
-
-	} else {
-		for _, obj := range slice {
-			if obj.R == nil {
-				obj.R = &eventVehicleR{}
-			}
-
-			if !queries.IsNil(obj.DeveloperLicenseAddress) {
-				args[obj.DeveloperLicenseAddress] = struct{}{}
-			}
-
-		}
-	}
-
-	if len(args) == 0 {
-		return nil
-	}
-
-	argsSlice := make([]interface{}, len(args))
-	i := 0
-	for arg := range args {
-		argsSlice[i] = arg
-		i++
-	}
-
-	query := NewQuery(
-		qm.From(`vehicle_events_api.developer_licenses`),
-		qm.WhereIn(`vehicle_events_api.developer_licenses.license_address in ?`, argsSlice...),
-	)
-	if mods != nil {
-		mods.Apply(query)
-	}
-
-	results, err := query.QueryContext(ctx, e)
-	if err != nil {
-		return errors.Wrap(err, "failed to eager load DeveloperLicense")
-	}
-
-	var resultSlice []*DeveloperLicense
-	if err = queries.Bind(results, &resultSlice); err != nil {
-		return errors.Wrap(err, "failed to bind eager loaded slice DeveloperLicense")
-	}
-
-	if err = results.Close(); err != nil {
-		return errors.Wrap(err, "failed to close results of eager load for developer_licenses")
-	}
-	if err = results.Err(); err != nil {
-		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for developer_licenses")
-	}
-
-	if len(developerLicenseAfterSelectHooks) != 0 {
-		for _, obj := range resultSlice {
-			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
-				return err
-			}
-		}
-	}
-
-	if len(resultSlice) == 0 {
-		return nil
-	}
-
-	if singular {
-		foreign := resultSlice[0]
-		object.R.DeveloperLicenseAddressDeveloperLicense = foreign
-		if foreign.R == nil {
-			foreign.R = &developerLicenseR{}
-		}
-		foreign.R.DeveloperLicenseAddressEventVehicles = append(foreign.R.DeveloperLicenseAddressEventVehicles, object)
-		return nil
-	}
-
-	for _, local := range slice {
-		for _, foreign := range resultSlice {
-			if queries.Equal(local.DeveloperLicenseAddress, foreign.LicenseAddress) {
-				local.R.DeveloperLicenseAddressDeveloperLicense = foreign
-				if foreign.R == nil {
-					foreign.R = &developerLicenseR{}
-				}
-				foreign.R.DeveloperLicenseAddressEventVehicles = append(foreign.R.DeveloperLicenseAddressEventVehicles, local)
-				break
-			}
-		}
-	}
-
-	return nil
-}
-
 // SetEvent of the eventVehicle to the related item.
 // Sets o.R.Event to related.
 // Adds o to related.R.EventVehicles.
@@ -761,53 +616,6 @@ func (o *EventVehicle) SetEvent(ctx context.Context, exec boil.ContextExecutor, 
 		}
 	} else {
 		related.R.EventVehicles = append(related.R.EventVehicles, o)
-	}
-
-	return nil
-}
-
-// SetDeveloperLicenseAddressDeveloperLicense of the eventVehicle to the related item.
-// Sets o.R.DeveloperLicenseAddressDeveloperLicense to related.
-// Adds o to related.R.DeveloperLicenseAddressEventVehicles.
-func (o *EventVehicle) SetDeveloperLicenseAddressDeveloperLicense(ctx context.Context, exec boil.ContextExecutor, insert bool, related *DeveloperLicense) error {
-	var err error
-	if insert {
-		if err = related.Insert(ctx, exec, boil.Infer()); err != nil {
-			return errors.Wrap(err, "failed to insert into foreign table")
-		}
-	}
-
-	updateQuery := fmt.Sprintf(
-		"UPDATE \"vehicle_events_api\".\"event_vehicles\" SET %s WHERE %s",
-		strmangle.SetParamNames("\"", "\"", 1, []string{"developer_license_address"}),
-		strmangle.WhereClause("\"", "\"", 2, eventVehiclePrimaryKeyColumns),
-	)
-	values := []interface{}{related.LicenseAddress, o.VehicleTokenID, o.EventID, o.DeveloperLicenseAddress}
-
-	if boil.IsDebug(ctx) {
-		writer := boil.DebugWriterFrom(ctx)
-		fmt.Fprintln(writer, updateQuery)
-		fmt.Fprintln(writer, values)
-	}
-	if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
-		return errors.Wrap(err, "failed to update local table")
-	}
-
-	queries.Assign(&o.DeveloperLicenseAddress, related.LicenseAddress)
-	if o.R == nil {
-		o.R = &eventVehicleR{
-			DeveloperLicenseAddressDeveloperLicense: related,
-		}
-	} else {
-		o.R.DeveloperLicenseAddressDeveloperLicense = related
-	}
-
-	if related.R == nil {
-		related.R = &developerLicenseR{
-			DeveloperLicenseAddressEventVehicles: EventVehicleSlice{o},
-		}
-	} else {
-		related.R.DeveloperLicenseAddressEventVehicles = append(related.R.DeveloperLicenseAddressEventVehicles, o)
 	}
 
 	return nil
