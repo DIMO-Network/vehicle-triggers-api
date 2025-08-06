@@ -4,14 +4,17 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"mime/multipart"
 	"net/http"
 	"time"
 
 	"github.com/DIMO-Network/shared/pkg/db"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
+	tokenexchange "github.com/DIMO-Network/vehicle-triggers-api/internal/clients/token-exchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/gateways"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 	"github.com/shopspring/decimal"
@@ -21,14 +24,15 @@ import (
 )
 
 type VehicleSubscriptionController struct {
-	store       db.Store
-	logger      zerolog.Logger
-	identityAPI gateways.IdentityAPI
-	cache       *services.WebhookCache
+	store               db.Store
+	logger              zerolog.Logger
+	identityAPI         *identity.Client
+	tokenExchangeClient *tokenexchange.Client
+	cache               *services.WebhookCache
 }
 
-func NewVehicleSubscriptionController(store db.Store, logger zerolog.Logger, identityAPI gateways.IdentityAPI, cache *services.WebhookCache) *VehicleSubscriptionController {
-	return &VehicleSubscriptionController{store: store, logger: logger, identityAPI: identityAPI, cache: cache}
+func NewVehicleSubscriptionController(store db.Store, logger zerolog.Logger, identityAPI *identity.Client, tokenExchangeClient *tokenexchange.Client, cache *services.WebhookCache) *VehicleSubscriptionController {
+	return &VehicleSubscriptionController{store: store, logger: logger, identityAPI: identityAPI, tokenExchangeClient: tokenExchangeClient, cache: cache}
 }
 
 type SubscriptionView struct {
@@ -67,8 +71,8 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 	if tokenStr == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Vehicle token ID required"})
 	}
-	dec := types.Decimal{}
-	if err := dec.Scan(tokenStr); err != nil {
+	tokenID := types.Decimal{}
+	if err := tokenID.Scan(tokenStr); err != nil {
 		v.logger.Error().Err(err).Msg("Invalid vehicle token ID format")
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid token format"})
 	}
@@ -77,7 +81,10 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	hasPerm, err := v.identityAPI.HasVehiclePermissions(tokenStr, dl)
+	hasPerm, err := v.tokenExchangeClient.HasVehiclePermissions(c.Context(), tokenID.Big.Int(new(big.Int)), common.HexToAddress(hex.EncodeToString(dl)), []string{
+		"privilege:GetNonLocationHistory",
+		"privilege:GetLocationHistory",
+	})
 	if err != nil {
 		v.logger.Error().Err(err).Msg("permission validation failed")
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to validate permissions"})
@@ -87,7 +94,7 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 	}
 
 	ev := &models.EventVehicle{
-		VehicleTokenID:             dec,
+		VehicleTokenID:             tokenID,
 		EventID:                    webhookID,
 		DeveloperLicenseAddress:    dl,
 		DeveloperLicenseAddressHex: []byte(hex.EncodeToString(dl)),
@@ -318,14 +325,13 @@ func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) e
 // @Security     BearerAuth
 // @Router       /v1/webhooks/{webhookId}/subscribe/all [post]
 func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.Ctx) error {
-
 	webhookID := c.Params("webhookId")
 	dl, err := getDevLicense(c, v.logger)
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	vehicles, err := v.identityAPI.GetSharedVehicles(dl)
+	vehicles, err := v.identityAPI.GetSharedVehicles(c.Context(), dl)
 	if err != nil {
 		v.logger.Error().Err(err).Msg("Failed to fetch shared vehicles")
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
@@ -333,11 +339,20 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 
 	var count int
 	for _, veh := range vehicles {
-		dec := types.Decimal{}
-		if err := dec.Scan(veh.TokenID.String()); err != nil {
-			v.logger.Error().Err(err).Msgf("Invalid token for %v", veh.TokenID.String())
-			continue
+		hasPerm, err := v.tokenExchangeClient.HasVehiclePermissions(c.Context(), veh.TokenID, common.HexToAddress(hex.EncodeToString(dl)), []string{
+			"privilege:GetNonLocationHistory",
+			"privilege:GetLocationHistory",
+		})
+		if err != nil {
+			v.logger.Error().Err(err).Msg("permission validation failed")
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to validate permissions for " + veh.TokenID.String()})
 		}
+		if !hasPerm {
+			return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "Insufficient vehicle permissions for " + veh.TokenID.String()})
+		}
+	}
+	for _, veh := range vehicles {
+		dec := types.NewDecimal(new(types.Decimal).SetBigMantScale(veh.TokenID, 0))
 		ev := &models.EventVehicle{
 			VehicleTokenID:             dec,
 			EventID:                    webhookID,

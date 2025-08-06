@@ -67,7 +67,7 @@ add-migration: ## Generate migration file specify name with name=your_migration_
 
 make tools: tools-golangci-lint ## install all tools
 
-generate: generate-swagger generate-go ## run all file generation for the project
+generate: generate-swagger generate-go generate-sqlboiler ## run all file generation for the project
 
 generate-swagger: ## generate swagger documentation
 	@go tool swag -version
