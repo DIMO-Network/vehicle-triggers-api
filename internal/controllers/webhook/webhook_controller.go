@@ -188,7 +188,6 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 
 // UpdateWebhookRequest is the request payload for updating a webhook.
 type UpdateWebhookRequest struct {
-	Service        *string `json:"service"`
 	MetricName     *string `json:"metricName"`
 	Condition      *string `json:"condition"`
 	CoolDownPeriod *int    `json:"coolDownPeriod"`
@@ -243,9 +242,6 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
 	}
 
-	if payload.Service != nil {
-		event.Service = *payload.Service
-	}
 	if payload.MetricName != nil {
 		event.MetricName = *payload.MetricName
 	}

@@ -85,24 +85,31 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
-	// TODO(kevin): verify that the developer license is the owner of the webhook
+	if err := v.OwnerCheck(c, webhookID, dl); err != nil {
+		return err
+	}
 
 	hasPerm, err := v.tokenExchangeClient.HasVehiclePermissions(c.Context(), tokenID, dl, []string{
 		"privilege:GetNonLocationHistory",
 		"privilege:GetLocationHistory",
 	})
 	if err != nil {
-		v.logger.Error().Err(err).Msg("permission validation failed")
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to validate permissions"})
+		return richerrors.Error{
+			ExternalMsg: "Failed to validate permissions",
+			Err:         err,
+			Code:        fiber.StatusInternalServerError,
+		}
 	}
 	if !hasPerm {
-		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "Insufficient vehicle permissions"})
+		return richerrors.Error{
+			ExternalMsg: "Insufficient vehicle permissions",
+			Code:        fiber.StatusForbidden,
+		}
 	}
 
 	_, err = v.repo.CreateVehicleSubscription(c.Context(), tokenID, webhookID)
 	if err != nil {
-		v.logger.Error().Err(err).Msg("Failed to assign vehicle")
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to assign vehicle"})
+		return fmt.Errorf("failed to assign vehicle: %w", err)
 	}
 
 	if err := v.cache.PopulateCache(c.Context()); err != nil {
@@ -131,7 +138,21 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromCSV(c *fiber.Ctx) e
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	_ = dl // TODO(kevin): verify that the developer license is the owner of the webhook
+	owner, err := v.repo.GetWebhookOwner(c.Context(), webhookID)
+	if err != nil {
+		return richerrors.Error{
+			ExternalMsg: "Failed to fetch webhook",
+			Err:         err,
+			Code:        fiber.StatusInternalServerError,
+		}
+	}
+	if owner != dl {
+		return richerrors.Error{
+			ExternalMsg: "Webhook not found",
+			Err:         fmt.Errorf("developer license %s is not the owner of webhook %s", dl.Hex(), webhookID),
+			Code:        fiber.StatusNotFound,
+		}
+	}
 
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
@@ -178,10 +199,11 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromCSV(c *fiber.Ctx) e
 		vehicleTokenIDs = append(vehicleTokenIDs, tokenID)
 	}
 
-	if err := v.repo.BulkCreateVehicleSubscriptions(c.Context(), vehicleTokenIDs, webhookID); err != nil {
-		v.logger.Error().Err(err).Msg("Failed to bulk create vehicle subscriptions")
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to subscribe vehicles"})
-	}
+	// TODO(kevin): should this be from a list  not a csv?
+	// if err := v.repo.BulkCreateVehicleSubscriptions(c.Context(), vehicleTokenIDs, webhookID); err != nil {
+	// 	v.logger.Error().Err(err).Msg("Failed to bulk create vehicle subscriptions")
+	// 	return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to subscribe vehicles"})
+	// }
 
 	return c.Status(http.StatusCreated).JSON(fiber.Map{"message": fmt.Sprintf("Subscribed %d vehicles", len(vehicleTokenIDs))})
 }
@@ -200,7 +222,7 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromCSV(c *fiber.Ctx) e
 // @Security     BearerAuth
 // @Router       /v1/webhooks/{webhookId}/unsubscribe/csv [delete]
 func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromCSV(c *fiber.Ctx) error {
-	webhookID := c.Params("webhookId")
+	// webhookID := c.Params("webhookId")
 	dl, err := getDevLicense(c, v.logger)
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
@@ -252,13 +274,15 @@ func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromCSV(c *fiber.Ctx)
 		vehicleTokenIDs = append(vehicleTokenIDs, tokenID)
 	}
 
-	count, err := v.repo.BulkDeleteVehicleSubscriptions(c.Context(), vehicleTokenIDs, webhookID)
-	if err != nil {
-		v.logger.Error().Err(err).Msg("Failed to bulk delete vehicle subscriptions")
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to unsubscribe vehicles"})
-	}
+	// TODO(kevin): should this be from a list  not a csv?
 
-	return c.JSON(fiber.Map{"message": fmt.Sprintf("Unsubscribed %d vehicles", count)})
+	// count, err := v.repo.BulkDeleteVehicleSubscriptions(c.Context(), vehicleTokenIDs, webhookID)
+	// if err != nil {
+	// 	v.logger.Error().Err(err).Msg("Failed to bulk delete vehicle subscriptions")
+	// 	return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to unsubscribe vehicles"})
+	// }
+
+	return c.JSON(fiber.Map{"message": fmt.Sprintf("Unsubscribed %d vehicles", len(vehicleTokenIDs))})
 }
 
 // RemoveVehicleFromWebhook godoc
@@ -338,9 +362,13 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 		vehicleTokenIDs = append(vehicleTokenIDs, veh.TokenID)
 	}
 
-	if err := v.repo.BulkCreateVehicleSubscriptions(c.Context(), vehicleTokenIDs, webhookID); err != nil {
-		v.logger.Error().Err(err).Msg("Failed to bulk create vehicle subscriptions")
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to subscribe vehicles"})
+	// TODO(kevin): handle partial failures
+	for _, tokenID := range vehicleTokenIDs {
+		_, err := v.repo.CreateVehicleSubscription(c.Context(), tokenID, webhookID)
+		if err != nil {
+			v.logger.Error().Err(err).Msg("Failed to create vehicle subscription")
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to subscribe vehicles"})
+		}
 	}
 
 	if err := v.cache.PopulateCache(c.Context()); err != nil {
@@ -368,12 +396,13 @@ func (v *VehicleSubscriptionController) UnsubscribeAllVehiclesFromWebhook(c *fib
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
-	_ = dl // TODO(kevin): verify that the developer license is the owner of the webhook
+	if err := v.OwnerCheck(c, webhookID, dl); err != nil {
+		return err
+	}
 
 	res, err := v.repo.DeleteAllVehicleSubscriptionsForTrigger(c.Context(), webhookID)
 	if err != nil {
-		v.logger.Error().Err(err).Msg("Failed to unsubscribe all vehicles")
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to unsubscribe all"})
+		return fmt.Errorf("failed to unsubscribe all vehicles: %w", err)
 	}
 	return c.JSON(fiber.Map{"message": fmt.Sprintf("Unsubscribed %d vehicles", res)})
 }
@@ -404,7 +433,7 @@ func (v *VehicleSubscriptionController) ListSubscriptions(c *fiber.Ctx) error {
 
 	// TODO(kevin): get a list of webhooks created by a developer license where the vehicle token id is also subscribed
 
-	subs, err := v.repo.GetVehicleSubscriptionsByVehicleTokenID(c.Context(), tokenID)
+	subs, err := v.repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(c.Context(), tokenID, dl)
 	if err != nil {
 		v.logger.Error().Err(err).Msg("Failed to fetch subscriptions")
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch"})
@@ -467,13 +496,9 @@ func (v *VehicleSubscriptionController) ListVehiclesForWebhook(c *fiber.Ctx) err
 		}
 	}
 
-	subs, err := v.repo.GetVehicleSubscriptionsByTriggerIDs(c.Context(), webhookID)
+	subs, err := v.repo.GetVehicleSubscriptionsByTriggerID(c.Context(), webhookID)
 	if err != nil {
-		return richerrors.Error{
-			ExternalMsg: "Failed to fetch subscribers",
-			Err:         err,
-			Code:        fiber.StatusInternalServerError,
-		}
+		return err
 	}
 
 	ids := make([]string, len(subs))
@@ -481,4 +506,29 @@ func (v *VehicleSubscriptionController) ListVehiclesForWebhook(c *fiber.Ctx) err
 		ids[i] = s.VehicleTokenID.String()
 	}
 	return c.JSON(ids)
+}
+
+func (v *VehicleSubscriptionController) OwnerCheck(c *fiber.Ctx, webhookID string, developerLicense common.Address) error {
+	owner, err := v.repo.GetWebhookOwner(c.Context(), webhookID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return richerrors.Error{
+				ExternalMsg: "Webhook not found",
+				Code:        fiber.StatusNotFound,
+			}
+		}
+		return richerrors.Error{
+			ExternalMsg: "Failed to fetch webhook",
+			Err:         err,
+			Code:        fiber.StatusInternalServerError,
+		}
+	}
+	if owner != developerLicense {
+		return richerrors.Error{
+			ExternalMsg: "Webhook not found",
+			Err:         fmt.Errorf("developer license %s is not the owner of webhook %s", developerLicense.Hex(), webhookID),
+			Code:        fiber.StatusNotFound,
+		}
+	}
+	return nil
 }

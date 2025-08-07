@@ -6,16 +6,23 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"time"
 
+	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/ericlagergren/decimal"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"github.com/volatiletech/sqlboiler/v4/types"
+)
+
+const (
+	schemaName = "vehicle_events_api"
 )
 
 type Repository struct {
@@ -38,8 +45,39 @@ type CreateTriggerRequest struct {
 	DeveloperLicenseAddress common.Address
 }
 
+func (req CreateTriggerRequest) Validate() error {
+	// Validate required fields
+	if req.MetricName == "" {
+		return fmt.Errorf("%w metric_name is required", ValidationError)
+	}
+	if req.DeveloperLicenseAddress == (common.Address{}) {
+		return fmt.Errorf("%w developer_license_address is required", ValidationError)
+	}
+	if req.Service == "" {
+		return fmt.Errorf("%w service is required", ValidationError)
+	}
+	if req.Condition == "" {
+		return fmt.Errorf("%w condition is required", ValidationError)
+	}
+	if req.TargetURI == "" {
+		return fmt.Errorf("%w target_uri is required", ValidationError)
+	}
+	if req.Status == "" {
+		return fmt.Errorf("%w status is required", ValidationError)
+	}
+	return nil
+}
+
 // CreateTrigger creates a new trigger/webhook.
 func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest) (*models.Trigger, error) {
+	if err := req.Validate(); err != nil {
+		return nil, richerrors.Error{
+			ExternalMsg: "Invalid request: " + err.Error(),
+			Err:         err,
+			Code:        http.StatusBadRequest,
+		}
+	}
+
 	trigger := &models.Trigger{
 		ID:                      uuid.New().String(),
 		Service:                 req.Service,
@@ -53,7 +91,11 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 	}
 
 	if err := trigger.Insert(ctx, r.db, boil.Infer()); err != nil {
-		return nil, err
+		return nil, richerrors.Error{
+			ExternalMsg: "Error creating trigger",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
 	}
 
 	return trigger, nil
@@ -67,7 +109,18 @@ func (r *Repository) GetTriggersByDeveloperLicense(ctx context.Context, develope
 	).All(ctx, r.db)
 
 	if err != nil {
-		return nil, err
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, richerrors.Error{
+				ExternalMsg: "No triggers found",
+				Err:         err,
+				Code:        http.StatusNotFound,
+			}
+		}
+		return nil, richerrors.Error{
+			ExternalMsg: "Error getting triggers",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
 	}
 
 	if triggers == nil {
@@ -79,16 +132,32 @@ func (r *Repository) GetTriggersByDeveloperLicense(ctx context.Context, develope
 
 // GetTriggerByIDAndDeveloperLicense retrieves a specific trigger by ID and developer license.
 func (r *Repository) GetTriggerByIDAndDeveloperLicense(ctx context.Context, triggerID string, developerLicenseAddress common.Address) (*models.Trigger, error) {
+	if triggerID == "" {
+		return nil, richerrors.Error{
+			ExternalMsg: "Trigger id is required",
+			Err:         ValidationError,
+			Code:        http.StatusBadRequest,
+		}
+	}
+	if developerLicenseAddress == (common.Address{}) {
+		return nil, richerrors.Error{
+			ExternalMsg: "Developer license address is required",
+			Err:         ValidationError,
+			Code:        http.StatusBadRequest,
+		}
+	}
+
 	trigger, err := models.Triggers(
 		models.TriggerWhere.ID.EQ(triggerID),
 		models.TriggerWhere.DeveloperLicenseAddress.EQ(developerLicenseAddress.Bytes()),
 	).One(ctx, r.db)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
+		return nil, richerrors.Error{
+			ExternalMsg: "Error getting trigger",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
 		}
-		return nil, err
 	}
 
 	return trigger, nil
@@ -96,8 +165,27 @@ func (r *Repository) GetTriggerByIDAndDeveloperLicense(ctx context.Context, trig
 
 // UpdateTrigger updates an existing trigger.
 func (r *Repository) UpdateTrigger(ctx context.Context, trigger *models.Trigger) error {
-	_, err := trigger.Update(ctx, r.db, boil.Infer())
-	return err
+	ret, err := trigger.Update(ctx, r.db, boil.Blacklist(models.TriggerColumns.ID,
+		models.TriggerColumns.ID,
+		models.TriggerColumns.DeveloperLicenseAddress,
+		models.TriggerColumns.Service,
+		models.TriggerColumns.CreatedAt,
+	))
+	if err != nil {
+		return richerrors.Error{
+			ExternalMsg: "Error updating trigger",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	if ret == 0 {
+		return richerrors.Error{
+			ExternalMsg: "Trigger not found",
+			Err:         sql.ErrNoRows,
+			Code:        http.StatusNotFound,
+		}
+	}
+	return nil
 }
 
 // DeleteTrigger deletes a trigger by ID and developer license
@@ -108,20 +196,43 @@ func (r *Repository) DeleteTrigger(ctx context.Context, triggerID string, develo
 	).One(ctx, r.db)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil
+		return richerrors.Error{
+			ExternalMsg: "Error deleting trigger",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
 		}
-		return err
 	}
 
 	_, err = trigger.Delete(ctx, r.db)
-	return err
+	if err != nil {
+		return richerrors.Error{
+			ExternalMsg: "Error deleting trigger",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	return nil
 }
 
 // Vehicle Subscription operations
 
 // CreateVehicleSubscription creates a new vehicle subscription
 func (r *Repository) CreateVehicleSubscription(ctx context.Context, vehicleTokenID *big.Int, triggerID string) (*models.VehicleSubscription, error) {
+	if vehicleTokenID.Cmp(big.NewInt(0)) == 0 {
+		return nil, richerrors.Error{
+			ExternalMsg: "Vehicle token ID is required",
+			Err:         ValidationError,
+			Code:        http.StatusBadRequest,
+		}
+	}
+	if triggerID == "" {
+		return nil, richerrors.Error{
+			ExternalMsg: "Trigger id is required",
+			Err:         ValidationError,
+			Code:        http.StatusBadRequest,
+		}
+	}
+
 	subscription := &models.VehicleSubscription{
 		VehicleTokenID: bigIntToDecimal(vehicleTokenID),
 		TriggerID:      triggerID,
@@ -130,6 +241,16 @@ func (r *Repository) CreateVehicleSubscription(ctx context.Context, vehicleToken
 	}
 
 	if err := subscription.Insert(ctx, r.db, boil.Infer()); err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) {
+			if pqErr.Code == ForeignKeyViolation {
+				return nil, richerrors.Error{
+					ExternalMsg: "Trigger not found",
+					Err:         err,
+					Code:        http.StatusNotFound,
+				}
+			}
+		}
 		return nil, err
 	}
 
@@ -137,28 +258,58 @@ func (r *Repository) CreateVehicleSubscription(ctx context.Context, vehicleToken
 }
 
 // GetVehicleSubscriptionsByTriggerID retrieves all vehicle subscriptions for a trigger
-func (r *Repository) GetVehicleSubscriptionsByTriggerIDs(ctx context.Context, triggerIDs ...string) ([]*models.VehicleSubscription, error) {
+func (r *Repository) GetVehicleSubscriptionsByTriggerID(ctx context.Context, triggerID string) ([]*models.VehicleSubscription, error) {
 	subscriptions, err := models.VehicleSubscriptions(
-		models.VehicleSubscriptionWhere.TriggerID.IN(triggerIDs),
+		models.VehicleSubscriptionWhere.TriggerID.EQ(triggerID),
 	).All(ctx, r.db)
 
 	if err != nil {
-		return nil, err
+		return nil, richerrors.Error{
+			ExternalMsg: "Failed to get vehicle subscriptions",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
 	}
 
 	return subscriptions, nil
 }
 
-// GetVehicleSubscriptionsByVehicleTokenID retrieves all subscriptions for a vehicle.
-func (r *Repository) GetVehicleSubscriptionsByVehicleTokenID(ctx context.Context, vehicleTokenID *big.Int) ([]*models.VehicleSubscription, error) {
+// GetVehicleSubscriptionsByVehicleAndDeveloperLicense retrieves all subscriptions for webhook IDs that the device_license created.
+func (r *Repository) GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx context.Context, vehicleTokenID *big.Int, developerLicenseAddress common.Address) ([]*models.VehicleSubscription, error) {
+	if developerLicenseAddress == (common.Address{}) {
+		return nil, richerrors.Error{
+			ExternalMsg: "Developer license address is required",
+			Err:         ValidationError,
+			Code:        http.StatusBadRequest,
+		}
+	}
+	if vehicleTokenID == nil || vehicleTokenID.Cmp(big.NewInt(0)) == 0 {
+		return nil, richerrors.Error{
+			ExternalMsg: "Vehicle token ID is required",
+			Err:         ValidationError,
+			Code:        http.StatusBadRequest,
+		}
+	}
 	dec := bigIntToDecimal(vehicleTokenID)
 	subscriptions, err := models.VehicleSubscriptions(
 		models.VehicleSubscriptionWhere.VehicleTokenID.EQ(dec),
-		qm.Load(models.VehicleSubscriptionRels.Trigger),
+		qm.InnerJoin(fmt.Sprintf("%s.%s on %s = %s",
+			schemaName,
+			models.TableNames.Triggers,
+			models.TriggerTableColumns.ID,
+			models.VehicleSubscriptionTableColumns.TriggerID,
+		)),
+		qm.Where(fmt.Sprintf("%s = ?",
+			models.TriggerTableColumns.DeveloperLicenseAddress,
+		), developerLicenseAddress.Bytes()),
 	).All(ctx, r.db)
 
 	if err != nil {
-		return nil, err
+		return nil, richerrors.Error{
+			ExternalMsg: "Failed to get vehicle subscriptions",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
 	}
 
 	return subscriptions, nil
@@ -166,6 +317,20 @@ func (r *Repository) GetVehicleSubscriptionsByVehicleTokenID(ctx context.Context
 
 // DeleteVehicleSubscription deletes a specific vehicle subscription.
 func (r *Repository) DeleteVehicleSubscription(ctx context.Context, triggerID string, vehicleTokenID *big.Int) (int64, error) {
+	if triggerID == "" {
+		return 0, richerrors.Error{
+			ExternalMsg: "Trigger id is required",
+			Err:         ValidationError,
+			Code:        http.StatusBadRequest,
+		}
+	}
+	if vehicleTokenID == nil || vehicleTokenID.Cmp(big.NewInt(0)) == 0 {
+		return 0, richerrors.Error{
+			ExternalMsg: "Vehicle token ID is required",
+			Err:         ValidationError,
+			Code:        http.StatusBadRequest,
+		}
+	}
 	return models.VehicleSubscriptions(
 		models.VehicleSubscriptionWhere.TriggerID.EQ(triggerID),
 		models.VehicleSubscriptionWhere.VehicleTokenID.EQ(bigIntToDecimal(vehicleTokenID)),
@@ -174,47 +339,16 @@ func (r *Repository) DeleteVehicleSubscription(ctx context.Context, triggerID st
 
 // DeleteAllVehicleSubscriptionsForTrigger deletes all vehicle subscriptions for a trigger.
 func (r *Repository) DeleteAllVehicleSubscriptionsForTrigger(ctx context.Context, triggerID string) (int64, error) {
+	if triggerID == "" {
+		return 0, richerrors.Error{
+			ExternalMsg: "Trigger id is required",
+			Err:         ValidationError,
+			Code:        http.StatusBadRequest,
+		}
+	}
 	return models.VehicleSubscriptions(
 		models.VehicleSubscriptionWhere.TriggerID.EQ(triggerID),
 	).DeleteAll(ctx, r.db)
-}
-
-// BulkCreateVehicleSubscriptions creates multiple vehicle subscriptions.
-func (r *Repository) BulkCreateVehicleSubscriptions(ctx context.Context, vehicleTokenIDs []*big.Int, triggerID string) error {
-	for _, vehicleTokenID := range vehicleTokenIDs {
-		subscription := &models.VehicleSubscription{
-			VehicleTokenID: bigIntToDecimal(vehicleTokenID),
-			TriggerID:      triggerID,
-			CreatedAt:      time.Now(),
-			UpdatedAt:      time.Now(),
-		}
-
-		if err := subscription.Insert(ctx, r.db, boil.Infer()); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// BulkDeleteVehicleSubscriptions deletes multiple vehicle subscriptions.
-func (r *Repository) BulkDeleteVehicleSubscriptions(ctx context.Context, vehicleTokenIDs []*big.Int, triggerID string) (int64, error) {
-	var totalDeleted int64
-	var errs error
-	for _, vehicleTokenID := range vehicleTokenIDs {
-		deleted, err := models.VehicleSubscriptions(
-			models.VehicleSubscriptionWhere.TriggerID.EQ(triggerID),
-			models.VehicleSubscriptionWhere.VehicleTokenID.EQ(bigIntToDecimal(vehicleTokenID)),
-		).DeleteAll(ctx, r.db)
-
-		if err != nil {
-			errs = errors.Join(errs, fmt.Errorf("error deleting vehicle subscription for vehicle token ID %s: %w", vehicleTokenID, err))
-		}
-
-		totalDeleted += deleted
-	}
-
-	return totalDeleted, nil
 }
 
 // GetWebhookOwner returns the developer license address of the webhook owner

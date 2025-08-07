@@ -658,7 +658,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Removes a vehicle’s subscription.",
+                "description": "Removes a vehicle's subscription.",
                 "produces": [
                     "application/json"
                 ],
@@ -799,9 +799,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "metricName": {
-                    "type": "string"
-                },
-                "service": {
                     "type": "string"
                 },
                 "status": {

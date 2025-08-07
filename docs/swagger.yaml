@@ -58,8 +58,6 @@ definitions:
         type: string
       metricName:
         type: string
-      service:
-        type: string
       status:
         type: string
       targetURI:
@@ -342,7 +340,7 @@ paths:
       - Webhooks
   /v1/webhooks/{webhookId}/unsubscribe/{vehicleTokenId}:
     delete:
-      description: Removes a vehicle’s subscription.
+      description: Removes a vehicle's subscription.
       parameters:
       - description: Webhook ID
         in: path

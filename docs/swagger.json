@@ -649,7 +649,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Removes a vehicle’s subscription.",
+                "description": "Removes a vehicle's subscription.",
                 "produces": [
                     "application/json"
                 ],
@@ -790,9 +790,6 @@
                     "type": "string"
                 },
                 "metricName": {
-                    "type": "string"
-                },
-                "service": {
                     "type": "string"
                 },
                 "status": {

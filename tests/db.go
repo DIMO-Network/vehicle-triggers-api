@@ -77,5 +77,6 @@ func SetupTestContainer(t *testing.T) *TestContainer {
 		err = migrations.RunGoose(ctx, []string{"up"}, globalTestContainer.Settings)
 		require.NoError(t, err)
 	})
+	globalTestContainer.TeardownIfLastTest(t)
 	return &globalTestContainer
 }
