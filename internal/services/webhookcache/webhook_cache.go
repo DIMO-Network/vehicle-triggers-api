@@ -2,6 +2,7 @@ package webhookcache
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
@@ -28,12 +29,14 @@ type Webhook struct {
 type WebhookCache struct {
 	mu       sync.RWMutex
 	webhooks map[uint32]map[string][]Webhook
+	db       *sql.DB
 	logger   *zerolog.Logger
 }
 
-func NewWebhookCache(logger *zerolog.Logger) *WebhookCache {
+func NewWebhookCache(db *sql.DB, logger *zerolog.Logger) *WebhookCache {
 	return &WebhookCache{
 		webhooks: make(map[uint32]map[string][]Webhook),
+		db:       db,
 		logger:   logger,
 	}
 }
@@ -41,8 +44,8 @@ func NewWebhookCache(logger *zerolog.Logger) *WebhookCache {
 var FetchWebhooksFromDBFunc = fetchEventVehicleWebhooks
 
 // PopulateCache builds the cache from the database
-func (wc *WebhookCache) PopulateCache(ctx context.Context, exec boil.ContextExecutor) error {
-	webhooks, err := FetchWebhooksFromDBFunc(ctx, exec)
+func (wc *WebhookCache) PopulateCache(ctx context.Context) error {
+	webhooks, err := FetchWebhooksFromDBFunc(ctx, wc.db)
 	wc.logger.Debug().
 		Int("vehicles_with_hooks", len(webhooks)).
 		Msg("Fetched raw hook map from DB")

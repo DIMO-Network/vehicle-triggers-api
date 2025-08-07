@@ -16,6 +16,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/vehiclelistener"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/IBM/sarama"
 	"github.com/gofiber/fiber/v2"
@@ -41,13 +42,14 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 	if err != nil {
 		return nil, fmt.Errorf("failed to create identity client: %w", err)
 	}
+	repo := triggersrepo.NewRepository(store.DBS().Writer.DB)
 
-	app := CreateFiberApp(logger, store, webhookCache, tokenExchangeAPI, identityClient, settings)
+	app := CreateFiberApp(logger, repo, webhookCache, tokenExchangeAPI, identityClient, settings)
 	return app, nil
 }
 
 // Run sets up the API routes and starts the HTTP server.
-func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *webhookcache.WebhookCache, tokenExchangeClient *tokenexchange.Client, identityClient *identity.Client, settings *config.Settings) *fiber.App {
+func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, tokenExchangeClient *tokenexchange.Client, identityClient *identity.Client, settings *config.Settings) *fiber.App {
 	logger.Info().Msg("Starting Vehicle Triggers API...")
 
 	app := fiber.New(fiber.Config{
@@ -65,10 +67,10 @@ func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *webhook
 
 	// Create a JWT middleware that verifies developer licenses.
 	// settings.IdentityAPIURL is loaded from your settings.yaml.
-	jwtMiddleware := webhook.JWTMiddleware(store, identityClient, logger)
+	jwtMiddleware := webhook.JWTMiddleware(identityClient, logger)
 	// Register Webhook routes.
-	webhookController := webhook.NewWebhookController(store, logger)
-	vehicleSubscriptionController := webhook.NewVehicleSubscriptionController(store, logger, identityClient, tokenExchangeClient, webhookCache)
+	webhookController := webhook.NewWebhookController(repo, logger)
+	vehicleSubscriptionController := webhook.NewVehicleSubscriptionController(repo, logger, identityClient, tokenExchangeClient, webhookCache)
 	logger.Info().Msg("Registering routes...")
 
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -117,10 +119,10 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 	}
 
 	// Initialize the in-memory webhook cache.
-	webhookCache := webhookcache.NewWebhookCache(&logger)
+	webhookCache := webhookcache.NewWebhookCache(store.DBS().Reader.DB, &logger)
 
 	//load all existing webhooks into memory** so GetWebhooks() won't be empty
-	if err := webhookCache.PopulateCache(ctx, store.DBS().Reader); err != nil {
+	if err := webhookCache.PopulateCache(ctx); err != nil {
 		return nil, fmt.Errorf("failed to populate webhook cache at startup: %w", err)
 	}
 
@@ -129,7 +131,7 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
-			if err := webhookCache.PopulateCache(ctx, store.DBS().Reader); err != nil {
+			if err := webhookCache.PopulateCache(ctx); err != nil {
 				logger.Error().Err(err).Msg("Periodic cache refresh failed")
 			}
 		}

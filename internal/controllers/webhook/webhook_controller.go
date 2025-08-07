@@ -13,24 +13,21 @@ import (
 
 	"github.com/DIMO-Network/model-garage/pkg/schema"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
-	"github.com/DIMO-Network/shared/pkg/db"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/volatiletech/null/v8"
-	"github.com/volatiletech/sqlboiler/v4/boil"
-	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 )
 
 type WebhookController struct {
-	store  db.Store
 	logger zerolog.Logger
+	repo   *triggersrepo.Repository
 }
 
-func NewWebhookController(store db.Store, logger zerolog.Logger) *WebhookController {
+func NewWebhookController(repo *triggersrepo.Repository, logger zerolog.Logger) *WebhookController {
 	return &WebhookController{
-		store:  store,
+		repo:   repo,
 		logger: logger,
 	}
 }
@@ -127,19 +124,22 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	}
 	// --- End URI Validation ---
 
-	event := &models.Trigger{
-		ID:                      uuid.New().String(),
+	developerLicenseAddress := c.Locals("developer_license_address").([]byte)
+	devLicenseAddr := common.BytesToAddress(developerLicenseAddress)
+
+	req := triggersrepo.CreateTriggerRequest{
 		Service:                 payload.Service,
 		MetricName:              payload.MetricName,
 		Condition:               payload.Condition,
-		Description:             null.StringFrom(payload.Description),
 		TargetURI:               payload.TargetURI,
-		CooldownPeriod:          payload.CoolDownPeriod,
-		DeveloperLicenseAddress: c.Locals("developer_license_address").([]byte),
 		Status:                  payload.Status,
+		Description:             payload.Description,
+		CooldownPeriod:          payload.CoolDownPeriod,
+		DeveloperLicenseAddress: devLicenseAddr,
 	}
 
-	if err := event.Insert(c.Context(), w.store.DBS().Writer, boil.Infer()); err != nil {
+	trigger, err := w.repo.CreateTrigger(c.Context(), req)
+	if err != nil {
 		return richerrors.Error{
 			ExternalMsg: "Failed to add webhook",
 			Err:         err,
@@ -147,8 +147,8 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	w.logger.Info().Str("id", event.ID).Msg("Webhook registered successfully")
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"id": event.ID, "message": "Webhook registered successfully"})
+	w.logger.Info().Str("id", trigger.ID).Msg("Webhook registered successfully")
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"id": trigger.ID, "message": "Webhook registered successfully"})
 }
 
 // ListWebhooks godoc
@@ -173,21 +173,14 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 		}
 	}
 
-	events, err := models.Triggers(
-		models.TriggerWhere.DeveloperLicenseAddress.EQ(devLicense),
-		qm.OrderBy("id"),
-	).All(c.Context(), w.store.DBS().Reader)
-
+	devLicenseAddr := common.BytesToAddress(devLicense)
+	events, err := w.repo.GetTriggersByDeveloperLicense(c.Context(), devLicenseAddr)
 	if err != nil {
 		return richerrors.Error{
 			ExternalMsg: "Failed to retrieve webhooks",
 			Err:         err,
 			Code:        fiber.StatusInternalServerError,
 		}
-	}
-
-	if events == nil {
-		events = make([]*models.Trigger, 0)
 	}
 
 	return c.JSON(events)
@@ -229,10 +222,8 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	event, err := models.Triggers(
-		models.TriggerWhere.ID.EQ(webhookId),
-		models.TriggerWhere.DeveloperLicenseAddress.EQ(devLicense),
-	).One(c.Context(), w.store.DBS().Reader)
+	devLicenseAddr := common.BytesToAddress(devLicense)
+	event, err := w.repo.GetTriggerByIDAndDeveloperLicense(c.Context(), webhookId, devLicenseAddr)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return richerrors.Error{
@@ -274,7 +265,7 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		event.CooldownPeriod = *payload.CoolDownPeriod
 	}
 
-	if _, err := event.Update(c.Context(), w.store.DBS().Writer, boil.Infer()); err != nil {
+	if err := w.repo.UpdateTrigger(c.Context(), event); err != nil {
 		return richerrors.Error{
 			ExternalMsg: "Failed to update webhook",
 			Err:         err,
@@ -309,25 +300,8 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 
 	_ = devLicense // TODO(kevin): verify that the developer license is the owner of the webhook
 
-	event, err := models.Triggers(
-		models.TriggerWhere.ID.EQ(webhookId),
-		models.TriggerWhere.DeveloperLicenseAddress.EQ(devLicense),
-	).One(c.Context(), w.store.DBS().Reader)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return richerrors.Error{
-				ExternalMsg: "Webhook not found",
-				Code:        fiber.StatusNotFound,
-			}
-		}
-		return richerrors.Error{
-			ExternalMsg: "Failed to retrieve webhook",
-			Err:         err,
-			Code:        fiber.StatusInternalServerError,
-		}
-	}
-
-	if _, err := event.Delete(c.Context(), w.store.DBS().Writer); err != nil {
+	devLicenseAddr := common.BytesToAddress(devLicense)
+	if err := w.repo.DeleteTrigger(c.Context(), webhookId, devLicenseAddr); err != nil {
 		return richerrors.Error{
 			ExternalMsg: "Failed to delete webhook",
 			Err:         err,

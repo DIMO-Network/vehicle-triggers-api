@@ -26,8 +26,8 @@ func TestPopulateCache(t *testing.T) {
 		}, nil
 	}
 
-	cache := NewWebhookCache(&nopLogger)
-	if err := cache.PopulateCache(context.Background(), nil); err != nil {
+	cache := NewWebhookCache(nil, &nopLogger)
+	if err := cache.PopulateCache(context.Background()); err != nil {
 		t.Fatalf("PopulateCache returned error: %v", err)
 	}
 	hooks := cache.GetWebhooks(10, "temperature")
@@ -44,14 +44,14 @@ func TestPopulateCache_Error(t *testing.T) {
 		return nil, errors.New("db error")
 	}
 
-	cache := NewWebhookCache(&nopLogger)
-	if err := cache.PopulateCache(context.Background(), nil); err == nil {
+	cache := NewWebhookCache(nil, &nopLogger)
+	if err := cache.PopulateCache(context.Background()); err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }
 
 func TestGetWebhooks_Empty(t *testing.T) {
-	cache := NewWebhookCache(&nopLogger)
+	cache := NewWebhookCache(nil, &nopLogger)
 	// without PopulateCache, lookup should return nil
 	if got := cache.GetWebhooks(123, "foo"); got != nil {
 		t.Errorf("expected nil slice, got %v", got)
@@ -66,7 +66,7 @@ func TestUpdateAndGetWebhooks(t *testing.T) {
 			},
 		},
 	}
-	cache := NewWebhookCache(&nopLogger)
+	cache := NewWebhookCache(nil, &nopLogger)
 	cache.Update(data)
 
 	hooks := cache.GetWebhooks(55, "gps")

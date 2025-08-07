@@ -118,7 +118,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 				}
 
 				// 2) Refresh the cache and check its error
-				if err := l.webhookCache.PopulateCache(context.Background(), l.store.DBS().Reader); err != nil {
+				if err := l.webhookCache.PopulateCache(context.Background()); err != nil {
 					l.log.Error().
 						Err(err).
 						Msg("Failed to refresh webhook cache after permission revocation")
