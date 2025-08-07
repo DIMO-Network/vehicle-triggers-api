@@ -15,10 +15,9 @@ import (
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/utils"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/teris-io/shortid"
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
@@ -29,15 +28,6 @@ type WebhookController struct {
 	logger zerolog.Logger
 }
 
-func generateShortID(logger zerolog.Logger) string {
-	id, err := shortid.Generate()
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to generate short ID")
-		return ""
-	}
-	return strings.TrimSpace(id)
-}
-
 func NewWebhookController(store db.Store, logger zerolog.Logger) *WebhookController {
 	return &WebhookController{
 		store:  store,
@@ -45,15 +35,24 @@ func NewWebhookController(store db.Store, logger zerolog.Logger) *WebhookControl
 	}
 }
 
-type CelCondition struct {
-	Field    string `json:"field" validate:"required"`
-	Operator string `json:"operator" validate:"required"`
-	Value    string `json:"value" validate:"required"`
-}
-
-type CelRequestPayload struct {
-	Conditions []CelCondition `json:"conditions" validate:"required"`
-	Logic      string         `json:"logic" validate:"required"`
+type RegisterWebhookRequest struct {
+	// Service is the service that the webhook is associated with.
+	Service string `json:"service" validate:"required"`
+	// MetricName is the name of the metric that the webhook is associated with.
+	MetricName string `json:"metricName" validate:"required"`
+	// Condition expressed as a CEL expression that needs to be true for the webhook to be triggered.
+	Condition string `json:"condition" validate:"required"`
+	// CoolDownPeriod is the number of seconds to wait before a webhook can be triggered again.
+	// If the webhook is triggered again within the cool down period, the webhook will not be triggered again.
+	CoolDownPeriod int `json:"coolDownPeriod" validate:"required"`
+	// Description is the description of the webhook.
+	Description string `json:"description"`
+	// TargetURI is the URI that the webhook will be sent to.
+	TargetURI string `json:"targetURI" validate:"required"`
+	// Status is the status of the webhook.
+	Status string `json:"status"`
+	// VerificationToken is the token that wukk
+	VerificationToken string `json:"verificationToken" validate:"required"`
 }
 
 // RegisterWebhook godoc
@@ -62,24 +61,14 @@ type CelRequestPayload struct {
 // @Tags         Webhooks
 // @Accept       json
 // @Produce      json
-// @Param        request  body      object  true  "Request payload"
+// @Param        request  body      RegisterWebhookRequest  true  "Webhook configuration"
 // @Success      201      "Webhook registered successfully"
 // @Failure      400      "Invalid request payload or target URI"
 // @Failure      500      "Internal server error"
 // @Security     BearerAuth
 // @Router       /v1/webhooks [post]
 func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
-	type RequestPayload struct {
-		Service           string `json:"service" validate:"required"`
-		Data              string `json:"data" validate:"required"`
-		Trigger           string `json:"trigger" validate:"required"`
-		Setup             string `json:"setup" validate:"required"`
-		Description       string `json:"description"`
-		TargetURI         string `json:"target_uri" validate:"required"`
-		Status            string `json:"status"`
-		VerificationToken string `json:"verification_token" validate:"required"`
-	}
-	var payload RequestPayload
+	var payload RegisterWebhookRequest
 	if err := c.BodyParser(&payload); err != nil {
 		return richerrors.Error{
 			ExternalMsg: "Invalid request payload",
@@ -138,22 +127,14 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	}
 	// --- End URI Validation ---
 
-	normalized := utils.NormalizeSignalName(payload.Data)
-
-	defaultCooldown := 0
-	if payload.Setup == "Hourly" {
-		defaultCooldown = 3600
-	}
-
-	event := &models.Event{
-		ID:                      generateShortID(w.logger),
+	event := &models.Trigger{
+		ID:                      uuid.New().String(),
 		Service:                 payload.Service,
-		Data:                    normalized,
-		Trigger:                 payload.Trigger,
-		Setup:                   payload.Setup,
+		MetricName:              payload.MetricName,
+		Condition:               payload.Condition,
 		Description:             null.StringFrom(payload.Description),
 		TargetURI:               payload.TargetURI,
-		CooldownPeriod:          defaultCooldown,
+		CooldownPeriod:          payload.CoolDownPeriod,
 		DeveloperLicenseAddress: c.Locals("developer_license_address").([]byte),
 		Status:                  payload.Status,
 	}
@@ -192,8 +173,8 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 		}
 	}
 
-	events, err := models.Events(
-		qm.Where("developer_license_address = ?", devLicense),
+	events, err := models.Triggers(
+		models.TriggerWhere.DeveloperLicenseAddress.EQ(devLicense),
 		qm.OrderBy("id"),
 	).All(c.Context(), w.store.DBS().Reader)
 
@@ -206,10 +187,21 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 	}
 
 	if events == nil {
-		events = make([]*models.Event, 0)
+		events = make([]*models.Trigger, 0)
 	}
 
 	return c.JSON(events)
+}
+
+// UpdateWebhookRequest is the request payload for updating a webhook.
+type UpdateWebhookRequest struct {
+	Service        *string `json:"service"`
+	MetricName     *string `json:"metricName"`
+	Condition      *string `json:"condition"`
+	CoolDownPeriod *int    `json:"coolDownPeriod"`
+	TargetURI      *string `json:"targetURI"`
+	Status         *string `json:"status"`
+	Description    *string `json:"description"`
 }
 
 // UpdateWebhook godoc
@@ -219,7 +211,7 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 // @Accept       json
 // @Produce      json
 // @Param        webhookId       path      string  true  "Webhook ID"
-// @Param        request  body      object  true  "Request payload"
+// @Param        request  body      UpdateWebhookRequest  true  "Webhook configuration"
 // @Success      200      "Webhook updated successfully"
 // @Failure      400      "Invalid request payload"
 // @Failure      404      "Webhook not found"
@@ -237,8 +229,9 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	event, err := models.Events(
-		qm.Where("id = ? AND developer_license_address = ?", webhookId, devLicense),
+	event, err := models.Triggers(
+		models.TriggerWhere.ID.EQ(webhookId),
+		models.TriggerWhere.DeveloperLicenseAddress.EQ(devLicense),
 	).One(c.Context(), w.store.DBS().Reader)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -254,45 +247,31 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	type RequestPayload struct {
-		Service     string `json:"service"`
-		Data        string `json:"data"`
-		Trigger     string `json:"trigger"`
-		Setup       string `json:"setup"`
-		TargetURI   string `json:"target_uri"`
-		Status      string `json:"status"`
-		Description string `json:"description"`
-	}
-
-	var payload RequestPayload
+	var payload UpdateWebhookRequest
 	if err := c.BodyParser(&payload); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
 	}
 
-	if payload.Service != "" {
-		event.Service = payload.Service
+	if payload.Service != nil {
+		event.Service = *payload.Service
 	}
-	if payload.Data != "" {
-		event.Data = utils.NormalizeSignalName(payload.Data)
+	if payload.MetricName != nil {
+		event.MetricName = *payload.MetricName
 	}
-	if payload.Setup != "" {
-		event.Setup = payload.Setup
+	if payload.TargetURI != nil {
+		event.TargetURI = *payload.TargetURI
 	}
-	if payload.TargetURI != "" {
-		event.TargetURI = payload.TargetURI
+	if payload.Status != nil {
+		event.Status = *payload.Status
 	}
-	if payload.Status != "" {
-		event.Status = payload.Status
+	if payload.Condition != nil {
+		event.Condition = *payload.Condition
 	}
-	if payload.Trigger != "" {
-		event.Trigger = payload.Trigger
+	if payload.Description != nil {
+		event.Description = null.StringFrom(*payload.Description)
 	}
-	if payload.Description != "" {
-		event.Description = null.StringFrom(payload.Description)
-	}
-
-	if strings.EqualFold(event.Setup, "Hourly") && event.CooldownPeriod == 0 {
-		event.CooldownPeriod = 3600
+	if payload.CoolDownPeriod != nil {
+		event.CooldownPeriod = *payload.CoolDownPeriod
 	}
 
 	if _, err := event.Update(c.Context(), w.store.DBS().Writer, boil.Infer()); err != nil {
@@ -328,8 +307,11 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	event, err := models.Events(
-		qm.Where("id = ? AND developer_license_address = ?", webhookId, devLicense),
+	_ = devLicense // TODO(kevin): verify that the developer license is the owner of the webhook
+
+	event, err := models.Triggers(
+		models.TriggerWhere.ID.EQ(webhookId),
+		models.TriggerWhere.DeveloperLicenseAddress.EQ(devLicense),
 	).One(c.Context(), w.store.DBS().Reader)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -356,6 +338,12 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Webhook deleted successfully"})
 }
 
+type SignalDefinition struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Unit        string `json:"unit"`
+}
+
 // GetSignalNames godoc
 // @Summary      Get signal names
 // @Description  Fetches the list of signal names available for the data field.
@@ -366,62 +354,30 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 // @Security     BearerAuth
 // @Router       /v1/webhooks/signals [get]
 func (w *WebhookController) GetSignalNames(c *fiber.Ctx) error {
-	dimoVss := strings.NewReader(schema.VssRel42DIMO())
-
-	vssSignals, err := schema.LoadSignalsCSV(dimoVss)
+	defs, err := schema.LoadDefinitionFile(strings.NewReader(schema.DefaultDefinitionsYAML()))
 	if err != nil {
 		return richerrors.Error{
-			ExternalMsg: "Failed to load VSS signals",
+			ExternalMsg: "Failed to load default schema definitions",
 			Err:         err,
 			Code:        fiber.StatusInternalServerError,
 		}
 	}
-
-	type ValidaSignal struct {
-		Name string `json:"name"`
-		Unit string `json:"unit"`
-	}
-
-	signalNames := make([]ValidaSignal, 0)
-	for _, vssSignal := range vssSignals {
-		if !vssSignal.Deprecated {
-			signal := ValidaSignal{
-				Name: vssSignal.Name,
-				Unit: vssSignal.Unit,
-			}
-
-			signalNames = append(signalNames, signal)
-		}
-	}
-
-	w.logger.Info().Int("signal_count", len(signalNames)).Msg("Returning signal names")
-	return c.JSON(signalNames)
-}
-
-func (w *WebhookController) BuildCEL(c *fiber.Ctx) error {
-	var payload CelRequestPayload
-
-	if err := c.BodyParser(&payload); err != nil {
+	signalInfo, err := schema.LoadSignalsCSV(strings.NewReader(schema.VssRel42DIMO()))
+	if err != nil {
 		return richerrors.Error{
-			ExternalMsg: "Invalid request payload",
+			ExternalMsg: "Failed to load default signal info",
 			Err:         err,
-			Code:        fiber.StatusBadRequest,
+			Code:        fiber.StatusInternalServerError,
 		}
 	}
-
-	if payload.Logic != "AND" && payload.Logic != "OR" {
-		return richerrors.Error{
-			ExternalMsg: "Invalid logic. Must be AND or OR.",
-			Code:        fiber.StatusBadRequest,
-		}
+	definedSignals := defs.DefinedSignal(signalInfo)
+	signalDefs := make([]SignalDefinition, 0, len(definedSignals))
+	for _, signal := range definedSignals {
+		signalDefs = append(signalDefs, SignalDefinition{
+			Name:        signal.JSONName,
+			Unit:        signal.Unit,
+			Description: signal.Desc,
+		})
 	}
-
-	conditions := []string{}
-	for _, condition := range payload.Conditions {
-		expr := fmt.Sprintf("%s %s %s", condition.Field, condition.Operator, condition.Value)
-		conditions = append(conditions, expr)
-	}
-	celExpression := strings.Join(conditions, fmt.Sprintf(" %s ", payload.Logic))
-
-	return c.JSON(fiber.Map{"cel_expression": celExpression})
+	return c.JSON(signalDefs)
 }

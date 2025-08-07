@@ -11,13 +11,12 @@ import (
 
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
-	tokenexchange "github.com/DIMO-Network/vehicle-triggers-api/internal/clients/token-exchange"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
-	"github.com/shopspring/decimal"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"github.com/volatiletech/sqlboiler/v4/types"
@@ -76,10 +75,12 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		v.logger.Error().Err(err).Msg("Invalid vehicle token ID format")
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid token format"})
 	}
+
 	dl, err := getDevLicense(c, v.logger)
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+	// TODO(kevin): verify that the developer license is the owner of the webhook
 
 	hasPerm, err := v.tokenExchangeClient.HasVehiclePermissions(c.Context(), tokenID.Int(new(big.Int)), common.HexToAddress(hex.EncodeToString(dl)), []string{
 		"privilege:GetNonLocationHistory",
@@ -93,13 +94,11 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "Insufficient vehicle permissions"})
 	}
 
-	ev := &models.EventVehicle{
-		VehicleTokenID:             tokenID,
-		EventID:                    webhookID,
-		DeveloperLicenseAddress:    dl,
-		DeveloperLicenseAddressHex: []byte(hex.EncodeToString(dl)),
-		CreatedAt:                  time.Now(),
-		UpdatedAt:                  time.Now(),
+	ev := &models.VehicleSubscription{
+		VehicleTokenID: tokenID,
+		TriggerID:      webhookID,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 	if err := ev.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
 		v.logger.Error().Err(err).Msg("Failed to assign vehicle")
@@ -131,6 +130,8 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromCSV(c *fiber.Ctx) e
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
+	_ = dl // TODO(kevin): verify that the developer license is the owner of the webhook
+
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		v.logger.Error().Err(err).Msg("Failed to get file from form data")
@@ -168,23 +169,17 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromCSV(c *fiber.Ctx) e
 			continue
 		}
 		tokenStr := record[0]
-		if _, err := decimal.NewFromString(tokenStr); err != nil {
-			v.logger.Error().Err(err).Msgf("Invalid token format in CSV: %v", tokenStr)
-			continue
-		}
 		dec := types.Decimal{}
 		if err := dec.Scan(tokenStr); err != nil {
 			v.logger.Error().Err(err).Msgf("Invalid token format in CSV: %v", tokenStr)
 			continue
 		}
 
-		ev := &models.EventVehicle{
-			VehicleTokenID:             dec,
-			EventID:                    webhookID,
-			DeveloperLicenseAddress:    dl,
-			DeveloperLicenseAddressHex: []byte(hex.EncodeToString(dl)),
-			CreatedAt:                  time.Now(),
-			UpdatedAt:                  time.Now(),
+		ev := &models.VehicleSubscription{
+			VehicleTokenID: dec,
+			TriggerID:      webhookID,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
 		}
 		if err := ev.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
 			v.logger.Error().Err(err).Msgf("Failed to assign vehicle from CSV: %v", tokenStr)
@@ -215,6 +210,7 @@ func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromCSV(c *fiber.Ctx)
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+	_ = dl // TODO(kevin): verify that the developer license is the owner of the webhook
 
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
@@ -259,10 +255,9 @@ func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromCSV(c *fiber.Ctx)
 			continue
 		}
 
-		res, err := models.EventVehicles(
-			models.EventVehicleWhere.EventID.EQ(webhookID),
-			models.EventVehicleWhere.VehicleTokenID.EQ(dec),
-			models.EventVehicleWhere.DeveloperLicenseAddress.EQ(dl),
+		res, err := models.VehicleSubscriptions(
+			models.VehicleSubscriptionWhere.TriggerID.EQ(webhookID),
+			models.VehicleSubscriptionWhere.VehicleTokenID.EQ(dec),
 		).DeleteAll(c.Context(), v.store.DBS().Writer)
 
 		if err != nil {
@@ -293,8 +288,8 @@ func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromCSV(c *fiber.Ctx)
 func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) error {
 	webhookID := c.Params("webhookId")
 	tokenStr := c.Params("vehicleTokenId")
-	dec, err := decimal.NewFromString(tokenStr)
-	if err != nil {
+	dec := types.Decimal{}
+	if err := dec.Scan(tokenStr); err != nil {
 		v.logger.Error().Err(err).Msg("Invalid vehicle token ID")
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid token format"})
 	}
@@ -302,9 +297,11 @@ func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) e
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+	_ = dl // TODO(kevin): verify that the developer license is the owner of the webhook
 
-	if _, err := models.EventVehicles(
-		qm.Where("event_id = ? AND vehicle_token_id = ? AND developer_license_address = ?", webhookID, dec, dl),
+	if _, err := models.VehicleSubscriptions(
+		models.VehicleSubscriptionWhere.TriggerID.EQ(webhookID),
+		models.VehicleSubscriptionWhere.VehicleTokenID.EQ(dec),
 	).DeleteAll(c.Context(), v.store.DBS().Writer); err != nil {
 		v.logger.Error().Err(err).Msg("Failed to remove subscription")
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to unsubscribe"})
@@ -330,6 +327,7 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+	_ = dl // TODO(kevin): verify that the developer license is the owner of the webhook
 
 	vehicles, err := v.identityAPI.GetSharedVehicles(c.Context(), dl)
 	if err != nil {
@@ -353,13 +351,11 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 	}
 	for _, veh := range vehicles {
 		dec := types.NewDecimal(new(types.Decimal).SetBigMantScale(veh.TokenID, 0))
-		ev := &models.EventVehicle{
-			VehicleTokenID:             dec,
-			EventID:                    webhookID,
-			DeveloperLicenseAddress:    dl,
-			DeveloperLicenseAddressHex: []byte(hex.EncodeToString(dl)),
-			CreatedAt:                  time.Now(),
-			UpdatedAt:                  time.Now(),
+		ev := &models.VehicleSubscription{
+			VehicleTokenID: dec,
+			TriggerID:      webhookID,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
 		}
 		if err := ev.Insert(c.Context(), v.store.DBS().Writer, boil.Infer()); err != nil {
 			v.logger.Error().Err(err).Msgf("Failed to subscribe %v", veh.TokenID.String())
@@ -393,9 +389,9 @@ func (v *VehicleSubscriptionController) UnsubscribeAllVehiclesFromWebhook(c *fib
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
-
-	res, err := models.EventVehicles(
-		qm.Where("event_id = ? AND developer_license_address = ?", webhookID, dl),
+	_ = dl // TODO(kevin): verify that the developer license is the owner of the webhook
+	res, err := models.VehicleSubscriptions(
+		models.VehicleSubscriptionWhere.TriggerID.EQ(webhookID),
 	).DeleteAll(c.Context(), v.store.DBS().Writer)
 	if err != nil {
 		v.logger.Error().Err(err).Msg("Failed to unsubscribe all vehicles")
@@ -426,10 +422,13 @@ func (v *VehicleSubscriptionController) ListSubscriptions(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+	_ = dl // TODO(kevin): verify that the developer license is the owner of the webhook
 
-	subs, err := models.EventVehicles(
-		qm.Where("vehicle_token_id = ? AND developer_license_address = ?", dec, dl),
-		qm.Load(models.EventVehicleRels.Event),
+	// TODO(kevin): get a list of webhooks created by a developer license where the vehicle token id is also subscribed
+
+	subs, err := models.VehicleSubscriptions(
+		models.VehicleSubscriptionWhere.VehicleTokenID.EQ(dec),
+		qm.Load(models.VehicleSubscriptionRels.Trigger),
 	).All(c.Context(), v.store.DBS().Reader)
 	if err != nil {
 		v.logger.Error().Err(err).Msg("Failed to fetch subscriptions")
@@ -439,11 +438,11 @@ func (v *VehicleSubscriptionController) ListSubscriptions(c *fiber.Ctx) error {
 	out := make([]SubscriptionView, 0, len(subs))
 	for _, s := range subs {
 		desc := ""
-		if s.R != nil && s.R.Event != nil {
-			desc = s.R.Event.Description.String
+		if s.R != nil && s.R.Trigger != nil {
+			desc = s.R.Trigger.Description.String
 		}
 		out = append(out, SubscriptionView{
-			EventID:        s.EventID,
+			EventID:        s.TriggerID,
 			VehicleTokenID: s.VehicleTokenID.String(),
 			CreatedAt:      s.CreatedAt,
 			Description:    desc,
@@ -469,9 +468,10 @@ func (v *VehicleSubscriptionController) ListVehiclesForWebhook(c *fiber.Ctx) err
 	if err != nil {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+	_ = dl // TODO(kevin): verify that the developer license is the owner of the webhook
 
-	subs, err := models.EventVehicles(
-		qm.Where("event_id = ? AND developer_license_address = ?", webhookID, dl),
+	subs, err := models.VehicleSubscriptions(
+		models.VehicleSubscriptionWhere.TriggerID.EQ(webhookID),
 	).All(c.Context(), v.store.DBS().Reader)
 	if err != nil {
 		v.logger.Error().Err(err).Msg("Failed to fetch subscribers")

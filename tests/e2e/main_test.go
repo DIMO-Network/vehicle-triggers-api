@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/tests"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/rs/zerolog"
 )
 
 var (
@@ -30,6 +32,8 @@ func GetTestServices(t *testing.T) *TestServices {
 	t.Helper()
 	srvcLock.Lock()
 	globalTestContainer.Do(func() {
+		logger := zerolog.New(os.Stdout).Level(zerolog.WarnLevel)
+		zerolog.DefaultContextLogger = &logger
 		settings := config.Settings{
 			Port:    8080,
 			MonPort: 9090,
@@ -73,6 +77,7 @@ func GetTestServices(t *testing.T) *TestServices {
 	})
 	srvcLock.Unlock()
 	testServices.TeardownIfLastTest(t)
+	testServices.Postgres.TeardownIfLastTest(t)
 	return testServices
 }
 
@@ -83,7 +88,6 @@ func (tc *TestServices) TeardownIfLastTest(t *testing.T) {
 		if refs != 0 {
 			return
 		}
-		tc.Postgres.Close()
 		tc.Identity.Close()
 		tc.Auth.Close()
 		if err := tc.Kafka.Close(); err != nil {

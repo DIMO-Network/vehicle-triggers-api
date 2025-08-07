@@ -67,12 +67,12 @@ const docTemplate = `{
                 "summary": "Register a new webhook",
                 "parameters": [
                     {
-                        "description": "Request payload",
+                        "description": "Webhook configuration",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/controllers.RegisterWebhookRequest"
                         }
                     }
                 ],
@@ -255,12 +255,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Request payload",
+                        "description": "Webhook configuration",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/controllers.UpdateWebhookRequest"
                         }
                     }
                 ],
@@ -724,6 +724,51 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "controllers.RegisterWebhookRequest": {
+            "type": "object",
+            "required": [
+                "condition",
+                "coolDownPeriod",
+                "metricName",
+                "service",
+                "targetURI",
+                "verificationToken"
+            ],
+            "properties": {
+                "condition": {
+                    "description": "Condition expressed as a CEL expression that needs to be true for the webhook to be triggered.",
+                    "type": "string"
+                },
+                "coolDownPeriod": {
+                    "description": "CoolDownPeriod is the number of seconds to wait before a webhook can be triggered again.\nIf the webhook is triggered again within the cool down period, the webhook will not be triggered again.",
+                    "type": "integer"
+                },
+                "description": {
+                    "description": "Description is the description of the webhook.",
+                    "type": "string"
+                },
+                "metricName": {
+                    "description": "MetricName is the name of the metric that the webhook is associated with.",
+                    "type": "string"
+                },
+                "service": {
+                    "description": "Service is the service that the webhook is associated with.",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status is the status of the webhook.",
+                    "type": "string"
+                },
+                "targetURI": {
+                    "description": "TargetURI is the URI that the webhook will be sent to.",
+                    "type": "string"
+                },
+                "verificationToken": {
+                    "description": "VerificationToken is the token that wukk",
+                    "type": "string"
+                }
+            }
+        },
         "controllers.SubscriptionView": {
             "type": "object",
             "properties": {
@@ -737,6 +782,32 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "vehicle_token_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.UpdateWebhookRequest": {
+            "type": "object",
+            "properties": {
+                "condition": {
+                    "type": "string"
+                },
+                "coolDownPeriod": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "metricName": {
+                    "type": "string"
+                },
+                "service": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "targetURI": {
                     "type": "string"
                 }
             }

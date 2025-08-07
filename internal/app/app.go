@@ -11,7 +11,7 @@ import (
 	"github.com/DIMO-Network/shared/pkg/db"
 	_ "github.com/DIMO-Network/vehicle-triggers-api/docs" // Import Swagger docs
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
-	tokenexchange "github.com/DIMO-Network/vehicle-triggers-api/internal/clients/token-exchange"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
@@ -69,8 +69,6 @@ func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *service
 	webhookController := controllers.NewWebhookController(store, logger)
 	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger, identityClient, tokenExchangeClient, webhookCache)
 	logger.Info().Msg("Registering routes...")
-
-	app.Post("/build-cel", webhookController.BuildCEL)
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{

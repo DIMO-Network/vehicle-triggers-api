@@ -9,33 +9,23 @@ import (
 	"math/big"
 	"net/http"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/DIMO-Network/shared/pkg/db"
-	tokenexchange "github.com/DIMO-Network/vehicle-triggers-api/internal/clients/token-exchange"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ericlagergren/decimal"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/cel-go/cel"
 	celtypes "github.com/google/cel-go/common/types"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/teris-io/shortid"
-	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
-	sqltypes "github.com/volatiletech/sqlboiler/v4/types"
+	"github.com/volatiletech/sqlboiler/v4/types"
 )
-
-func generateShortID(logger zerolog.Logger) string {
-	id, err := shortid.Generate()
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to generate short ID")
-		return ""
-	}
-	return strings.TrimSpace(id)
-}
 
 var reIntLit = regexp.MustCompile(`\b\d+\b`)
 
@@ -106,26 +96,24 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		}
 		if !hasPerm {
 			l.log.Info().Msgf("permissions revoked for license %x on vehicle %d", wh.DeveloperLicenseAddress, signal.TokenID)
-			var dec sqltypes.Decimal
+			var dec types.Decimal
 			if err := dec.Scan(fmt.Sprint(signal.TokenID)); err == nil {
-				// 1) Delete the EventVehicle row and check its error
-				if delCount, err := models.EventVehicles(
-					qm.Where(
-						"event_id = ? AND vehicle_token_id = ? AND developer_license_address = ?",
-						wh.ID, dec, wh.DeveloperLicenseAddress,
-					),
+				// 1) Delete the TriggerSubscription row and check its error
+				if delCount, err := models.VehicleSubscriptions(
+					models.VehicleSubscriptionWhere.TriggerID.EQ(wh.ID),
+					models.VehicleSubscriptionWhere.VehicleTokenID.EQ(dec),
 				).DeleteAll(context.Background(), l.store.DBS().Writer); err != nil {
 					l.log.Error().
 						Err(err).
 						Str("event_id", wh.ID).
 						Uint32("vehicle_token", signal.TokenID).
-						Msg("Failed to delete EventVehicle subscription")
+						Msg("Failed to delete TriggerSubscription subscription")
 				} else {
 					l.log.Debug().
 						Str("event_id", wh.ID).
 						Uint32("vehicle_token", signal.TokenID).
 						Int("rows_deleted", int(delCount)).
-						Msg("Successfully removed EventVehicle subscription")
+						Msg("Successfully removed TriggerSubscription subscription")
 				}
 
 				// 2) Refresh the cache and check its error
@@ -133,10 +121,6 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 					l.log.Error().
 						Err(err).
 						Msg("Failed to refresh webhook cache after permission revocation")
-				} else {
-					l.log.Debug().
-						Uint32("vehicle_token", signal.TokenID).
-						Msg("Webhook cache refreshed after permission revocation")
 				}
 			}
 
@@ -152,7 +136,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 			continue
 		}
 
-		shouldFire, err := l.evaluateCondition(wh.Trigger, &signal, wh.Data)
+		shouldFire, err := l.evaluateCondition(wh.Condition, &signal, wh.MetricName)
 		if err != nil {
 			l.log.Error().Err(err).Msg("failed to evaluate CEL condition")
 			continue
@@ -160,7 +144,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		if shouldFire {
 			l.log.Info().
 				Str("webhook_url", wh.URL).
-				Str("trigger", wh.Trigger).
+				Str("trigger", wh.Condition).
 				Msg("Webhook triggered.")
 			if err := l.sendWebhookNotification(wh, &signal); err != nil {
 				l.log.Error().Err(err).Msg("failed to send webhook")
@@ -172,7 +156,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		} else {
 			l.log.Debug().
 				Str("webhook_url", wh.URL).
-				Str("trigger", wh.Trigger).
+				Str("trigger", wh.Condition).
 				Msg("Condition not met; skipping webhook.")
 		}
 	}
@@ -230,25 +214,21 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 
 func (l *SignalListener) checkCooldown(webhook Webhook, tokenID uint32) (bool, error) {
 	cooldown := webhook.CooldownPeriod
-	if cooldown == 0 && strings.EqualFold(webhook.Setup, "Hourly") {
-		cooldown = 3600
-	}
-	logs, err := models.EventLogs(
-		qm.Where("event_id = ? AND vehicle_token_id = ?", webhook.ID, tokenID),
+	tokenIDDecimal := types.NewDecimal(decimal.New(int64(tokenID), 0))
+	logs, err := models.TriggerLogs(
+		models.TriggerLogWhere.TriggerID.EQ(webhook.ID),
+		models.TriggerLogWhere.VehicleTokenID.EQ(tokenIDDecimal),
 		qm.OrderBy("last_triggered_at DESC"),
 		qm.Limit(1),
 	).All(context.Background(), l.store.DBS().Reader)
 	if err != nil {
-		l.log.Error().Err(err).Msg("Error retrieving EventLogs")
-		return false, err
+		return false, fmt.Errorf("failed to retrieve event logs: %w", err)
 	}
 	if len(logs) == 0 {
-		l.log.Debug().Msg("No previous EventLog found; cooldown passed")
 		return true, nil
 	}
 	lastTriggered := logs[0].LastTriggeredAt
 	diff := time.Since(lastTriggered)
-	l.log.Debug().Msgf("Last triggered %v ago, required cooldown: %vs", diff.Seconds(), cooldown)
 	if diff >= time.Duration(cooldown)*time.Second {
 		return true, nil
 	}
@@ -256,21 +236,19 @@ func (l *SignalListener) checkCooldown(webhook Webhook, tokenID uint32) (bool, e
 }
 
 func (l *SignalListener) logWebhookTrigger(eventID string, tokenID uint32) error {
-	var dec sqltypes.Decimal
+	var dec types.Decimal
 	if err := dec.Scan(fmt.Sprint(tokenID)); err != nil {
 		l.log.Error().Err(err).Msg("failed to convert tokenID")
 		return err
 	}
-	eventLog := &models.EventLog{
-		ID:               generateShortID(l.log),
-		EventID:          eventID,
-		VehicleTokenID:   dec,
-		SnapshotData:     []byte("{}"),
-		HTTPResponseCode: null.IntFrom(0),
-		LastTriggeredAt:  time.Now(),
-		EventType:        "vehicle.signal",
-		PermissionStatus: "Granted",
-		CreatedAt:        time.Now(),
+	now := time.Now()
+	eventLog := &models.TriggerLog{
+		ID:              uuid.New().String(),
+		TriggerID:       eventID,
+		VehicleTokenID:  dec,
+		SnapshotData:    []byte("{}"),
+		LastTriggeredAt: now,
+		CreatedAt:       now,
 	}
 	if err := eventLog.Insert(context.Background(), l.store.DBS().Writer, boil.Infer()); err != nil {
 		l.log.Error().Err(err).Msg("Error inserting EventLog")
@@ -321,7 +299,7 @@ func (l *SignalListener) handleWebhookFailure(webhookID string) {
 		return
 	}
 	ctx := context.Background()
-	event, err := models.FindEvent(ctx, l.store.DBS().Reader, webhookID)
+	event, err := models.FindTrigger(ctx, l.store.DBS().Reader, webhookID)
 	if err != nil {
 		l.log.Error().Err(err).Msg("handleWebhookFailure: could not fetch event")
 		return
@@ -344,7 +322,7 @@ func (l *SignalListener) resetWebhookFailure(webhookID string) {
 		return
 	}
 	ctx := context.Background()
-	event, err := models.FindEvent(ctx, l.store.DBS().Reader, webhookID)
+	event, err := models.FindTrigger(ctx, l.store.DBS().Reader, webhookID)
 	if err != nil {
 		l.log.Error().Err(err).Msg("resetWebhookFailure: could not fetch event")
 		return
