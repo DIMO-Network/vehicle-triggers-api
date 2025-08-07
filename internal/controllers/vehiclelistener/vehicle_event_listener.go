@@ -1,4 +1,4 @@
-package services
+package vehiclelistener
 
 import (
 	"bytes"
@@ -14,6 +14,7 @@ import (
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ericlagergren/decimal"
 	"github.com/ethereum/go-ethereum/common"
@@ -46,12 +47,12 @@ type Signal struct {
 
 type SignalListener struct {
 	log                 zerolog.Logger
-	webhookCache        *WebhookCache
+	webhookCache        *webhookcache.WebhookCache
 	store               db.Store
 	tokenExchangeClient *tokenexchange.Client
 }
 
-func NewSignalListener(logger zerolog.Logger, wc *WebhookCache, store db.Store, tokenExchangeAPI *tokenexchange.Client) *SignalListener {
+func NewSignalListener(logger zerolog.Logger, wc *webhookcache.WebhookCache, store db.Store, tokenExchangeAPI *tokenexchange.Client) *SignalListener {
 	return &SignalListener{
 		log:                 logger,
 		webhookCache:        wc,
@@ -212,7 +213,7 @@ func (l *SignalListener) evaluateCondition(trigger string, signal *Signal, telem
 	return out == celtypes.True, nil
 }
 
-func (l *SignalListener) checkCooldown(webhook Webhook, tokenID uint32) (bool, error) {
+func (l *SignalListener) checkCooldown(webhook webhookcache.Webhook, tokenID uint32) (bool, error) {
 	cooldown := webhook.CooldownPeriod
 	tokenIDDecimal := types.NewDecimal(decimal.New(int64(tokenID), 0))
 	logs, err := models.TriggerLogs(
@@ -258,7 +259,7 @@ func (l *SignalListener) logWebhookTrigger(eventID string, tokenID uint32) error
 	return nil
 }
 
-func (l *SignalListener) sendWebhookNotification(wh Webhook, signal *Signal) error {
+func (l *SignalListener) sendWebhookNotification(wh webhookcache.Webhook, signal *Signal) error {
 	body, err := json.Marshal(signal)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal signal for webhook")

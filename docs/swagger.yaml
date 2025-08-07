@@ -1,5 +1,5 @@
 definitions:
-  controllers.RegisterWebhookRequest:
+  internal_controllers_webhook.RegisterWebhookRequest:
     properties:
       condition:
         description: Condition expressed as a CEL expression that needs to be true
@@ -37,7 +37,7 @@ definitions:
     - targetURI
     - verificationToken
     type: object
-  controllers.SubscriptionView:
+  internal_controllers_webhook.SubscriptionView:
     properties:
       created_at:
         type: string
@@ -48,7 +48,7 @@ definitions:
       vehicle_token_id:
         type: string
     type: object
-  controllers.UpdateWebhookRequest:
+  internal_controllers_webhook.UpdateWebhookRequest:
     properties:
       condition:
         type: string
@@ -103,7 +103,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/controllers.RegisterWebhookRequest'
+          $ref: '#/definitions/internal_controllers_webhook.RegisterWebhookRequest'
       produces:
       - application/json
       responses:
@@ -190,7 +190,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/controllers.UpdateWebhookRequest'
+          $ref: '#/definitions/internal_controllers_webhook.UpdateWebhookRequest'
       produces:
       - application/json
       responses:
@@ -506,7 +506,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/controllers.SubscriptionView'
+              $ref: '#/definitions/internal_controllers_webhook.SubscriptionView'
             type: array
         "401":
           description: Unauthorized

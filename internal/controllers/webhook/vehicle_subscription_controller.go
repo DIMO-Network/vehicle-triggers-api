@@ -1,4 +1,4 @@
-package controllers
+package webhook
 
 import (
 	"encoding/csv"
@@ -13,7 +13,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/services"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
@@ -27,10 +27,10 @@ type VehicleSubscriptionController struct {
 	logger              zerolog.Logger
 	identityAPI         *identity.Client
 	tokenExchangeClient *tokenexchange.Client
-	cache               *services.WebhookCache
+	cache               *webhookcache.WebhookCache
 }
 
-func NewVehicleSubscriptionController(store db.Store, logger zerolog.Logger, identityAPI *identity.Client, tokenExchangeClient *tokenexchange.Client, cache *services.WebhookCache) *VehicleSubscriptionController {
+func NewVehicleSubscriptionController(store db.Store, logger zerolog.Logger, identityAPI *identity.Client, tokenExchangeClient *tokenexchange.Client, cache *webhookcache.WebhookCache) *VehicleSubscriptionController {
 	return &VehicleSubscriptionController{store: store, logger: logger, identityAPI: identityAPI, tokenExchangeClient: tokenExchangeClient, cache: cache}
 }
 

@@ -2,12 +2,12 @@ package kafka
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/IBM/sarama"
 	"github.com/ThreeDotsLabs/watermill"
 	wm_kafka "github.com/ThreeDotsLabs/watermill-kafka/v3/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/rs/zerolog"
 )
 
 type Config struct {
@@ -21,10 +21,9 @@ type Config struct {
 type Consumer struct {
 	subscriber *wm_kafka.Subscriber
 	topic      string
-	logger     *zerolog.Logger
 }
 
-func NewConsumer(cfg *Config, logger *zerolog.Logger) (*Consumer, error) {
+func NewConsumer(cfg *Config) (*Consumer, error) {
 	saramaSubscriberConfig := wm_kafka.DefaultSaramaSubscriberConfig()
 
 	saramaSubscriberConfig.Version = cfg.ClusterConfig.Version
@@ -46,15 +45,15 @@ func NewConsumer(cfg *Config, logger *zerolog.Logger) (*Consumer, error) {
 	return &Consumer{
 		subscriber: subscriber,
 		topic:      cfg.Topic,
-		logger:     logger,
 	}, nil
 }
 
-func (c *Consumer) Start(ctx context.Context, process func(messages <-chan *message.Message)) {
+func (c *Consumer) Start(ctx context.Context, process func(messages <-chan *message.Message)) error {
 	messages, err := c.subscriber.Subscribe(ctx, c.topic)
 	if err != nil {
-		c.logger.Fatal().Err(err).Msgf("Could not subscribe to topic: %s", c.topic)
+		return fmt.Errorf("could not subscribe to topic: %s", c.topic)
 	}
 
 	go process(messages)
+	return nil
 }

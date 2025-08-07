@@ -1,4 +1,4 @@
-package services
+package vehiclelistener
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/rs/zerolog"
 )
 
@@ -204,7 +205,7 @@ func TestSendWebhookNotification_Success(t *testing.T) {
 	defer ts.Close()
 
 	listener := &SignalListener{log: zerolog.Nop()}
-	wh := Webhook{URL: ts.URL, DeveloperLicenseAddress: nil}
+	wh := webhookcache.Webhook{URL: ts.URL, DeveloperLicenseAddress: nil}
 	err := listener.sendWebhookNotification(wh, &Signal{
 		TokenID:     42,
 		Timestamp:   time.Now(),
@@ -225,7 +226,7 @@ func TestSendWebhookNotification_Non200(t *testing.T) {
 	defer ts.Close()
 
 	listener := &SignalListener{log: zerolog.Nop()}
-	wh := Webhook{URL: ts.URL, DeveloperLicenseAddress: nil}
+	wh := webhookcache.Webhook{URL: ts.URL, DeveloperLicenseAddress: nil}
 	err := listener.sendWebhookNotification(wh, &Signal{})
 	if err == nil {
 		t.Error("expected error on 500 status, got nil")
@@ -234,7 +235,7 @@ func TestSendWebhookNotification_Non200(t *testing.T) {
 
 func TestSendWebhookNotification_BadURL(t *testing.T) {
 	listener := &SignalListener{log: zerolog.Nop()}
-	wh := Webhook{URL: "http://invalid.localhost:0", DeveloperLicenseAddress: nil}
+	wh := webhookcache.Webhook{URL: "http://invalid.localhost:0", DeveloperLicenseAddress: nil}
 	err := listener.sendWebhookNotification(wh, &Signal{})
 	if err == nil {
 		t.Error("expected error on invalid URL, got nil")

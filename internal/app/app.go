@@ -13,9 +13,10 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/vehiclelistener"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/services"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/IBM/sarama"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/swagger"
@@ -46,7 +47,7 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 }
 
 // Run sets up the API routes and starts the HTTP server.
-func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *services.WebhookCache, tokenExchangeClient *tokenexchange.Client, identityClient *identity.Client, settings *config.Settings) *fiber.App {
+func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *webhookcache.WebhookCache, tokenExchangeClient *tokenexchange.Client, identityClient *identity.Client, settings *config.Settings) *fiber.App {
 	logger.Info().Msg("Starting Vehicle Triggers API...")
 
 	app := fiber.New(fiber.Config{
@@ -64,10 +65,10 @@ func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *service
 
 	// Create a JWT middleware that verifies developer licenses.
 	// settings.IdentityAPIURL is loaded from your settings.yaml.
-	jwtMiddleware := controllers.JWTMiddleware(store, identityClient, logger)
+	jwtMiddleware := webhook.JWTMiddleware(store, identityClient, logger)
 	// Register Webhook routes.
-	webhookController := controllers.NewWebhookController(store, logger)
-	vehicleSubscriptionController := controllers.NewVehicleSubscriptionController(store, logger, identityClient, tokenExchangeClient, webhookCache)
+	webhookController := webhook.NewWebhookController(store, logger)
+	vehicleSubscriptionController := webhook.NewVehicleSubscriptionController(store, logger, identityClient, tokenExchangeClient, webhookCache)
 	logger.Info().Msg("Registering routes...")
 
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -97,7 +98,7 @@ func CreateFiberApp(logger zerolog.Logger, store db.Store, webhookCache *service
 }
 
 // startDeviceSignalsConsumer sets up and starts the Kafka consumer for topic.device.signals
-func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, store db.Store) (*services.WebhookCache, error) {
+func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, store db.Store) (*webhookcache.WebhookCache, error) {
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
@@ -110,13 +111,13 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 		MaxInFlight:     1,
 	}
 
-	consumer, err := kafka.NewConsumer(consumerConfig, &logger)
+	consumer, err := kafka.NewConsumer(consumerConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create device signals consumer: %w", err)
 	}
 
 	// Initialize the in-memory webhook cache.
-	webhookCache := services.NewWebhookCache(&logger)
+	webhookCache := webhookcache.NewWebhookCache(&logger)
 
 	//load all existing webhooks into memory** so GetWebhooks() won't be empty
 	if err := webhookCache.PopulateCache(ctx, store.DBS().Reader); err != nil {
@@ -134,8 +135,10 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 		}
 	}()
 
-	signalListener := services.NewSignalListener(logger, webhookCache, store, tokenExchangeAPI)
-	consumer.Start(ctx, signalListener.ProcessSignals)
+	signalListener := vehiclelistener.NewSignalListener(logger, webhookCache, store, tokenExchangeAPI)
+	if err := consumer.Start(ctx, signalListener.ProcessSignals); err != nil {
+		return nil, fmt.Errorf("failed to start device signals consumer: %w", err)
+	}
 
 	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)
 

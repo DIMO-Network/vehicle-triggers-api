@@ -72,7 +72,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/controllers.RegisterWebhookRequest"
+                            "$ref": "#/definitions/internal_controllers_webhook.RegisterWebhookRequest"
                         }
                     }
                 ],
@@ -150,7 +150,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/controllers.SubscriptionView"
+                                "$ref": "#/definitions/internal_controllers_webhook.SubscriptionView"
                             }
                         }
                     },
@@ -260,7 +260,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/controllers.UpdateWebhookRequest"
+                            "$ref": "#/definitions/internal_controllers_webhook.UpdateWebhookRequest"
                         }
                     }
                 ],
@@ -724,7 +724,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "controllers.RegisterWebhookRequest": {
+        "internal_controllers_webhook.RegisterWebhookRequest": {
             "type": "object",
             "required": [
                 "condition",
@@ -769,7 +769,7 @@ const docTemplate = `{
                 }
             }
         },
-        "controllers.SubscriptionView": {
+        "internal_controllers_webhook.SubscriptionView": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -786,7 +786,7 @@ const docTemplate = `{
                 }
             }
         },
-        "controllers.UpdateWebhookRequest": {
+        "internal_controllers_webhook.UpdateWebhookRequest": {
             "type": "object",
             "properties": {
                 "condition": {

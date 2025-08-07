@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/app"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -58,7 +58,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 	t.Run("Step 1: Create Webhook", func(t *testing.T) {
 		t.Log("Creating initial webhook")
 
-		webhookPayload := controllers.RegisterWebhookRequest{
+		webhookPayload := webhook.RegisterWebhookRequest{
 			Service:           "Telemetry",
 			MetricName:        "speed",
 			Condition:         "valueNumber > 20",
@@ -238,7 +238,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 	t.Run("Step 7: Update Webhook", func(t *testing.T) {
 		t.Log("Updating webhook configuration")
 
-		updatePayload := controllers.UpdateWebhookRequest{
+		updatePayload := webhook.UpdateWebhookRequest{
 			Description:    ref("Updated description for speed alert"),
 			CoolDownPeriod: ref(15),
 			Status:         ref("Active"),
