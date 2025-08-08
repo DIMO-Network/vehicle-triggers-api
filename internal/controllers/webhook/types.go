@@ -18,9 +18,11 @@ type RegisterWebhookRequest struct {
 	CoolDownPeriod int `json:"coolDownPeriod" validate:"required"`
 	// Description is an optional human-friendly explanation of the webhook.
 	Description string `json:"description"`
+	// DisplayName is a user-friendly unique name per developer license.
+	DisplayName string `json:"displayName"`
 	// TargetURL is the HTTPS endpoint that will receive webhook callbacks.
 	TargetURL string `json:"targetURL" validate:"required"`
-	// Status sets the initial state for the webhook (e.g. "Enabled" or "Disabled").
+	// Status sets the initial state for the webhook (e.g. "enabled" or "Disabled").
 	Status string `json:"status"`
 	// VerificationToken is the expected token that your endpoint must echo back during verification.
 	VerificationToken string `json:"verificationToken" validate:"required"`
@@ -45,10 +47,12 @@ type UpdateWebhookRequest struct {
 	CoolDownPeriod *int `json:"coolDownPeriod"`
 	// TargetURL updates the HTTPS endpoint that will receive callbacks.
 	TargetURL *string `json:"targetURL"`
-	// Status updates the current state of the webhook (e.g. "Enabled" or "Disabled").
+	// Status updates the current state of the webhook (e.g. "enabled" or "Disabled").
 	Status *string `json:"status"`
 	// Description updates the optional human-friendly explanation of the webhook.
 	Description *string `json:"description"`
+	// DisplayName updates the user-friendly unique name per developer license.
+	DisplayName *string `json:"displayName"`
 }
 
 // UpdateWebhookResponse is returned after a webhook is successfully updated.
@@ -77,11 +81,11 @@ type WebhookView struct {
 	MetricName string `json:"metricName"`
 	// Condition is the CEL expression evaluated to decide when to fire.
 	Condition string `json:"condition"`
-	// TargetURI is the HTTPS endpoint that receives webhook callbacks.
-	TargetURI string `json:"targetURI"`
+	// TargetURL is the HTTPS endpoint that receives webhook callbacks.
+	TargetURL string `json:"targetURL"`
 	// CoolDownPeriod is the minimum number of seconds between successive firings.
 	CoolDownPeriod int `json:"coolDownPeriod"`
-	// Status is the current state of the webhook (e.g. "Enabled" or "Disabled").
+	// Status is the current state of the webhook (e.g. "enabled" or "Disabled").
 	Status string `json:"status"`
 	// Description is an optional human-friendly explanation of the webhook.
 	Description string `json:"description"`
@@ -91,6 +95,8 @@ type WebhookView struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 	// FailureCount counts consecutive delivery failures for observability.
 	FailureCount int `json:"failureCount"`
+	// DisplayName is the user-friendly unique name per developer license.
+	DisplayName string `json:"displayName"`
 }
 
 // SignalDefinition describes a telemetry signal available for use with webhooks.

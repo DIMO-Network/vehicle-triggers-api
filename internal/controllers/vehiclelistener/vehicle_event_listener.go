@@ -273,7 +273,7 @@ func (l *SignalListener) handleWebhookFailure(webhook webhookcache.Webhook) {
 	l.log.Debug().Msgf("Incremented FailureCount for webhook %s to %d", webhook.ID, event.FailureCount)
 
 	if event.FailureCount >= 5 {
-		event.Status = "Disabled"
+		event.Status = triggersrepo.StatusFailed
 		l.log.Info().Msgf("Webhook %s disabled due to excessive failures", webhook.ID)
 	}
 	if err := l.repo.UpdateTrigger(ctx, event); err != nil {

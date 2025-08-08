@@ -37,6 +37,7 @@ type Trigger struct {
 	Description                null.String `boil:"description" json:"description,omitempty" toml:"description" yaml:"description,omitempty"`
 	FailureCount               int         `boil:"failure_count" json:"failure_count" toml:"failure_count" yaml:"failure_count"`
 	DeveloperLicenseAddressHex []byte      `boil:"developer_license_address_hex" json:"developer_license_address_hex" toml:"developer_license_address_hex" yaml:"developer_license_address_hex"`
+	DisplayName                string      `boil:"display_name" json:"display_name" toml:"display_name" yaml:"display_name"`
 
 	R *triggerR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L triggerL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -56,6 +57,7 @@ var TriggerColumns = struct {
 	Description                string
 	FailureCount               string
 	DeveloperLicenseAddressHex string
+	DisplayName                string
 }{
 	ID:                         "id",
 	Service:                    "service",
@@ -70,6 +72,7 @@ var TriggerColumns = struct {
 	Description:                "description",
 	FailureCount:               "failure_count",
 	DeveloperLicenseAddressHex: "developer_license_address_hex",
+	DisplayName:                "display_name",
 }
 
 var TriggerTableColumns = struct {
@@ -86,6 +89,7 @@ var TriggerTableColumns = struct {
 	Description                string
 	FailureCount               string
 	DeveloperLicenseAddressHex string
+	DisplayName                string
 }{
 	ID:                         "triggers.id",
 	Service:                    "triggers.service",
@@ -100,6 +104,7 @@ var TriggerTableColumns = struct {
 	Description:                "triggers.description",
 	FailureCount:               "triggers.failure_count",
 	DeveloperLicenseAddressHex: "triggers.developer_license_address_hex",
+	DisplayName:                "triggers.display_name",
 }
 
 // Generated where
@@ -150,6 +155,7 @@ var TriggerWhere = struct {
 	Description                whereHelpernull_String
 	FailureCount               whereHelperint
 	DeveloperLicenseAddressHex whereHelper__byte
+	DisplayName                whereHelperstring
 }{
 	ID:                         whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"id\""},
 	Service:                    whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"service\""},
@@ -164,6 +170,7 @@ var TriggerWhere = struct {
 	Description:                whereHelpernull_String{field: "\"vehicle_events_api\".\"triggers\".\"description\""},
 	FailureCount:               whereHelperint{field: "\"vehicle_events_api\".\"triggers\".\"failure_count\""},
 	DeveloperLicenseAddressHex: whereHelper__byte{field: "\"vehicle_events_api\".\"triggers\".\"developer_license_address_hex\""},
+	DisplayName:                whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"display_name\""},
 }
 
 // TriggerRels is where relationship names are stored.
@@ -222,9 +229,9 @@ func (r *triggerR) GetVehicleSubscriptions() VehicleSubscriptionSlice {
 type triggerL struct{}
 
 var (
-	triggerAllColumns            = []string{"id", "service", "metric_name", "condition", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description", "failure_count", "developer_license_address_hex"}
+	triggerAllColumns            = []string{"id", "service", "metric_name", "condition", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description", "failure_count", "developer_license_address_hex", "display_name"}
 	triggerColumnsWithoutDefault = []string{"id", "service", "metric_name", "condition", "target_uri", "developer_license_address", "status", "developer_license_address_hex"}
-	triggerColumnsWithDefault    = []string{"cooldown_period", "created_at", "updated_at", "description", "failure_count"}
+	triggerColumnsWithDefault    = []string{"cooldown_period", "created_at", "updated_at", "description", "failure_count", "display_name"}
 	triggerPrimaryKeyColumns     = []string{"id"}
 	triggerGeneratedColumns      = []string{}
 )

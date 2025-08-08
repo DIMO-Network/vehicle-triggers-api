@@ -23,6 +23,14 @@ import (
 
 const (
 	schemaName = "vehicle_events_api"
+	// StatusEnabled is the status of a trigger that is enabled.
+	StatusEnabled = "enabled"
+	// StatusDisabled is the status of a trigger that is disabled.
+	StatusDisabled = "disabled"
+	// StatusFailed is the status of a trigger that has failed.
+	StatusFailed = "failed"
+	// StatusDeleted is the status of a trigger that has been deleted.
+	StatusDeleted = "deleted"
 )
 
 type Repository struct {
@@ -35,6 +43,7 @@ func NewRepository(db *sql.DB) *Repository {
 
 // CreateTriggerRequest represents the data needed to create a new trigger.
 type CreateTriggerRequest struct {
+	DisplayName             string
 	Service                 string
 	MetricName              string
 	Condition               string
@@ -48,10 +57,10 @@ type CreateTriggerRequest struct {
 func (req CreateTriggerRequest) Validate() error {
 	// Validate required fields
 	if req.MetricName == "" {
-		return fmt.Errorf("%w metric_name is required", ValidationError)
+		return fmt.Errorf("%w metricName is required", ValidationError)
 	}
 	if req.DeveloperLicenseAddress == (common.Address{}) {
-		return fmt.Errorf("%w developer_license_address is required", ValidationError)
+		return fmt.Errorf("%w developerLicenseAddress is required", ValidationError)
 	}
 	if req.Service == "" {
 		return fmt.Errorf("%w service is required", ValidationError)
@@ -65,6 +74,9 @@ func (req CreateTriggerRequest) Validate() error {
 	if req.Status == "" {
 		return fmt.Errorf("%w status is required", ValidationError)
 	}
+	if req.CooldownPeriod < 0 {
+		return fmt.Errorf("%w cooldownPeriod cannot be negative", ValidationError)
+	}
 	return nil
 }
 
@@ -77,9 +89,15 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 			Code:        http.StatusBadRequest,
 		}
 	}
+	id := uuid.New().String()
+	displayName := req.DisplayName
+	if displayName == "" {
+		displayName = id
+	}
 
 	trigger := &models.Trigger{
-		ID:                      uuid.New().String(),
+		ID:                      id,
+		DisplayName:             displayName,
 		Service:                 req.Service,
 		MetricName:              req.MetricName,
 		Condition:               req.Condition,
@@ -105,6 +123,7 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 func (r *Repository) GetTriggersByDeveloperLicense(ctx context.Context, developerLicenseAddress common.Address) ([]*models.Trigger, error) {
 	triggers, err := models.Triggers(
 		models.TriggerWhere.DeveloperLicenseAddress.EQ(developerLicenseAddress.Bytes()),
+		models.TriggerWhere.Status.NEQ(StatusDeleted),
 		qm.OrderBy("id"),
 	).All(ctx, r.db)
 
@@ -150,6 +169,7 @@ func (r *Repository) GetTriggerByIDAndDeveloperLicense(ctx context.Context, trig
 	trigger, err := models.Triggers(
 		models.TriggerWhere.ID.EQ(triggerID),
 		models.TriggerWhere.DeveloperLicenseAddress.EQ(developerLicenseAddress.Bytes()),
+		models.TriggerWhere.Status.NEQ(StatusDeleted),
 	).One(ctx, r.db)
 
 	if err != nil {
@@ -190,11 +210,12 @@ func (r *Repository) UpdateTrigger(ctx context.Context, trigger *models.Trigger)
 
 // DeleteTrigger deletes a trigger by ID and developer license
 func (r *Repository) DeleteTrigger(ctx context.Context, triggerID string, developerLicenseAddress common.Address) error {
+	// Find the trigger owned by the developer and not already deleted
 	trigger, err := models.Triggers(
 		models.TriggerWhere.ID.EQ(triggerID),
 		models.TriggerWhere.DeveloperLicenseAddress.EQ(developerLicenseAddress.Bytes()),
+		models.TriggerWhere.Status.NEQ(StatusDeleted),
 	).One(ctx, r.db)
-
 	if err != nil {
 		return richerrors.Error{
 			ExternalMsg: "Error deleting trigger",
@@ -203,8 +224,41 @@ func (r *Repository) DeleteTrigger(ctx context.Context, triggerID string, develo
 		}
 	}
 
-	_, err = trigger.Delete(ctx, r.db)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
+		return richerrors.Error{
+			ExternalMsg: "Error deleting trigger",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	defer func() {
+		// Rollback if still active
+		_ = tx.Rollback()
+	}()
+
+	// Soft-delete the trigger by setting status to Deleted
+	trigger.Status = StatusDeleted
+	if _, err := trigger.Update(ctx, tx, boil.Whitelist(models.TriggerColumns.Status)); err != nil {
+		return richerrors.Error{
+			ExternalMsg: "Error deleting trigger",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+
+	// Delete all related vehicle subscriptions
+	if _, err := models.VehicleSubscriptions(
+		models.VehicleSubscriptionWhere.TriggerID.EQ(trigger.ID),
+	).DeleteAll(ctx, tx); err != nil {
+		return richerrors.Error{
+			ExternalMsg: "Error deleting trigger",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
 		return richerrors.Error{
 			ExternalMsg: "Error deleting trigger",
 			Err:         err,
@@ -306,6 +360,7 @@ func (r *Repository) GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx con
 		qm.Where(fmt.Sprintf("%s = ?",
 			models.TriggerTableColumns.DeveloperLicenseAddress,
 		), developerLicenseAddress.Bytes()),
+		qm.Where(fmt.Sprintf("%s != ?", models.TriggerTableColumns.Status), StatusDeleted),
 	).All(ctx, r.db)
 
 	if err != nil {
@@ -375,6 +430,7 @@ func (r *Repository) DeleteAllVehicleSubscriptionsForTrigger(ctx context.Context
 func (r *Repository) GetWebhookOwner(ctx context.Context, triggerID string) (common.Address, error) {
 	trigger, err := models.Triggers(
 		models.TriggerWhere.ID.EQ(triggerID),
+		models.TriggerWhere.Status.NEQ(StatusDeleted),
 	).One(ctx, r.db)
 
 	if err != nil {
@@ -399,6 +455,13 @@ func (r *Repository) GetWebhookOwner(ctx context.Context, triggerID string) (com
 func (r *Repository) GetAllVehicleSubscriptions(ctx context.Context) ([]*models.VehicleSubscription, error) {
 	subs, err := models.VehicleSubscriptions(
 		qm.Load(models.VehicleSubscriptionRels.Trigger),
+		qm.InnerJoin(fmt.Sprintf("%s.%s on %s = %s",
+			schemaName,
+			models.TableNames.Triggers,
+			models.TriggerTableColumns.ID,
+			models.VehicleSubscriptionTableColumns.TriggerID,
+		)),
+		qm.Where(fmt.Sprintf("%s != ?", models.TriggerTableColumns.Status), StatusDeleted),
 	).All(ctx, r.db)
 	if err != nil {
 		return nil, richerrors.Error{

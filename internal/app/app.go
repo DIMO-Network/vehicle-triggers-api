@@ -77,7 +77,7 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 	// settings.IdentityAPIURL is loaded from your settings.yaml.
 	jwtMiddleware := webhook.JWTMiddleware(identityClient, logger)
 	// Register Webhook routes.
-	webhookController, err := webhook.NewWebhookController(repo, logger)
+	webhookController, err := webhook.NewWebhookController(repo, webhookCache)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create webhook controller: %w", err)
 	}

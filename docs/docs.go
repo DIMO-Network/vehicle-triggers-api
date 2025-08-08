@@ -238,7 +238,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Updates the configuration of a webhook by its ID.",
+                "description": "Updates the configuration of a webhook by its ID. The failure count is reset to 0 when updating a webhook.",
                 "consumes": [
                     "application/json"
                 ],
@@ -747,6 +747,10 @@ const docTemplate = `{
                     "description": "Description is an optional human-friendly explanation of the webhook.",
                     "type": "string"
                 },
+                "displayName": {
+                    "description": "DisplayName is a user-friendly unique name per developer license.",
+                    "type": "string"
+                },
                 "metricName": {
                     "description": "MetricName is the fully qualified signal/metric to monitor.",
                     "type": "string"
@@ -756,7 +760,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "description": "Status sets the initial state for the webhook (e.g. \"Enabled\" or \"Disabled\").",
+                    "description": "Status sets the initial state for the webhook (e.g. \"enabled\" or \"Disabled\").",
                     "type": "string"
                 },
                 "targetURL": {
@@ -835,12 +839,16 @@ const docTemplate = `{
                     "description": "Description updates the optional human-friendly explanation of the webhook.",
                     "type": "string"
                 },
+                "displayName": {
+                    "description": "DisplayName updates the user-friendly unique name per developer license.",
+                    "type": "string"
+                },
                 "metricName": {
                     "description": "MetricName updates the signal/event name used by the webhook.",
                     "type": "string"
                 },
                 "status": {
-                    "description": "Status updates the current state of the webhook (e.g. \"Enabled\" or \"Disabled\").",
+                    "description": "Status updates the current state of the webhook (e.g. \"enabled\" or \"Disabled\").",
                     "type": "string"
                 },
                 "targetURL": {
@@ -881,6 +889,10 @@ const docTemplate = `{
                     "description": "Description is an optional human-friendly explanation of the webhook.",
                     "type": "string"
                 },
+                "displayName": {
+                    "description": "DisplayName is the user-friendly unique name per developer license.",
+                    "type": "string"
+                },
                 "failureCount": {
                     "description": "FailureCount counts consecutive delivery failures for observability.",
                     "type": "integer"
@@ -898,11 +910,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "description": "Status is the current state of the webhook (e.g. \"Enabled\" or \"Disabled\").",
+                    "description": "Status is the current state of the webhook (e.g. \"enabled\" or \"Disabled\").",
                     "type": "string"
                 },
-                "targetURI": {
-                    "description": "TargetURI is the HTTPS endpoint that receives webhook callbacks.",
+                "targetURL": {
+                    "description": "TargetURL is the HTTPS endpoint that receives webhook callbacks.",
                     "type": "string"
                 },
                 "updatedAt": {

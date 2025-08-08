@@ -12,6 +12,7 @@ import (
 	"github.com/DIMO-Network/model-garage/pkg/schema"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
@@ -22,10 +23,11 @@ import (
 type WebhookController struct {
 	repo       *triggersrepo.Repository
 	signalDefs []SignalDefinition
+	cache      *webhookcache.WebhookCache
 }
 
 // NewWebhookController creates a new WebhookController.
-func NewWebhookController(repo *triggersrepo.Repository, logger zerolog.Logger) (*WebhookController, error) {
+func NewWebhookController(repo *triggersrepo.Repository, cache *webhookcache.WebhookCache) (*WebhookController, error) {
 	signalDefs, err := loadSignalDefs()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load signal definitions: %w", err)
@@ -33,6 +35,7 @@ func NewWebhookController(repo *triggersrepo.Repository, logger zerolog.Logger) 
 	return &WebhookController{
 		repo:       repo,
 		signalDefs: signalDefs,
+		cache:      cache,
 	}, nil
 }
 
@@ -127,6 +130,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		Description:             payload.Description,
 		CooldownPeriod:          payload.CoolDownPeriod,
 		DeveloperLicenseAddress: devLicenseAddr,
+		DisplayName:             payload.DisplayName,
 	}
 
 	trigger, err := w.repo.CreateTrigger(c.Context(), req)
@@ -173,13 +177,14 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 			Service:        t.Service,
 			MetricName:     t.MetricName,
 			Condition:      t.Condition,
-			TargetURI:      t.TargetURI,
+			TargetURL:      t.TargetURI,
 			CoolDownPeriod: t.CooldownPeriod,
 			Status:         t.Status,
 			Description:    desc,
 			CreatedAt:      t.CreatedAt,
 			UpdatedAt:      t.UpdatedAt,
 			FailureCount:   t.FailureCount,
+			DisplayName:    t.DisplayName,
 		})
 	}
 	return c.JSON(out)
@@ -187,7 +192,7 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 
 // UpdateWebhook godoc
 // @Summary      Update a webhook
-// @Description  Updates the configuration of a webhook by its ID.
+// @Description  Updates the configuration of a webhook by its ID. The failure count is reset to 0 when updating a webhook.
 // @Tags         Webhooks
 // @Accept       json
 // @Produce      json
@@ -227,6 +232,12 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		event.TargetURI = *payload.TargetURL
 	}
 	if payload.Status != nil {
+		if *payload.Status != "enabled" && *payload.Status != "disabled" {
+			return richerrors.Error{
+				ExternalMsg: "Invalid status. Must be either 'enabled' or 'disabled'",
+				Code:        fiber.StatusBadRequest,
+			}
+		}
 		event.Status = *payload.Status
 	}
 	if payload.Condition != nil {
@@ -238,6 +249,11 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	if payload.CoolDownPeriod != nil {
 		event.CooldownPeriod = *payload.CoolDownPeriod
 	}
+	if payload.DisplayName != nil {
+		event.DisplayName = *payload.DisplayName
+	}
+	// Always reset failure count to 0 when updating a webhook
+	event.FailureCount = 0
 
 	if err := w.repo.UpdateTrigger(c.Context(), event); err != nil {
 		return fmt.Errorf("failed to update webhook: %w", err)
@@ -274,6 +290,9 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 
 	if err := w.repo.DeleteTrigger(c.Context(), webhookID, devLicense); err != nil {
 		return fmt.Errorf("failed to delete webhook: %w", err)
+	}
+	if err := w.cache.PopulateCache(c.Context()); err != nil {
+		zerolog.Ctx(c.UserContext()).Error().Err(err).Msg("Failed to populate cache after deleting webhook")
 	}
 
 	return c.Status(fiber.StatusOK).JSON(GenericResponse{Message: "Webhook deleted successfully"})

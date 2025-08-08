@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/DIMO-Network/cloudevent v0.1.2
 	github.com/DIMO-Network/model-garage v0.6.8
-	github.com/DIMO-Network/server-garage v0.0.4-0.20250808120136-9a76078ff7a3
+	github.com/DIMO-Network/server-garage v0.0.4-0.20250808222032-0420bcb14079
 	github.com/DIMO-Network/shared v1.0.7
 	github.com/DIMO-Network/token-exchange-api v0.3.3
 	github.com/IBM/sarama v1.45.2
@@ -22,7 +22,6 @@ require (
 	github.com/google/cel-go v0.26.0
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
-	github.com/pkg/errors v0.9.1
 	github.com/pressly/goose/v3 v3.24.3
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.10.0
@@ -143,6 +142,7 @@ require (
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/prometheus/client_golang v1.23.0 // indirect

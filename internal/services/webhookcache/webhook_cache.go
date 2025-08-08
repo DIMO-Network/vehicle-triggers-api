@@ -111,6 +111,9 @@ func fetchEventVehicleWebhooks(ctx context.Context, repo *triggersrepo.Repositor
 
 	newData := make(map[uint32]map[string][]Webhook)
 	for _, sub := range subs {
+		if sub.R.Trigger.Status != triggersrepo.StatusEnabled {
+			continue
+		}
 		vehicleTokenID, err := decimalToUint32(sub.VehicleTokenID)
 		if err != nil {
 			return nil, fmt.Errorf("converting token_id '%s': %w", sub.VehicleTokenID.String(), err)
