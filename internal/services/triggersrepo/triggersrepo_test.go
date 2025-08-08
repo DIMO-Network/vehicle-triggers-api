@@ -30,7 +30,7 @@ func TestCreateTrigger(t *testing.T) {
 		MetricName:              "speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
-		Status:                  "Active",
+		Status:                  "Enabled",
 		Description:             "Alert when vehicle speed exceeds 20 kph",
 		CooldownPeriod:          10,
 		DeveloperLicenseAddress: randomAddr(t),
@@ -124,7 +124,7 @@ func TestGetTriggersByDeveloperLicense(t *testing.T) {
 		MetricName:              "speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
-		Status:                  "Active",
+		Status:                  "Enabled",
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
 		DeveloperLicenseAddress: randomAddr(t),
@@ -256,7 +256,7 @@ func TestGetTriggerByIDAndDeveloperLicense(t *testing.T) {
 		MetricName:              "speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
-		Status:                  "Active",
+		Status:                  "Enabled",
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
 		DeveloperLicenseAddress: randomAddr(t),
@@ -402,7 +402,7 @@ func TestUpdateTrigger(t *testing.T) {
 		MetricName:              "speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
-		Status:                  "Active",
+		Status:                  "Enabled",
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
 		DeveloperLicenseAddress: randomAddr(t),
@@ -418,7 +418,7 @@ func TestUpdateTrigger(t *testing.T) {
 		require.NotNil(t, trigger)
 
 		// Update the trigger
-		trigger.Status = "Inactive"
+		trigger.Status = "Disabled"
 		trigger.Description.String = "Updated speed alert"
 		trigger.CooldownPeriod = 20
 
@@ -430,7 +430,7 @@ func TestUpdateTrigger(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, updatedTrigger)
 
-		assert.Equal(t, "Inactive", updatedTrigger.Status)
+		assert.Equal(t, "Disabled", updatedTrigger.Status)
 		assert.Equal(t, "Updated speed alert", updatedTrigger.Description.String)
 		assert.Equal(t, 20, updatedTrigger.CooldownPeriod)
 		// other fields should be the same
@@ -474,7 +474,7 @@ func TestUpdateTrigger(t *testing.T) {
 		require.NotNil(t, trigger)
 
 		// Update multiple fields
-		trigger.Status = "Inactive"
+		trigger.Status = "Disabled"
 		trigger.Description.String = "Updated temperature alert"
 		trigger.CooldownPeriod = 25
 		trigger.Condition = "valueNumber > 35"
@@ -488,7 +488,7 @@ func TestUpdateTrigger(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, updatedTrigger)
 
-		assert.Equal(t, "Inactive", updatedTrigger.Status)
+		assert.Equal(t, "Disabled", updatedTrigger.Status)
 		assert.Equal(t, "Updated temperature alert", updatedTrigger.Description.String)
 		assert.Equal(t, 25, updatedTrigger.CooldownPeriod)
 		assert.Equal(t, "valueNumber > 35", updatedTrigger.Condition)
@@ -513,7 +513,7 @@ func TestDeleteTrigger(t *testing.T) {
 		MetricName:              "speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
-		Status:                  "Active",
+		Status:                  "Enabled",
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
 		DeveloperLicenseAddress: randomAddr(t),
@@ -707,7 +707,7 @@ func TestCreateVehicleSubscription(t *testing.T) {
 		MetricName:              "speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
-		Status:                  "Active",
+		Status:                  "Enabled",
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
 		DeveloperLicenseAddress: randomAddr(t),
@@ -873,7 +873,7 @@ func TestGetVehicleSubscriptionsByTriggerID(t *testing.T) {
 		MetricName:              "speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
-		Status:                  "Active",
+		Status:                  "Enabled",
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
 		DeveloperLicenseAddress: randomAddr(t),
@@ -960,7 +960,7 @@ func TestGetVehicleSubscriptionsByVehicleAndDeveloperLicense(t *testing.T) {
 		MetricName:              "speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
-		Status:                  "Active",
+		Status:                  "Enabled",
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
 		DeveloperLicenseAddress: randomAddr(t),
@@ -1195,7 +1195,7 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 		MetricName:              "speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
-		Status:                  "Active",
+		Status:                  "Enabled",
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
 		DeveloperLicenseAddress: randomAddr(t),
@@ -1386,7 +1386,7 @@ func TestDeleteAllVehicleSubscriptionsForTrigger(t *testing.T) {
 		MetricName:              "speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
-		Status:                  "Active",
+		Status:                  "Enabled",
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
 		DeveloperLicenseAddress: randomAddr(t),
@@ -1584,7 +1584,7 @@ func TestGetWebhookOwner(t *testing.T) {
 		MetricName:              "speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
-		Status:                  "Active",
+		Status:                  "Enabled",
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
 		DeveloperLicenseAddress: devAddress,

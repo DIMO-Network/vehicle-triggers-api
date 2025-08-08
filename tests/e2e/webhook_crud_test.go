@@ -64,8 +64,8 @@ func TestWebhookCRUDOperations(t *testing.T) {
 			Condition:         "valueNumber > 20",
 			CoolDownPeriod:    10,
 			Description:       "Alert when vehicle speed exceeds 20 kph",
-			TargetURI:         webhookReceiver.URL(),
-			Status:            "Active",
+			TargetURL:         webhookReceiver.URL(),
+			Status:            "Enabled",
 			VerificationToken: "test-verification-token",
 		}
 
@@ -241,7 +241,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		updatePayload := webhook.UpdateWebhookRequest{
 			Description:    ref("Updated description for speed alert"),
 			CoolDownPeriod: ref(15),
-			Status:         ref("Active"),
+			Status:         ref("Enabled"),
 		}
 
 		updateBody, err := json.Marshal(updatePayload)

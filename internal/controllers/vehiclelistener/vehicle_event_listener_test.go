@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 )
 
@@ -21,7 +23,7 @@ func TestEvaluateCondition(t *testing.T) {
 		name      string
 		condition string
 		telemetry string
-		signal    Signal
+		signal    vss.Signal
 		want      bool
 		wantErr   bool
 	}{
@@ -29,7 +31,7 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "Empty condition returns true",
 			condition: "",
 			telemetry: "valueNumber",
-			signal: Signal{
+			signal: vss.Signal{
 				ValueNumber: 75,
 				ValueString: "foo",
 				TokenID:     1,
@@ -42,7 +44,7 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "valueNumber > 100 false",
 			condition: "valueNumber > 100",
 			telemetry: "valueNumber",
-			signal: Signal{
+			signal: vss.Signal{
 				ValueNumber: 50,
 				ValueString: "bar",
 				TokenID:     1,
@@ -55,7 +57,7 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "valueNumber > 100 true",
 			condition: "valueNumber > 100",
 			telemetry: "valueNumber",
-			signal: Signal{
+			signal: vss.Signal{
 				ValueNumber: 150,
 				ValueString: "baz",
 				TokenID:     1,
@@ -68,7 +70,7 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "valueNumber equals 1 returns true",
 			condition: "valueNumber == 1",
 			telemetry: "valueNumber",
-			signal: Signal{
+			signal: vss.Signal{
 				ValueNumber: 1,
 				ValueString: "fop",
 				TokenID:     1,
@@ -81,7 +83,7 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "valueNumber equals 0 returns false",
 			condition: "valueNumber == 0",
 			telemetry: "valueNumber",
-			signal: Signal{
+			signal: vss.Signal{
 				ValueNumber: 0,
 				ValueString: "bat",
 				TokenID:     1,
@@ -94,7 +96,7 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "Invalid condition returns error",
 			condition: "invalid condition",
 			telemetry: "valueNumber",
-			signal: Signal{
+			signal: vss.Signal{
 				ValueNumber: 80,
 				ValueString: "active",
 				TokenID:     1,
@@ -127,7 +129,7 @@ func TestEvaluateCondition_StringComparisons(t *testing.T) {
 		name      string
 		condition string
 		telemetry string
-		signal    Signal
+		signal    vss.Signal
 		want      bool
 		wantErr   bool
 	}{
@@ -135,7 +137,7 @@ func TestEvaluateCondition_StringComparisons(t *testing.T) {
 			name:      "valueString == 'Active' true",
 			condition: `valueString == 'Active'`,
 			telemetry: "valueString",
-			signal: Signal{
+			signal: vss.Signal{
 				ValueNumber: 42,
 				ValueString: "Active",
 				TokenID:     1,
@@ -148,7 +150,7 @@ func TestEvaluateCondition_StringComparisons(t *testing.T) {
 			name:      "valueString == 'Active' false",
 			condition: `valueString == 'Active'`,
 			telemetry: "valueString",
-			signal: Signal{
+			signal: vss.Signal{
 				ValueString: "Inactive",
 				TokenID:     1,
 			},
@@ -159,7 +161,7 @@ func TestEvaluateCondition_StringComparisons(t *testing.T) {
 			name:      "mismatched types error",
 			condition: `valueString > 'foo'`,
 			telemetry: "valueString",
-			signal: Signal{
+			signal: vss.Signal{
 				ValueString: "bar",
 				TokenID:     1,
 			},
@@ -170,7 +172,7 @@ func TestEvaluateCondition_StringComparisons(t *testing.T) {
 			name:      "unknown variable in expr",
 			condition: `foo == 1`,
 			telemetry: "valueNumber",
-			signal: Signal{
+			signal: vss.Signal{
 				ValueNumber: 1,
 				TokenID:     1,
 			},
@@ -196,7 +198,7 @@ func TestSendWebhookNotification_Success(t *testing.T) {
 	// start a test server that always returns 200
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// verify we get the JSON payload
-		var sig Signal
+		var sig vss.Signal
 		if err := json.NewDecoder(r.Body).Decode(&sig); err != nil {
 			t.Errorf("unexpected body decode error: %v", err)
 		}
@@ -205,8 +207,8 @@ func TestSendWebhookNotification_Success(t *testing.T) {
 	defer ts.Close()
 
 	listener := &SignalListener{log: zerolog.Nop()}
-	wh := webhookcache.Webhook{URL: ts.URL, DeveloperLicenseAddress: nil}
-	err := listener.sendWebhookNotification(wh, &Signal{
+	wh := webhookcache.Webhook{URL: ts.URL, DeveloperLicenseAddress: common.Address{}}
+	err := listener.sendWebhookNotification(wh, &vss.Signal{
 		TokenID:     42,
 		Timestamp:   time.Now(),
 		Name:        "foo",
@@ -226,8 +228,8 @@ func TestSendWebhookNotification_Non200(t *testing.T) {
 	defer ts.Close()
 
 	listener := &SignalListener{log: zerolog.Nop()}
-	wh := webhookcache.Webhook{URL: ts.URL, DeveloperLicenseAddress: nil}
-	err := listener.sendWebhookNotification(wh, &Signal{})
+	wh := webhookcache.Webhook{URL: ts.URL, DeveloperLicenseAddress: common.Address{}}
+	err := listener.sendWebhookNotification(wh, &vss.Signal{})
 	if err == nil {
 		t.Error("expected error on 500 status, got nil")
 	}
@@ -235,8 +237,8 @@ func TestSendWebhookNotification_Non200(t *testing.T) {
 
 func TestSendWebhookNotification_BadURL(t *testing.T) {
 	listener := &SignalListener{log: zerolog.Nop()}
-	wh := webhookcache.Webhook{URL: "http://invalid.localhost:0", DeveloperLicenseAddress: nil}
-	err := listener.sendWebhookNotification(wh, &Signal{})
+	wh := webhookcache.Webhook{URL: "http://invalid.localhost:0", DeveloperLicenseAddress: common.Address{}}
+	err := listener.sendWebhookNotification(wh, &vss.Signal{})
 	if err == nil {
 		t.Error("expected error on invalid URL, got nil")
 	}

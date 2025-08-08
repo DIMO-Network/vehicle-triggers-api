@@ -5,8 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
-	"github.com/volatiletech/sqlboiler/v4/boil"
 )
 
 var nopLogger = zerolog.Nop()
@@ -16,11 +17,11 @@ func TestPopulateCache(t *testing.T) {
 	defer func() { FetchWebhooksFromDBFunc = orig }()
 
 	// Fake implementation
-	FetchWebhooksFromDBFunc = func(ctx context.Context, exec boil.ContextExecutor) (map[uint32]map[string][]Webhook, error) {
+	FetchWebhooksFromDBFunc = func(ctx context.Context, repo *triggersrepo.Repository) (map[uint32]map[string][]Webhook, error) {
 		return map[uint32]map[string][]Webhook{
 			10: {
 				"temperature": {
-					{URL: "http://example.com", Condition: "valueNumber>50", MetricName: "temperature", DeveloperLicenseAddress: nil},
+					{URL: "http://example.com", Condition: "valueNumber>50", MetricName: "temperature", DeveloperLicenseAddress: common.Address{}},
 				},
 			},
 		}, nil
@@ -40,7 +41,7 @@ func TestPopulateCache_Error(t *testing.T) {
 	orig := FetchWebhooksFromDBFunc
 	defer func() { FetchWebhooksFromDBFunc = orig }()
 
-	FetchWebhooksFromDBFunc = func(ctx context.Context, exec boil.ContextExecutor) (map[uint32]map[string][]Webhook, error) {
+	FetchWebhooksFromDBFunc = func(ctx context.Context, repo *triggersrepo.Repository) (map[uint32]map[string][]Webhook, error) {
 		return nil, errors.New("db error")
 	}
 
@@ -62,7 +63,7 @@ func TestUpdateAndGetWebhooks(t *testing.T) {
 	data := map[uint32]map[string][]Webhook{
 		55: {
 			"gps": {
-				{URL: "u1", DeveloperLicenseAddress: nil}, {URL: "u2", DeveloperLicenseAddress: nil},
+				{URL: "u1", DeveloperLicenseAddress: common.Address{}}, {URL: "u2", DeveloperLicenseAddress: common.Address{}},
 			},
 		},
 	}

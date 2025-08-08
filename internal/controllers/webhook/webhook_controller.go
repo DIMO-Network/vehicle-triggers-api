@@ -2,8 +2,6 @@ package webhook
 
 import (
 	"bytes"
-	"database/sql"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,36 +18,22 @@ import (
 	"github.com/volatiletech/null/v8"
 )
 
+// WebhookController is the controller for creating and managing webhooks.
 type WebhookController struct {
-	logger zerolog.Logger
-	repo   *triggersrepo.Repository
+	repo       *triggersrepo.Repository
+	signalDefs []SignalDefinition
 }
 
-func NewWebhookController(repo *triggersrepo.Repository, logger zerolog.Logger) *WebhookController {
-	return &WebhookController{
-		repo:   repo,
-		logger: logger,
+// NewWebhookController creates a new WebhookController.
+func NewWebhookController(repo *triggersrepo.Repository, logger zerolog.Logger) (*WebhookController, error) {
+	signalDefs, err := loadSignalDefs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load signal definitions: %w", err)
 	}
-}
-
-type RegisterWebhookRequest struct {
-	// Service is the service that the webhook is associated with.
-	Service string `json:"service" validate:"required"`
-	// MetricName is the name of the metric that the webhook is associated with.
-	MetricName string `json:"metricName" validate:"required"`
-	// Condition expressed as a CEL expression that needs to be true for the webhook to be triggered.
-	Condition string `json:"condition" validate:"required"`
-	// CoolDownPeriod is the number of seconds to wait before a webhook can be triggered again.
-	// If the webhook is triggered again within the cool down period, the webhook will not be triggered again.
-	CoolDownPeriod int `json:"coolDownPeriod" validate:"required"`
-	// Description is the description of the webhook.
-	Description string `json:"description"`
-	// TargetURI is the URI that the webhook will be sent to.
-	TargetURI string `json:"targetURI" validate:"required"`
-	// Status is the status of the webhook.
-	Status string `json:"status"`
-	// VerificationToken is the token that wukk
-	VerificationToken string `json:"verificationToken" validate:"required"`
+	return &WebhookController{
+		repo:       repo,
+		signalDefs: signalDefs,
+	}, nil
 }
 
 // RegisterWebhook godoc
@@ -58,8 +42,8 @@ type RegisterWebhookRequest struct {
 // @Tags         Webhooks
 // @Accept       json
 // @Produce      json
-// @Param        request  body      RegisterWebhookRequest  true  "Webhook configuration"
-// @Success      201      "Webhook registered successfully"
+// @Param        request  body      RegisterWebhookRequest     true  "Webhook configuration"
+// @Success      201      {object}  RegisterWebhookResponse    "Webhook registered successfully"
 // @Failure      400      "Invalid request payload or target URI"
 // @Failure      500      "Internal server error"
 // @Security     BearerAuth
@@ -74,11 +58,18 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	parsedURL, err := url.ParseRequestURI(payload.TargetURI)
+	parsedURL, err := url.ParseRequestURI(payload.TargetURL)
 	if err != nil {
 		return richerrors.Error{
-			ExternalMsg: "Invalid target URI",
+			ExternalMsg: "Invalid webhook URL",
 			Err:         err,
+			Code:        fiber.StatusBadRequest,
+		}
+	}
+
+	if parsedURL.Scheme != "https" {
+		return richerrors.Error{
+			ExternalMsg: "Webhook URL must be HTTPS",
 			Code:        fiber.StatusBadRequest,
 		}
 	}
@@ -131,7 +122,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		Service:                 payload.Service,
 		MetricName:              payload.MetricName,
 		Condition:               payload.Condition,
-		TargetURI:               payload.TargetURI,
+		TargetURI:               payload.TargetURL,
 		Status:                  payload.Status,
 		Description:             payload.Description,
 		CooldownPeriod:          payload.CoolDownPeriod,
@@ -147,8 +138,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	w.logger.Info().Str("id", trigger.ID).Msg("Webhook registered successfully")
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"id": trigger.ID, "message": "Webhook registered successfully"})
+	return c.Status(fiber.StatusCreated).JSON(RegisterWebhookResponse{ID: trigger.ID, Message: "Webhook registered successfully"})
 }
 
 // ListWebhooks godoc
@@ -156,44 +146,43 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 // @Description  Retrieves all registered webhooks for the developer.
 // @Tags         Webhooks
 // @Produce      json
-// @Success      200  {array}  object  "List of webhooks"
+// @Success      200  {array}  WebhookView  "List of webhooks"
 // @Failure      401  "Unauthorized"
 // @Failure      500  "Internal server error"
 // @Security     BearerAuth
 // @Router       /v1/webhooks [get]
 func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
-	w.logger.Info().Msg("ListWebhooks endpoint hit")
-
-	devLicense, ok := c.Locals("developer_license_address").([]byte)
-	if !ok {
-		return richerrors.Error{
-			ExternalMsg: "Developer license not found in request",
-			Err:         fmt.Errorf("developer license not found in request context"),
-			Code:        fiber.StatusInternalServerError,
-		}
-	}
-
-	devLicenseAddr := common.BytesToAddress(devLicense)
-	events, err := w.repo.GetTriggersByDeveloperLicense(c.Context(), devLicenseAddr)
+	devLicense, err := getDevLicense(c)
 	if err != nil {
-		return richerrors.Error{
-			ExternalMsg: "Failed to retrieve webhooks",
-			Err:         err,
-			Code:        fiber.StatusInternalServerError,
-		}
+		return err
 	}
 
-	return c.JSON(events)
-}
+	triggers, err := w.repo.GetTriggersByDeveloperLicense(c.Context(), devLicense)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve webhooks: %w", err)
+	}
 
-// UpdateWebhookRequest is the request payload for updating a webhook.
-type UpdateWebhookRequest struct {
-	MetricName     *string `json:"metricName"`
-	Condition      *string `json:"condition"`
-	CoolDownPeriod *int    `json:"coolDownPeriod"`
-	TargetURI      *string `json:"targetURI"`
-	Status         *string `json:"status"`
-	Description    *string `json:"description"`
+	out := make([]WebhookView, 0, len(triggers))
+	for _, t := range triggers {
+		desc := ""
+		if t.Description.Valid {
+			desc = t.Description.String
+		}
+		out = append(out, WebhookView{
+			ID:             t.ID,
+			Service:        t.Service,
+			MetricName:     t.MetricName,
+			Condition:      t.Condition,
+			TargetURI:      t.TargetURI,
+			CoolDownPeriod: t.CooldownPeriod,
+			Status:         t.Status,
+			Description:    desc,
+			CreatedAt:      t.CreatedAt,
+			UpdatedAt:      t.UpdatedAt,
+			FailureCount:   t.FailureCount,
+		})
+	}
+	return c.JSON(out)
 }
 
 // UpdateWebhook godoc
@@ -203,8 +192,8 @@ type UpdateWebhookRequest struct {
 // @Accept       json
 // @Produce      json
 // @Param        webhookId       path      string  true  "Webhook ID"
-// @Param        request  body      UpdateWebhookRequest  true  "Webhook configuration"
-// @Success      200      "Webhook updated successfully"
+// @Param        request  body      UpdateWebhookRequest   true  "Webhook configuration"
+// @Success      200      {object}  UpdateWebhookResponse  "Webhook updated successfully"
 // @Failure      400      "Invalid request payload"
 // @Failure      404      "Webhook not found"
 // @Failure      500      "Internal server error"
@@ -212,41 +201,30 @@ type UpdateWebhookRequest struct {
 // @Router       /v1/webhooks/{webhookId} [put]
 func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	webhookId := c.Params("webhookId")
-	devLicense, ok := c.Locals("developer_license_address").([]byte)
-	if !ok {
-		return richerrors.Error{
-			ExternalMsg: "Developer license not found in request",
-			Err:         fmt.Errorf("developer license not found in request context"),
-			Code:        fiber.StatusInternalServerError,
-		}
+	devLicense, err := getDevLicense(c)
+	if err != nil {
+		return err
 	}
 
-	devLicenseAddr := common.BytesToAddress(devLicense)
-	event, err := w.repo.GetTriggerByIDAndDeveloperLicense(c.Context(), webhookId, devLicenseAddr)
+	event, err := w.repo.GetTriggerByIDAndDeveloperLicense(c.Context(), webhookId, devLicense)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return richerrors.Error{
-				ExternalMsg: "Webhook not found",
-				Code:        fiber.StatusNotFound,
-			}
-		}
-		return richerrors.Error{
-			ExternalMsg: "Failed to retrieve webhook",
-			Err:         err,
-			Code:        fiber.StatusInternalServerError,
-		}
+		return fmt.Errorf("failed to retrieve webhook: %w", err)
 	}
 
 	var payload UpdateWebhookRequest
 	if err := c.BodyParser(&payload); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
+		return richerrors.Error{
+			ExternalMsg: "Invalid request payload: " + err.Error(),
+			Err:         err,
+			Code:        fiber.StatusBadRequest,
+		}
 	}
 
 	if payload.MetricName != nil {
 		event.MetricName = *payload.MetricName
 	}
-	if payload.TargetURI != nil {
-		event.TargetURI = *payload.TargetURI
+	if payload.TargetURL != nil {
+		event.TargetURI = *payload.TargetURL
 	}
 	if payload.Status != nil {
 		event.Status = *payload.Status
@@ -262,14 +240,10 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	}
 
 	if err := w.repo.UpdateTrigger(c.Context(), event); err != nil {
-		return richerrors.Error{
-			ExternalMsg: "Failed to update webhook",
-			Err:         err,
-			Code:        fiber.StatusInternalServerError,
-		}
+		return fmt.Errorf("failed to update webhook: %w", err)
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Webhook updated successfully", "id": event.ID})
+	return c.Status(fiber.StatusOK).JSON(UpdateWebhookResponse{ID: event.ID, Message: "Webhook updated successfully"})
 }
 
 // DeleteWebhook godoc
@@ -278,40 +252,31 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 // @Tags         Webhooks
 // @Produce      json
 // @Param        webhookId  path  string  true  "Webhook ID"
-// @Success      204  "Webhook deleted successfully"
+// @Success      200  {object}  GenericResponse  "Webhook deleted successfully"
 // @Failure      404  "Webhook not found"
 // @Failure      500  "Internal server error"
 // @Security     BearerAuth
 // @Router       /v1/webhooks/{webhookId} [delete]
 func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
-	webhookId := c.Params("webhookId")
-	devLicense, ok := c.Locals("developer_license_address").([]byte)
-	if !ok {
-		return richerrors.Error{
-			ExternalMsg: "Developer license not found in request",
-			Err:         fmt.Errorf("developer license not found in request context"),
-			Code:        fiber.StatusInternalServerError,
-		}
+	webhookID, err := getWebhookID(c)
+	if err != nil {
+		return err
+	}
+	devLicense, err := getDevLicense(c)
+	if err != nil {
+		return err
 	}
 
-	_ = devLicense // TODO(kevin): verify that the developer license is the owner of the webhook
-
-	devLicenseAddr := common.BytesToAddress(devLicense)
-	if err := w.repo.DeleteTrigger(c.Context(), webhookId, devLicenseAddr); err != nil {
-		return richerrors.Error{
-			ExternalMsg: "Failed to delete webhook",
-			Err:         err,
-			Code:        fiber.StatusInternalServerError,
-		}
+	err = ownerCheck(c.Context(), w.repo, webhookID, devLicense)
+	if err != nil {
+		return err
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Webhook deleted successfully"})
-}
+	if err := w.repo.DeleteTrigger(c.Context(), webhookID, devLicense); err != nil {
+		return fmt.Errorf("failed to delete webhook: %w", err)
+	}
 
-type SignalDefinition struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Unit        string `json:"unit"`
+	return c.Status(fiber.StatusOK).JSON(GenericResponse{Message: "Webhook deleted successfully"})
 }
 
 // GetSignalNames godoc
@@ -319,26 +284,22 @@ type SignalDefinition struct {
 // @Description  Fetches the list of signal names available for the data field.
 // @Tags         Webhooks
 // @Produce      json
-// @Success      200  {array}  string  "List of signal names"
+// @Success      200  {array}  SignalDefinition  "List of signal names"
 // @Failure      500  "Internal server error"
 // @Security     BearerAuth
 // @Router       /v1/webhooks/signals [get]
 func (w *WebhookController) GetSignalNames(c *fiber.Ctx) error {
+	return c.JSON(w.signalDefs)
+}
+
+func loadSignalDefs() ([]SignalDefinition, error) {
 	defs, err := schema.LoadDefinitionFile(strings.NewReader(schema.DefaultDefinitionsYAML()))
 	if err != nil {
-		return richerrors.Error{
-			ExternalMsg: "Failed to load default schema definitions",
-			Err:         err,
-			Code:        fiber.StatusInternalServerError,
-		}
+		return nil, fmt.Errorf("failed to load default schema definitions: %w", err)
 	}
 	signalInfo, err := schema.LoadSignalsCSV(strings.NewReader(schema.VssRel42DIMO()))
 	if err != nil {
-		return richerrors.Error{
-			ExternalMsg: "Failed to load default signal info",
-			Err:         err,
-			Code:        fiber.StatusInternalServerError,
-		}
+		return nil, fmt.Errorf("failed to load default signal info: %w", err)
 	}
 	definedSignals := defs.DefinedSignal(signalInfo)
 	signalDefs := make([]SignalDefinition, 0, len(definedSignals))
@@ -349,5 +310,5 @@ func (w *WebhookController) GetSignalNames(c *fiber.Ctx) error {
 			Description: signal.Desc,
 		})
 	}
-	return c.JSON(signalDefs)
+	return signalDefs, nil
 }

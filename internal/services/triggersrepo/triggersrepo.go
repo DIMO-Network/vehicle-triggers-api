@@ -251,7 +251,11 @@ func (r *Repository) CreateVehicleSubscription(ctx context.Context, vehicleToken
 				}
 			}
 		}
-		return nil, err
+		return nil, richerrors.Error{
+			ExternalMsg: "Failed to create vehicle subscription",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
 	}
 
 	return subscription, nil
@@ -331,10 +335,18 @@ func (r *Repository) DeleteVehicleSubscription(ctx context.Context, triggerID st
 			Code:        http.StatusBadRequest,
 		}
 	}
-	return models.VehicleSubscriptions(
+	deleteCount, err := models.VehicleSubscriptions(
 		models.VehicleSubscriptionWhere.TriggerID.EQ(triggerID),
 		models.VehicleSubscriptionWhere.VehicleTokenID.EQ(bigIntToDecimal(vehicleTokenID)),
 	).DeleteAll(ctx, r.db)
+	if err != nil {
+		return 0, richerrors.Error{
+			ExternalMsg: "Failed to delete vehicle subscription",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	return deleteCount, nil
 }
 
 // DeleteAllVehicleSubscriptionsForTrigger deletes all vehicle subscriptions for a trigger.
@@ -346,9 +358,17 @@ func (r *Repository) DeleteAllVehicleSubscriptionsForTrigger(ctx context.Context
 			Code:        http.StatusBadRequest,
 		}
 	}
-	return models.VehicleSubscriptions(
+	deleteCount, err := models.VehicleSubscriptions(
 		models.VehicleSubscriptionWhere.TriggerID.EQ(triggerID),
 	).DeleteAll(ctx, r.db)
+	if err != nil {
+		return 0, richerrors.Error{
+			ExternalMsg: "Failed to delete vehicle subscriptions",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	return deleteCount, nil
 }
 
 // GetWebhookOwner returns the developer license address of the webhook owner
@@ -358,12 +378,70 @@ func (r *Repository) GetWebhookOwner(ctx context.Context, triggerID string) (com
 	).One(ctx, r.db)
 
 	if err != nil {
-		return common.Address{}, err
+		if errors.Is(err, sql.ErrNoRows) {
+			return common.Address{}, richerrors.Error{
+				ExternalMsg: "Webhook not found",
+				Err:         err,
+				Code:        http.StatusNotFound,
+			}
+		}
+		return common.Address{}, richerrors.Error{
+			ExternalMsg: "Failed to get webhook owner",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
 	}
 
 	return common.BytesToAddress(trigger.DeveloperLicenseAddress), nil
 }
 
+// GetAllVehicleSubscriptions returns all vehicle subscriptions.
+func (r *Repository) GetAllVehicleSubscriptions(ctx context.Context) ([]*models.VehicleSubscription, error) {
+	subs, err := models.VehicleSubscriptions(
+		qm.Load(models.VehicleSubscriptionRels.Trigger),
+	).All(ctx, r.db)
+	if err != nil {
+		return nil, richerrors.Error{
+			ExternalMsg: "Failed to get all vehicle subscriptions",
+			Err:         fmt.Errorf("failed to get all vehicle subscriptions: %w", err),
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	return subs, nil
+}
+
+// GetLastTriggeredAt returns the last triggered at timestamp for a trigger and vehicle token ID.
+func (r *Repository) GetLastTriggeredAt(ctx context.Context, triggerID string, vehicleTokenID *big.Int) (time.Time, error) {
+	logs, err := models.TriggerLogs(
+		models.TriggerLogWhere.TriggerID.EQ(triggerID),
+		models.TriggerLogWhere.VehicleTokenID.EQ(bigIntToDecimal(vehicleTokenID)),
+		qm.OrderBy("last_triggered_at DESC"),
+	).One(ctx, r.db)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return time.Time{}, nil
+		}
+		return time.Time{}, richerrors.Error{
+			ExternalMsg: "Failed to get last triggered at",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	return logs.LastTriggeredAt, nil
+}
+
+// CreateTriggerLog creates a new trigger log.
+func (r *Repository) CreateTriggerLog(ctx context.Context, log *models.TriggerLog) error {
+	if err := log.Insert(ctx, r.db, boil.Infer()); err != nil {
+		return richerrors.Error{
+			ExternalMsg: "Failed to create trigger log",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	return nil
+}
 func bigIntToDecimal(vehicleTokenID *big.Int) types.Decimal {
 	dec := types.NewDecimal(new(decimal.Big))
 	dec.SetBigMantScale(vehicleTokenID, 0)

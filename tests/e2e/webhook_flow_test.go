@@ -41,8 +41,8 @@ func TestWebhookFlow(t *testing.T) {
 		Condition:         "valueNumber > 20",
 		CoolDownPeriod:    10,
 		Description:       "Alert when vehicle speed exceeds 20 kph",
-		TargetURI:         webhookReceiver.URL(),
-		Status:            "Active",
+		TargetURL:         webhookReceiver.URL(),
+		Status:            "Enabled",
 		VerificationToken: "test-verification-token",
 	}
 

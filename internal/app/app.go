@@ -2,12 +2,11 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/DIMO-Network/server-garage/pkg/richerrors"
+	"github.com/DIMO-Network/server-garage/pkg/fibercommon"
 	"github.com/DIMO-Network/shared/pkg/db"
 	_ "github.com/DIMO-Network/vehicle-triggers-api/docs" // Import Swagger docs
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
@@ -33,31 +32,40 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		return nil, fmt.Errorf("failed to create token exchange API: %w", err)
 	}
 
-	webhookCache, err := startDeviceSignalsConsumer(ctx, logger, settings, tokenExchangeAPI, store)
+	repo := triggersrepo.NewRepository(store.DBS().Writer.DB)
+
+	webhookCache, err := startDeviceSignalsConsumer(ctx, logger, settings, tokenExchangeAPI, repo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start device signals consumer: %w", err)
 	}
 
-	identityClient, err := identity.New(settings.IdentityAPIURL, logger)
+	identityClient, err := identity.New(settings, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create identity client: %w", err)
 	}
-	repo := triggersrepo.NewRepository(store.DBS().Writer.DB)
 
-	app := CreateFiberApp(logger, repo, webhookCache, tokenExchangeAPI, identityClient, settings)
+	app, err := CreateFiberApp(logger, repo, webhookCache, tokenExchangeAPI, identityClient, settings)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create fiber app: %w", err)
+	}
 	return app, nil
 }
 
 // Run sets up the API routes and starts the HTTP server.
-func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, tokenExchangeClient *tokenexchange.Client, identityClient *identity.Client, settings *config.Settings) *fiber.App {
+func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
+	webhookCache *webhookcache.WebhookCache,
+	tokenExchangeClient *tokenexchange.Client,
+	identityClient *identity.Client,
+	settings *config.Settings) (*fiber.App, error) {
 	logger.Info().Msg("Starting Vehicle Triggers API...")
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
-			return ErrorHandler(c, err)
+			return fibercommon.ErrorHandler(c, err)
 		},
 		DisableStartupMessage: true,
 	})
+	app.Use(fibercommon.ContextLoggerMiddleware)
 
 	app.Get("/swagger/*", swagger.HandlerDefault)
 
@@ -69,8 +77,11 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository, webhoo
 	// settings.IdentityAPIURL is loaded from your settings.yaml.
 	jwtMiddleware := webhook.JWTMiddleware(identityClient, logger)
 	// Register Webhook routes.
-	webhookController := webhook.NewWebhookController(repo, logger)
-	vehicleSubscriptionController := webhook.NewVehicleSubscriptionController(repo, logger, identityClient, tokenExchangeClient, webhookCache)
+	webhookController, err := webhook.NewWebhookController(repo, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create webhook controller: %w", err)
+	}
+	vehicleSubscriptionController := webhook.NewVehicleSubscriptionController(repo, identityClient, tokenExchangeClient, webhookCache)
 	logger.Info().Msg("Registering routes...")
 
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -88,19 +99,19 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository, webhoo
 	app.Delete("/v1/webhooks/:webhookId", jwtMiddleware, webhookController.DeleteWebhook)
 
 	// Vehicle subscriptions
-	app.Post("/v1/webhooks/:webhookId/subscribe/csv", jwtMiddleware, vehicleSubscriptionController.SubscribeVehiclesFromCSV)
+	app.Post("/v1/webhooks/:webhookId/subscribe/list", jwtMiddleware, vehicleSubscriptionController.SubscribeVehiclesFromList)
 	app.Post("/v1/webhooks/:webhookId/subscribe/all", jwtMiddleware, vehicleSubscriptionController.SubscribeAllVehiclesToWebhook)
 	app.Post("/v1/webhooks/:webhookId/subscribe/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.AssignVehicleToWebhook)
-	app.Delete("/v1/webhooks/:webhookId/unsubscribe/csv", jwtMiddleware, vehicleSubscriptionController.UnsubscribeVehiclesFromCSV)
+	app.Delete("/v1/webhooks/:webhookId/unsubscribe/list", jwtMiddleware, vehicleSubscriptionController.UnsubscribeVehiclesFromList)
 	app.Delete("/v1/webhooks/:webhookId/unsubscribe/all", jwtMiddleware, vehicleSubscriptionController.UnsubscribeAllVehiclesFromWebhook)
 	app.Delete("/v1/webhooks/:webhookId/unsubscribe/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
 	app.Get("/v1/webhooks/vehicles/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.ListSubscriptions)
 
-	return app
+	return app, nil
 }
 
 // startDeviceSignalsConsumer sets up and starts the Kafka consumer for topic.device.signals
-func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, store db.Store) (*webhookcache.WebhookCache, error) {
+func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, repo *triggersrepo.Repository) (*webhookcache.WebhookCache, error) {
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
@@ -119,7 +130,7 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 	}
 
 	// Initialize the in-memory webhook cache.
-	webhookCache := webhookcache.NewWebhookCache(store.DBS().Reader.DB, &logger)
+	webhookCache := webhookcache.NewWebhookCache(repo, &logger)
 
 	//load all existing webhooks into memory** so GetWebhooks() won't be empty
 	if err := webhookCache.PopulateCache(ctx); err != nil {
@@ -137,7 +148,7 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 		}
 	}()
 
-	signalListener := vehiclelistener.NewSignalListener(logger, webhookCache, store, tokenExchangeAPI)
+	signalListener := vehiclelistener.NewSignalListener(logger, webhookCache, repo, tokenExchangeAPI)
 	if err := consumer.Start(ctx, signalListener.ProcessSignals); err != nil {
 		return nil, fmt.Errorf("failed to start device signals consumer: %w", err)
 	}
@@ -145,38 +156,4 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)
 
 	return webhookCache, nil
-}
-
-// ErrorHandler custom handler to log recovered errors using our logger and return json instead of string
-func ErrorHandler(ctx *fiber.Ctx, err error) error {
-	code := fiber.StatusInternalServerError // Default 500 statuscode
-	message := "Internal error."
-
-	var fiberErr *fiber.Error
-	var richErr richerrors.Error
-	if errors.As(err, &fiberErr) {
-		code = fiberErr.Code
-		message = fiberErr.Message
-	} else if errors.As(err, &richErr) {
-		message = richErr.ExternalMsg
-		if richErr.Code != 0 {
-			code = richErr.Code
-		}
-	}
-
-	// log all errors except 404
-	if code != fiber.StatusNotFound {
-		logger := zerolog.Ctx(ctx.UserContext())
-		logger.Err(err).Int("httpStatusCode", code).
-			Str("httpPath", strings.TrimPrefix(ctx.Path(), "/")).
-			Str("httpMethod", ctx.Method()).
-			Msg("caught an error from http request")
-	}
-
-	return ctx.Status(code).JSON(codeResp{Code: code, Message: message})
-}
-
-type codeResp struct {
-	Message string `json:"message"`
-	Code    int    `json:"code"`
 }

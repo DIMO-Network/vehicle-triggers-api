@@ -2,15 +2,13 @@ package webhookcache
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
 
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
-	"github.com/volatiletech/sqlboiler/v4/boil"
-	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"github.com/volatiletech/sqlboiler/v4/types"
 )
 
@@ -22,21 +20,21 @@ type Webhook struct {
 	Condition               string
 	CooldownPeriod          int
 	MetricName              string
-	DeveloperLicenseAddress []byte
+	DeveloperLicenseAddress common.Address
 }
 
 // WebhookCache is an in-memory map: vehicleTokenID -> telemetry identifier -> []Webhook.
 type WebhookCache struct {
 	mu       sync.RWMutex
 	webhooks map[uint32]map[string][]Webhook
-	db       *sql.DB
 	logger   *zerolog.Logger
+	repo     *triggersrepo.Repository
 }
 
-func NewWebhookCache(db *sql.DB, logger *zerolog.Logger) *WebhookCache {
+func NewWebhookCache(repo *triggersrepo.Repository, logger *zerolog.Logger) *WebhookCache {
 	return &WebhookCache{
 		webhooks: make(map[uint32]map[string][]Webhook),
-		db:       db,
+		repo:     repo,
 		logger:   logger,
 	}
 }
@@ -45,7 +43,7 @@ var FetchWebhooksFromDBFunc = fetchEventVehicleWebhooks
 
 // PopulateCache builds the cache from the database
 func (wc *WebhookCache) PopulateCache(ctx context.Context) error {
-	webhooks, err := FetchWebhooksFromDBFunc(ctx, wc.db)
+	webhooks, err := FetchWebhooksFromDBFunc(ctx, wc.repo)
 	wc.logger.Debug().
 		Int("vehicles_with_hooks", len(webhooks)).
 		Msg("Fetched raw hook map from DB")
@@ -105,41 +103,33 @@ func (wc *WebhookCache) Update(newData map[uint32]map[string][]Webhook) {
 
 // fetchEventVehicleWebhooks queries the EventVehicles table (with joined Event) and builds the cache
 // It uses Event.Data as the telemetry identifier
-func fetchEventVehicleWebhooks(ctx context.Context, exec boil.ContextExecutor) (map[uint32]map[string][]Webhook, error) {
-	subs, err := models.VehicleSubscriptions(
-		qm.Load(models.VehicleSubscriptionRels.Trigger),
-	).All(ctx, exec)
+func fetchEventVehicleWebhooks(ctx context.Context, repo *triggersrepo.Repository) (map[uint32]map[string][]Webhook, error) {
+	subs, err := repo.GetAllVehicleSubscriptions(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load EventVehicles: %w", err)
+		return nil, fmt.Errorf("failed to get all vehicle subscriptions: %w", err)
 	}
 
 	newData := make(map[uint32]map[string][]Webhook)
-	for _, evv := range subs {
-		vehicleTokenID, err := decimalToUint32(evv.VehicleTokenID)
+	for _, sub := range subs {
+		vehicleTokenID, err := decimalToUint32(sub.VehicleTokenID)
 		if err != nil {
-			return nil, fmt.Errorf("converting token_id '%s': %w", evv.VehicleTokenID.String(), err)
+			return nil, fmt.Errorf("converting token_id '%s': %w", sub.VehicleTokenID.String(), err)
 		}
-		event, err := models.FindTrigger(ctx, exec, evv.TriggerID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to find event: %w", err)
-		}
+		trigger := sub.R.Trigger
 
-		if event.MetricName == "" {
-			return nil, fmt.Errorf("event.MetricName empty for event %s (vehicle_token_id %d)", event.ID, vehicleTokenID)
-		}
 		if newData[vehicleTokenID] == nil {
 			newData[vehicleTokenID] = make(map[string][]Webhook)
 		}
 		wh := Webhook{
-			ID:                      event.ID,
-			URL:                     event.TargetURI,
-			Condition:               event.Condition,
-			CooldownPeriod:          event.CooldownPeriod,
-			MetricName:              event.MetricName,
-			DeveloperLicenseAddress: event.DeveloperLicenseAddress,
+			ID:                      trigger.ID,
+			URL:                     trigger.TargetURI,
+			Condition:               trigger.Condition,
+			CooldownPeriod:          trigger.CooldownPeriod,
+			MetricName:              trigger.MetricName,
+			DeveloperLicenseAddress: common.BytesToAddress(trigger.DeveloperLicenseAddress),
 		}
 
-		newData[vehicleTokenID][event.MetricName] = append(newData[vehicleTokenID][event.MetricName], wh)
+		newData[vehicleTokenID][trigger.MetricName] = append(newData[vehicleTokenID][trigger.MetricName], wh)
 	}
 	if len(newData) == 0 {
 		return nil, errNoWebhookConfig

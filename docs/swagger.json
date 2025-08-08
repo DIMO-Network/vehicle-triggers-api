@@ -27,7 +27,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "type": "object"
+                                "$ref": "#/definitions/internal_controllers_webhook.WebhookView"
                             }
                         }
                     },
@@ -69,7 +69,10 @@
                 ],
                 "responses": {
                     "201": {
-                        "description": "Webhook registered successfully"
+                        "description": "Webhook registered successfully",
+                        "schema": {
+                            "$ref": "#/definitions/internal_controllers_webhook.RegisterWebhookResponse"
+                        }
                     },
                     "400": {
                         "description": "Invalid request payload or target URI"
@@ -101,7 +104,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "type": "string"
+                                "$ref": "#/definitions/internal_controllers_webhook.SignalDefinition"
                             }
                         }
                     },
@@ -257,7 +260,10 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Webhook updated successfully"
+                        "description": "Webhook updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/internal_controllers_webhook.UpdateWebhookResponse"
+                        }
                     },
                     "400": {
                         "description": "Invalid request payload"
@@ -294,8 +300,11 @@
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "Webhook deleted successfully"
+                    "200": {
+                        "description": "Webhook deleted successfully",
+                        "schema": {
+                            "$ref": "#/definitions/internal_controllers_webhook.GenericResponse"
+                        }
                     },
                     "404": {
                         "description": "Webhook not found"
@@ -334,10 +343,7 @@
                     "201": {
                         "description": "Count of subscribed vehicles",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/internal_controllers_webhook.GenericResponse"
                         }
                     },
                     "400": {
@@ -370,16 +376,16 @@
                 }
             }
         },
-        "/v1/webhooks/{webhookId}/subscribe/csv": {
+        "/v1/webhooks/{webhookId}/subscribe/list": {
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Parses a CSV file from the request body and subscribes each vehicleTokenId to the webhook.",
+                "description": "Subscribes each vehicleTokenId to the webhook.",
                 "consumes": [
-                    "text/csv"
+                    "application/json"
                 ],
                 "produces": [
                     "application/json"
@@ -387,7 +393,7 @@
                 "tags": [
                     "Webhooks"
                 ],
-                "summary": "Assign multiple vehicles to a webhook from CSV",
+                "summary": "Assign multiple vehicles to a webhook from a list",
                 "parameters": [
                     {
                         "type": "string",
@@ -401,10 +407,7 @@
                     "201": {
                         "description": "Count of subscribed vehicles",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/internal_controllers_webhook.GenericResponse"
                         }
                     },
                     "400": {
@@ -475,10 +478,7 @@
                     "201": {
                         "description": "Vehicle assigned",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/internal_controllers_webhook.GenericResponse"
                         }
                     },
                     "400": {
@@ -539,10 +539,7 @@
                     "200": {
                         "description": "Count of unsubscribed vehicles",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/internal_controllers_webhook.GenericResponse"
                         }
                     },
                     "400": {
@@ -575,16 +572,16 @@
                 }
             }
         },
-        "/v1/webhooks/{webhookId}/unsubscribe/csv": {
+        "/v1/webhooks/{webhookId}/unsubscribe/list": {
             "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Parses a CSV file from the request body and unsubscribes each vehicleTokenId from the webhook.",
+                "description": "Unsubscribes each vehicleTokenId from the webhook.",
                 "consumes": [
-                    "text/csv"
+                    "application/json"
                 ],
                 "produces": [
                     "application/json"
@@ -592,7 +589,7 @@
                 "tags": [
                     "Webhooks"
                 ],
-                "summary": "Unsubscribe multiple vehicles from a webhook using CSV",
+                "summary": "Unsubscribe multiple vehicles from a webhook using a list",
                 "parameters": [
                     {
                         "type": "string",
@@ -606,10 +603,7 @@
                     "200": {
                         "description": "Count of unsubscribed vehicles",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/internal_controllers_webhook.GenericResponse"
                         }
                     },
                     "400": {
@@ -677,10 +671,7 @@
                     "200": {
                         "description": "Vehicle removed",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/internal_controllers_webhook.GenericResponse"
                         }
                     },
                     "400": {
@@ -715,6 +706,15 @@
         }
     },
     "definitions": {
+        "internal_controllers_webhook.GenericResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "description": "Message provides a brief status message for the operation.",
+                    "type": "string"
+                }
+            }
+        },
         "internal_controllers_webhook.RegisterWebhookRequest": {
             "type": "object",
             "required": [
@@ -722,40 +722,70 @@
                 "coolDownPeriod",
                 "metricName",
                 "service",
-                "targetURI",
+                "targetURL",
                 "verificationToken"
             ],
             "properties": {
                 "condition": {
-                    "description": "Condition expressed as a CEL expression that needs to be true for the webhook to be triggered.",
+                    "description": "Condition is a CEL expression evaluated against the metric to decide when to fire.",
                     "type": "string"
                 },
                 "coolDownPeriod": {
-                    "description": "CoolDownPeriod is the number of seconds to wait before a webhook can be triggered again.\nIf the webhook is triggered again within the cool down period, the webhook will not be triggered again.",
+                    "description": "CoolDownPeriod is the minimum number of seconds between successive firings.",
                     "type": "integer"
                 },
                 "description": {
-                    "description": "Description is the description of the webhook.",
+                    "description": "Description is an optional human-friendly explanation of the webhook.",
                     "type": "string"
                 },
                 "metricName": {
-                    "description": "MetricName is the name of the metric that the webhook is associated with.",
+                    "description": "MetricName is the fully qualified signal/metric to monitor.",
                     "type": "string"
                 },
                 "service": {
-                    "description": "Service is the service that the webhook is associated with.",
+                    "description": "Service is the subsystem producing the metric (e.g. \"vehicles\").",
                     "type": "string"
                 },
                 "status": {
-                    "description": "Status is the status of the webhook.",
+                    "description": "Status sets the initial state for the webhook (e.g. \"Enabled\" or \"Disabled\").",
                     "type": "string"
                 },
-                "targetURI": {
-                    "description": "TargetURI is the URI that the webhook will be sent to.",
+                "targetURL": {
+                    "description": "TargetURL is the HTTPS endpoint that will receive webhook callbacks.",
                     "type": "string"
                 },
                 "verificationToken": {
-                    "description": "VerificationToken is the token that wukk",
+                    "description": "VerificationToken is the expected token that your endpoint must echo back during verification.",
+                    "type": "string"
+                }
+            }
+        },
+        "internal_controllers_webhook.RegisterWebhookResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "ID is the unique identifier of the created webhook.",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "Message provides a brief status message for the operation.",
+                    "type": "string"
+                }
+            }
+        },
+        "internal_controllers_webhook.SignalDefinition": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "description": "Description briefly explains what the signal represents.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is the JSON-safe name of the signal.",
+                    "type": "string"
+                },
+                "unit": {
+                    "description": "Unit is the unit of measurement for the signal value (if any).",
                     "type": "string"
                 }
             }
@@ -763,16 +793,20 @@
         "internal_controllers_webhook.SubscriptionView": {
             "type": "object",
             "properties": {
-                "created_at": {
+                "createdAt": {
+                    "description": "CreatedAt is when the subscription was created.",
                     "type": "string"
                 },
                 "description": {
+                    "description": "Description is the optional description from the webhook trigger.",
                     "type": "string"
                 },
-                "event_id": {
+                "vehicleTokenId": {
+                    "description": "VehicleTokenID is the on-chain token ID of the vehicle.",
                     "type": "string"
                 },
-                "vehicle_token_id": {
+                "webhookId": {
+                    "description": "webhookID is the identifier of the webhook trigger.",
                     "type": "string"
                 }
             }
@@ -781,21 +815,89 @@
             "type": "object",
             "properties": {
                 "condition": {
+                    "description": "Condition updates the CEL expression used to decide when to fire.",
                     "type": "string"
                 },
                 "coolDownPeriod": {
+                    "description": "CoolDownPeriod updates the minimum number of seconds between firings.",
                     "type": "integer"
                 },
                 "description": {
+                    "description": "Description updates the optional human-friendly explanation of the webhook.",
                     "type": "string"
                 },
                 "metricName": {
+                    "description": "MetricName updates the signal/event name used by the webhook.",
                     "type": "string"
                 },
                 "status": {
+                    "description": "Status updates the current state of the webhook (e.g. \"Enabled\" or \"Disabled\").",
+                    "type": "string"
+                },
+                "targetURL": {
+                    "description": "TargetURL updates the HTTPS endpoint that will receive callbacks.",
+                    "type": "string"
+                }
+            }
+        },
+        "internal_controllers_webhook.UpdateWebhookResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "ID is the unique identifier of the updated webhook.",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "Message provides a brief status message for the operation.",
+                    "type": "string"
+                }
+            }
+        },
+        "internal_controllers_webhook.WebhookView": {
+            "type": "object",
+            "properties": {
+                "condition": {
+                    "description": "Condition is the CEL expression evaluated to decide when to fire.",
+                    "type": "string"
+                },
+                "coolDownPeriod": {
+                    "description": "CoolDownPeriod is the minimum number of seconds between successive firings.",
+                    "type": "integer"
+                },
+                "createdAt": {
+                    "description": "CreatedAt is when the webhook was created.",
+                    "type": "string"
+                },
+                "description": {
+                    "description": "Description is an optional human-friendly explanation of the webhook.",
+                    "type": "string"
+                },
+                "failureCount": {
+                    "description": "FailureCount counts consecutive delivery failures for observability.",
+                    "type": "integer"
+                },
+                "id": {
+                    "description": "ID is the unique identifier of the webhook.",
+                    "type": "string"
+                },
+                "metricName": {
+                    "description": "MetricName is the fully qualified signal/metric monitored by the webhook.",
+                    "type": "string"
+                },
+                "service": {
+                    "description": "Service is the subsystem producing the metric (e.g. \"vehicles\").",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status is the current state of the webhook (e.g. \"Enabled\" or \"Disabled\").",
                     "type": "string"
                 },
                 "targetURI": {
+                    "description": "TargetURI is the HTTPS endpoint that receives webhook callbacks.",
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "description": "UpdatedAt is when the webhook was last modified.",
                     "type": "string"
                 }
             }
