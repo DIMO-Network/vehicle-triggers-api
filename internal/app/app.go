@@ -130,7 +130,7 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 	}
 
 	// Initialize the in-memory webhook cache.
-	webhookCache := webhookcache.NewWebhookCache(repo, &logger)
+	webhookCache := webhookcache.NewWebhookCache(repo)
 
 	//load all existing webhooks into memory** so GetWebhooks() won't be empty
 	if err := webhookCache.PopulateCache(ctx); err != nil {

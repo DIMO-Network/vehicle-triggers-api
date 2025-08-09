@@ -451,10 +451,10 @@ func (r *Repository) GetWebhookOwner(ctx context.Context, triggerID string) (com
 	return common.BytesToAddress(trigger.DeveloperLicenseAddress), nil
 }
 
-// GetAllVehicleSubscriptions returns all vehicle subscriptions.
-func (r *Repository) GetAllVehicleSubscriptions(ctx context.Context) ([]*models.VehicleSubscription, error) {
+// InternalGetAllVehicleSubscriptions returns all vehicle subscriptions.
+// This should not be used with handler calls. Instead use GetVehicleSubscriptionsByVehicleAndDeveloperLicense.
+func (r *Repository) InternalGetAllVehicleSubscriptions(ctx context.Context) ([]*models.VehicleSubscription, error) {
 	subs, err := models.VehicleSubscriptions(
-		qm.Load(models.VehicleSubscriptionRels.Trigger),
 		qm.InnerJoin(fmt.Sprintf("%s.%s on %s = %s",
 			schemaName,
 			models.TableNames.Triggers,
@@ -471,6 +471,33 @@ func (r *Repository) GetAllVehicleSubscriptions(ctx context.Context) ([]*models.
 		}
 	}
 	return subs, nil
+}
+
+// InternalGetTriggerByID retrieves a specific trigger by ID.
+// This should not be used with handler calls. Instead use GetTriggerByIDAndDeveloperLicense.
+func (r *Repository) InternalGetTriggerByID(ctx context.Context, triggerID string) (*models.Trigger, error) {
+	if triggerID == "" {
+		return nil, richerrors.Error{
+			ExternalMsg: "Trigger id is required",
+			Err:         ValidationError,
+			Code:        http.StatusBadRequest,
+		}
+	}
+
+	trigger, err := models.Triggers(
+		models.TriggerWhere.ID.EQ(triggerID),
+		models.TriggerWhere.Status.NEQ(StatusDeleted),
+	).One(ctx, r.db)
+
+	if err != nil {
+		return nil, richerrors.Error{
+			ExternalMsg: "Error getting trigger",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+
+	return trigger, nil
 }
 
 // GetLastTriggeredAt returns the last triggered at timestamp for a trigger and vehicle token ID.

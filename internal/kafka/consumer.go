@@ -48,12 +48,12 @@ func NewConsumer(cfg *Config) (*Consumer, error) {
 	}, nil
 }
 
-func (c *Consumer) Start(ctx context.Context, process func(messages <-chan *message.Message)) error {
+func (c *Consumer) Start(ctx context.Context, process func(ctx context.Context, messages <-chan *message.Message)) error {
 	messages, err := c.subscriber.Subscribe(ctx, c.topic)
 	if err != nil {
 		return fmt.Errorf("could not subscribe to topic: %s", c.topic)
 	}
 
-	go process(messages)
+	go process(ctx, messages)
 	return nil
 }

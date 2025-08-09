@@ -8,27 +8,21 @@ import (
 	"io"
 	"math/big"
 	"net/http"
-	"regexp"
 	"time"
 
 	"github.com/DIMO-Network/model-garage/pkg/vss"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/celcondition"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/google/cel-go/cel"
-	celtypes "github.com/google/cel-go/common/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/volatiletech/sqlboiler/v4/types"
+	"golang.org/x/sync/errgroup"
 )
-
-var reIntLit = regexp.MustCompile(`\b\d+\b`)
-
-func convertIntLits(expr string) string {
-	return reIntLit.ReplaceAllStringFunc(expr, func(s string) string { return s + ".0" })
-}
 
 type SignalListener struct {
 	log                 zerolog.Logger
@@ -46,19 +40,16 @@ func NewSignalListener(logger zerolog.Logger, wc *webhookcache.WebhookCache, rep
 	}
 }
 
-func (l *SignalListener) ProcessSignals(messages <-chan *message.Message) {
+func (l *SignalListener) ProcessSignals(ctx context.Context, messages <-chan *message.Message) {
 	for msg := range messages {
-		if err := l.processMessage(msg); err != nil {
+		if err := l.processMessage(ctx, msg); err != nil {
 			l.log.Err(err).Msg("error processing signal message")
 		}
 		msg.Ack()
 	}
 }
 
-func (l *SignalListener) processMessage(msg *message.Message) error {
-	l.log.Debug().
-		RawJSON("raw_payload", msg.Payload).
-		Msg("Received raw Kafka payload")
+func (l *SignalListener) processMessage(ctx context.Context, msg *message.Message) error {
 	var signal vss.Signal
 	if err := json.Unmarshal(msg.Payload, &signal); err != nil {
 		return fmt.Errorf("failed to parse vehicle signal JSON: %w", err)
@@ -70,130 +61,67 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		return nil
 	}
 
+	group, _ := errgroup.WithContext(ctx)
+	group.SetLimit(100)
 	for _, wh := range webhooks {
-		bigTokenID := big.NewInt(int64(signal.TokenID))
-		hasPerm, err := l.tokenExchangeClient.HasVehiclePermissions(context.Background(), bigTokenID, wh.DeveloperLicenseAddress, []string{
-			"privilege:GetNonLocationHistory",
-			"privilege:GetLocationHistory",
+		group.Go(func() error {
+			if err := l.processWebhook(ctx, wh, &signal); err != nil {
+				zerolog.Ctx(ctx).Error().Err(err).Msg("failed to process webhook")
+			}
+			return nil
 		})
-		if err != nil {
-			l.log.Error().Err(err).Msg("permission check failed")
-			continue
-		}
-		if !hasPerm {
-			l.log.Info().Msgf("permissions revoked for license %x on vehicle %d", wh.DeveloperLicenseAddress, signal.TokenID)
-			tokenId := new(big.Int).SetUint64(uint64(signal.TokenID))
-			// 1) Delete the TriggerSubscription row and check its error
-			if delCount, err := l.repo.DeleteVehicleSubscription(context.Background(), wh.ID, tokenId); err != nil {
-				l.log.Error().
-					Err(err).
-					Str("trigger_id", wh.ID).
-					Uint32("vehicle_token", signal.TokenID).
-					Msg("Failed to delete vehicle subscription")
-			} else {
-				l.log.Debug().
-					Str("event_id", wh.ID).
-					Uint32("vehicle_token", signal.TokenID).
-					Int("rows_deleted", int(delCount)).
-					Msg("Successfully removed vehicle subscription due to permission revocation")
-			}
-
-			// 2) Refresh the cache and check its error
-			if err := l.webhookCache.PopulateCache(context.Background()); err != nil {
-				l.log.Error().
-					Err(err).
-					Msg("Failed to refresh webhook cache after permission revocation")
-			}
-
-			continue
-		}
-		cooldownPassed, err := l.checkCooldown(wh, signal.TokenID)
-		if err != nil {
-			l.log.Error().Err(err).Msg("failed to check cooldown")
-			continue
-		}
-		if !cooldownPassed {
-			l.log.Info().Str("webhook_url", wh.URL).Msg("Cooldown period not elapsed; skipping webhook.")
-			continue
-		}
-
-		shouldFire, err := l.evaluateCondition(wh.Condition, &signal, wh.MetricName)
-		if err != nil {
-			l.log.Error().Err(err).Msg("failed to evaluate CEL condition")
-			continue
-		}
-		if shouldFire {
-			l.log.Info().
-				Str("webhook_url", wh.URL).
-				Str("trigger", wh.Condition).
-				Msg("Webhook triggered.")
-			if err := l.sendWebhookNotification(wh, &signal); err != nil {
-				l.log.Error().Err(err).Msg("failed to send webhook")
-			} else {
-				if err := l.logWebhookTrigger(wh.ID, signal.TokenID); err != nil {
-					l.log.Error().Err(err).Msg("failed to log webhook trigger")
-				}
-			}
-		} else {
-			l.log.Debug().
-				Str("webhook_url", wh.URL).
-				Str("trigger", wh.Condition).
-				Msg("Condition not met; skipping webhook.")
-		}
 	}
+	return group.Wait()
+}
+
+func (l *SignalListener) processWebhook(ctx context.Context, wh *webhookcache.Webhook, signal *vss.Signal) error {
+	bigTokenID := big.NewInt(int64(signal.TokenID))
+	hasPerm, err := l.tokenExchangeClient.HasVehiclePermissions(ctx, bigTokenID, common.BytesToAddress(wh.Trigger.DeveloperLicenseAddress), []string{
+		"privilege:GetNonLocationHistory",
+		"privilege:GetLocationHistory",
+	})
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+	if !hasPerm {
+		// If we don't have permission, unsubscribe from the trigger and refresh the cache
+		zerolog.Ctx(ctx).Info().Msgf("permissions revoked for license %x on vehicle %d", wh.Trigger.DeveloperLicenseAddress, signal.TokenID)
+		tokenId := new(big.Int).SetUint64(uint64(signal.TokenID))
+		_, err := l.repo.DeleteVehicleSubscription(context.Background(), wh.Trigger.ID, tokenId)
+		if err != nil {
+			return fmt.Errorf("failed to delete vehicle subscription: %w", err)
+		}
+		l.webhookCache.ScheduleRefresh(ctx)
+		return nil
+	}
+	cooldownPassed, err := l.checkCooldown(wh.Trigger, signal.TokenID)
+	if err != nil {
+		return fmt.Errorf("failed to check cooldown: %w", err)
+	}
+	if !cooldownPassed {
+		// If the cooldown period hasn't passed, skip the webhook
+		return nil
+	}
+
+	shouldFire, err := celcondition.EvaluateCondition(wh.Program, signal)
+	if err != nil {
+		return fmt.Errorf("failed to evaluate CEL condition: %w", err)
+	}
+	if !shouldFire {
+		return nil
+	}
+
+	if err := l.sendWebhookNotification(wh.Trigger, signal); err != nil {
+		return fmt.Errorf("failed to send webhook: %w", err)
+	}
+	if err := l.logWebhookTrigger(wh.Trigger.ID, signal.TokenID); err != nil {
+		return fmt.Errorf("failed to log webhook trigger: %w", err)
+	}
+
 	return nil
 }
 
-func (l *SignalListener) evaluateCondition(trigger string, signal *vss.Signal, telemetry string) (bool, error) {
-	if trigger == "" {
-		return true, nil
-	}
-
-	trigger = convertIntLits(trigger)
-
-	opts := []cel.EnvOption{
-		cel.Variable("valueNumber", cel.DoubleType),
-		cel.Variable("valueString", cel.StringType),
-		cel.Variable("tokenId", cel.IntType),
-	}
-	if telemetry != "valueNumber" && telemetry != "valueString" {
-		opts = append(opts, cel.Variable(telemetry, cel.DoubleType))
-	}
-
-	env, err := cel.NewEnv(opts...)
-
-	if err != nil {
-		return false, fmt.Errorf("failed to compile CEL expression: %w", err)
-	}
-
-	ast, issues := env.Compile(trigger)
-	if issues != nil && issues.Err() != nil {
-		return false, issues.Err()
-	}
-
-	prg, err := env.Program(ast)
-	if err != nil {
-		return false, err
-	}
-
-	vars := map[string]interface{}{
-		"valueNumber": signal.ValueNumber,
-		"valueString": signal.ValueString,
-		"tokenId":     int64(signal.TokenID),
-	}
-	if telemetry != "valueNumber" && telemetry != "valueString" {
-		vars[telemetry] = signal.ValueNumber
-	}
-
-	out, _, err := prg.Eval(vars)
-	if err != nil {
-		l.log.Error().Err(err).Msg("Error during CEL evaluation")
-		return false, err
-	}
-	return out == celtypes.True, nil
-}
-
-func (l *SignalListener) checkCooldown(webhook webhookcache.Webhook, tokenID uint32) (bool, error) {
+func (l *SignalListener) checkCooldown(webhook *models.Trigger, tokenID uint32) (bool, error) {
 	cooldown := webhook.CooldownPeriod
 	tokenIDBigInt := new(big.Int).SetUint64(uint64(tokenID))
 	lastTriggered, err := l.repo.GetLastTriggeredAt(context.Background(), webhook.ID, tokenIDBigInt)
@@ -229,15 +157,15 @@ func (l *SignalListener) logWebhookTrigger(eventID string, tokenID uint32) error
 	return nil
 }
 
-func (l *SignalListener) sendWebhookNotification(wh webhookcache.Webhook, signal *vss.Signal) error {
+func (l *SignalListener) sendWebhookNotification(wh *models.Trigger, signal *vss.Signal) error {
 	body, err := json.Marshal(signal)
 	if err != nil {
 		return fmt.Errorf("failed to marshal signal for webhook: %w", err)
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Post(wh.URL, "application/json", bytes.NewBuffer(body))
+	resp, err := client.Post(wh.TargetURI, "application/json", bytes.NewBuffer(body))
 	if err != nil {
-		l.log.Error().Msgf("HTTP POST error for URL %s: %v", wh.URL, err)
+		l.log.Error().Msgf("HTTP POST error for URL %s: %v", wh.TargetURI, err)
 		if wh.ID != "" {
 			l.handleWebhookFailure(wh)
 		}
@@ -248,23 +176,23 @@ func (l *SignalListener) sendWebhookNotification(wh webhookcache.Webhook, signal
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
 		l.log.Error().Msgf("Received non‑200 response from %s: status %d, body: %s",
-			wh.URL, resp.StatusCode, string(respBody))
+			wh.TargetURI, resp.StatusCode, string(respBody))
 		if wh.ID != "" {
 			l.handleWebhookFailure(wh)
 		}
 		return fmt.Errorf("webhook returned status code %d", resp.StatusCode)
 	}
 
-	l.log.Debug().Msgf("Webhook notification sent successfully to %s", wh.URL)
+	l.log.Debug().Msgf("Webhook notification sent successfully to %s", wh.TargetURI)
 	if wh.ID != "" {
 		l.resetWebhookFailure(wh)
 	}
 	return nil
 }
 
-func (l *SignalListener) handleWebhookFailure(webhook webhookcache.Webhook) {
+func (l *SignalListener) handleWebhookFailure(webhook *models.Trigger) {
 	ctx := context.Background()
-	event, err := l.repo.GetTriggerByIDAndDeveloperLicense(ctx, webhook.ID, webhook.DeveloperLicenseAddress)
+	event, err := l.repo.GetTriggerByIDAndDeveloperLicense(ctx, webhook.ID, common.BytesToAddress(webhook.DeveloperLicenseAddress))
 	if err != nil {
 		l.log.Error().Err(err).Msg("handleWebhookFailure: could not fetch event")
 		return
@@ -281,9 +209,9 @@ func (l *SignalListener) handleWebhookFailure(webhook webhookcache.Webhook) {
 	}
 }
 
-func (l *SignalListener) resetWebhookFailure(webhook webhookcache.Webhook) {
+func (l *SignalListener) resetWebhookFailure(webhook *models.Trigger) {
 	ctx := context.Background()
-	event, err := l.repo.GetTriggerByIDAndDeveloperLicense(ctx, webhook.ID, webhook.DeveloperLicenseAddress)
+	event, err := l.repo.GetTriggerByIDAndDeveloperLicense(ctx, webhook.ID, common.BytesToAddress(webhook.DeveloperLicenseAddress))
 	if err != nil {
 		l.log.Error().Err(err).Msg("resetWebhookFailure: could not fetch event")
 		return

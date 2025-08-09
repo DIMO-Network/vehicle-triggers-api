@@ -5,9 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
+	"time"
 
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/celcondition"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/google/cel-go/cel"
 	"github.com/rs/zerolog"
 	"github.com/volatiletech/sqlboiler/v4/types"
 )
@@ -15,41 +19,37 @@ import (
 var errNoWebhookConfig = errors.New("no webhook configurations found in the database")
 
 type Webhook struct {
-	ID                      string
-	URL                     string
-	Condition               string
-	CooldownPeriod          int
-	MetricName              string
-	DeveloperLicenseAddress common.Address
+	Trigger *models.Trigger
+	Program cel.Program
 }
 
-// WebhookCache is an in-memory map: vehicleTokenID -> telemetry identifier -> []Webhook.
+type Repository interface {
+	InternalGetAllVehicleSubscriptions(ctx context.Context) ([]*models.VehicleSubscription, error)
+	InternalGetTriggerByID(ctx context.Context, triggerID string) (*models.Trigger, error)
+}
+
+// WebhookCache is an in-memory map: vehicleTokenID -> signal name -> []*models.Trigger.
 type WebhookCache struct {
-	mu       sync.RWMutex
-	webhooks map[uint32]map[string][]Webhook
-	logger   *zerolog.Logger
-	repo     *triggersrepo.Repository
+	mu          sync.RWMutex
+	webhooks    map[uint32]map[string][]*Webhook
+	repo        Repository
+	lastRefresh time.Time // last time the cache was refreshed
+	schedule    atomic.Bool
 }
 
-func NewWebhookCache(repo *triggersrepo.Repository, logger *zerolog.Logger) *WebhookCache {
+func NewWebhookCache(repo Repository) *WebhookCache {
 	return &WebhookCache{
-		webhooks: make(map[uint32]map[string][]Webhook),
+		webhooks: make(map[uint32]map[string][]*Webhook),
 		repo:     repo,
-		logger:   logger,
 	}
 }
 
-var FetchWebhooksFromDBFunc = fetchEventVehicleWebhooks
-
 // PopulateCache builds the cache from the database
 func (wc *WebhookCache) PopulateCache(ctx context.Context) error {
-	webhooks, err := FetchWebhooksFromDBFunc(ctx, wc.repo)
-	wc.logger.Debug().
-		Int("vehicles_with_hooks", len(webhooks)).
-		Msg("Fetched raw hook map from DB")
+	webhooks, err := wc.fetchEventVehicleWebhooks(ctx)
 	if err != nil {
 		if errors.Is(err, errNoWebhookConfig) {
-			webhooks = make(map[uint32]map[string][]Webhook)
+			webhooks = make(map[uint32]map[string][]*Webhook)
 		} else {
 			return err
 		}
@@ -59,80 +59,82 @@ func (wc *WebhookCache) PopulateCache(ctx context.Context) error {
 	return nil
 }
 
-func (wc *WebhookCache) GetWebhooks(vehicleTokenID uint32, telemetry string) []Webhook {
+func (wc *WebhookCache) ScheduleRefresh(ctx context.Context) {
+	wc.schedule.Store(true)
+	go func() {
+		time.Sleep(time.Second * 5)
+		if wc.schedule.Load() {
+			// if we waited and we still want to refresh, do it
+			wc.schedule.Store(false)
+			err := wc.PopulateCache(ctx)
+			if err != nil {
+				zerolog.Ctx(ctx).Error().Err(err).Msg("failed to populate webhook cache")
+			}
+		}
+	}()
+}
+
+func (wc *WebhookCache) GetWebhooks(vehicleTokenID uint32, telemetry string) []*Webhook {
 	wc.mu.RLock()
 	defer wc.mu.RUnlock()
 
 	byVehicle, exists := wc.webhooks[vehicleTokenID]
 	if !exists {
-		wc.logger.Debug().
-			Uint32("vehicle_token", vehicleTokenID).
-			Msg("No webhooks cached for this vehicle")
 		return nil
 	}
-
-	// log the list of available keys right before we try our lookup
-	available := make([]string, 0, len(byVehicle))
-	for k := range byVehicle {
-		available = append(available, k)
-	}
-	wc.logger.Debug().
-		Uint32("vehicle_token", vehicleTokenID).
-		Str("looking_for", telemetry).
-		Strs("available_keys", available).
-		Msg("Cache lookup")
 
 	return byVehicle[telemetry]
 }
 
-func (wc *WebhookCache) Update(newData map[uint32]map[string][]Webhook) {
+func (wc *WebhookCache) Update(newData map[uint32]map[string][]*Webhook) {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
 	wc.webhooks = newData
-	var total int
-	for _, m := range newData {
-		for _, hooks := range m {
-			total += len(hooks)
-		}
-	}
-	wc.logger.Info().
-		Int("webhook_config_count", total).
-		Msg("Webhook cache updated")
-
+	wc.lastRefresh = time.Now()
 }
 
-// fetchEventVehicleWebhooks queries the EventVehicles table (with joined Event) and builds the cache
-// It uses Event.Data as the telemetry identifier
-func fetchEventVehicleWebhooks(ctx context.Context, repo *triggersrepo.Repository) (map[uint32]map[string][]Webhook, error) {
-	subs, err := repo.GetAllVehicleSubscriptions(ctx)
+func (wc *WebhookCache) fetchEventVehicleWebhooks(ctx context.Context) (map[uint32]map[string][]*Webhook, error) {
+	subs, err := wc.repo.InternalGetAllVehicleSubscriptions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all vehicle subscriptions: %w", err)
 	}
 
-	newData := make(map[uint32]map[string][]Webhook)
+	// There will be many more vehicle subscriptions than triggers,
+	// so we can share the same trigger object to reduce memory usage and database calls
+	uniqueTriggers := make(map[string]*Webhook)
+
+	newData := make(map[uint32]map[string][]*Webhook)
+	logger := zerolog.Ctx(ctx)
 	for _, sub := range subs {
-		if sub.R.Trigger.Status != triggersrepo.StatusEnabled {
+		webhook, ok := uniqueTriggers[sub.TriggerID]
+		if !ok {
+			webhook = &Webhook{}
+			webhook.Trigger, err = wc.repo.InternalGetTriggerByID(ctx, sub.TriggerID)
+			if err != nil {
+				logger.Error().Err(err).Msg("failed to get trigger by id for webhook cache")
+				continue
+			}
+			webhook.Program, err = celcondition.PrepareCondition(webhook.Trigger.Condition)
+			if err != nil {
+				logger.Error().Err(err).Str("trigger_id", webhook.Trigger.ID).Msg("failed to prepare condition")
+				continue
+			}
+			uniqueTriggers[sub.TriggerID] = webhook
+		}
+		if webhook.Trigger.Status != triggersrepo.StatusEnabled {
 			continue
 		}
 		vehicleTokenID, err := decimalToUint32(sub.VehicleTokenID)
 		if err != nil {
-			return nil, fmt.Errorf("converting token_id '%s': %w", sub.VehicleTokenID.String(), err)
+			logger.Error().Err(err).Str("trigger_id", webhook.Trigger.ID).Str("vehicle_token_id", sub.VehicleTokenID.String()).Msg("failed to convert token_id")
+			continue
 		}
-		trigger := sub.R.Trigger
 
 		if newData[vehicleTokenID] == nil {
-			newData[vehicleTokenID] = make(map[string][]Webhook)
-		}
-		wh := Webhook{
-			ID:                      trigger.ID,
-			URL:                     trigger.TargetURI,
-			Condition:               trigger.Condition,
-			CooldownPeriod:          trigger.CooldownPeriod,
-			MetricName:              trigger.MetricName,
-			DeveloperLicenseAddress: common.BytesToAddress(trigger.DeveloperLicenseAddress),
+			newData[vehicleTokenID] = make(map[string][]*Webhook)
 		}
 
-		newData[vehicleTokenID][trigger.MetricName] = append(newData[vehicleTokenID][trigger.MetricName], wh)
+		newData[vehicleTokenID][webhook.Trigger.MetricName] = append(newData[vehicleTokenID][webhook.Trigger.MetricName], webhook)
 	}
 	if len(newData) == 0 {
 		return nil, errNoWebhookConfig

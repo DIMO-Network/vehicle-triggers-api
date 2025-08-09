@@ -11,6 +11,7 @@ import (
 
 	"github.com/DIMO-Network/model-garage/pkg/schema"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/celcondition"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -241,6 +242,13 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		event.Status = *payload.Status
 	}
 	if payload.Condition != nil {
+		_, err := celcondition.PrepareCondition(*payload.Condition)
+		if err != nil {
+			return richerrors.Error{
+				ExternalMsg: "Invalid CEL condition: " + err.Error(),
+				Code:        fiber.StatusBadRequest,
+			}
+		}
 		event.Condition = *payload.Condition
 	}
 	if payload.Description != nil {

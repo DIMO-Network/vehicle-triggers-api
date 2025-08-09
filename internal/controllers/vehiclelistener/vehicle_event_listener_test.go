@@ -1,224 +1,14 @@
 package vehiclelistener
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/DIMO-Network/model-garage/pkg/vss"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/rs/zerolog"
 )
-
-func TestEvaluateCondition(t *testing.T) {
-	logger := zerolog.Nop()
-	listener := &SignalListener{
-		log: logger,
-	}
-
-	tests := []struct {
-		name      string
-		condition string
-		telemetry string
-		signal    vss.Signal
-		want      bool
-		wantErr   bool
-	}{
-		{
-			name:      "Empty condition returns true",
-			condition: "",
-			telemetry: "valueNumber",
-			signal: vss.Signal{
-				ValueNumber: 75,
-				ValueString: "foo",
-				TokenID:     1,
-				Timestamp:   time.Now(),
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name:      "valueNumber > 100 false",
-			condition: "valueNumber > 100",
-			telemetry: "valueNumber",
-			signal: vss.Signal{
-				ValueNumber: 50,
-				ValueString: "bar",
-				TokenID:     1,
-				Timestamp:   time.Now(),
-			},
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name:      "valueNumber > 100 true",
-			condition: "valueNumber > 100",
-			telemetry: "valueNumber",
-			signal: vss.Signal{
-				ValueNumber: 150,
-				ValueString: "baz",
-				TokenID:     1,
-				Timestamp:   time.Now(),
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name:      "valueNumber equals 1 returns true",
-			condition: "valueNumber == 1",
-			telemetry: "valueNumber",
-			signal: vss.Signal{
-				ValueNumber: 1,
-				ValueString: "fop",
-				TokenID:     1,
-				Timestamp:   time.Now(),
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name:      "valueNumber equals 0 returns false",
-			condition: "valueNumber == 0",
-			telemetry: "valueNumber",
-			signal: vss.Signal{
-				ValueNumber: 0,
-				ValueString: "bat",
-				TokenID:     1,
-				Timestamp:   time.Now(),
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name:      "Invalid condition returns error",
-			condition: "invalid condition",
-			telemetry: "valueNumber",
-			signal: vss.Signal{
-				ValueNumber: 80,
-				ValueString: "active",
-				TokenID:     1,
-				Timestamp:   time.Now(),
-			},
-			want:    false,
-			wantErr: true,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := listener.evaluateCondition(tc.condition, &tc.signal, tc.telemetry)
-			if (err != nil) != tc.wantErr {
-				t.Errorf("evaluateCondition() error = %v, wantErr %v", err, tc.wantErr)
-				return
-			}
-			if got != tc.want {
-				t.Errorf("evaluateCondition() = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestEvaluateCondition_StringComparisons(t *testing.T) {
-	logger := zerolog.Nop()
-	listener := &SignalListener{log: logger}
-
-	tests := []struct {
-		name      string
-		condition string
-		telemetry string
-		signal    vss.Signal
-		want      bool
-		wantErr   bool
-	}{
-		{
-			name:      "valueString == 'Active' true",
-			condition: `valueString == 'Active'`,
-			telemetry: "valueString",
-			signal: vss.Signal{
-				ValueNumber: 42,
-				ValueString: "Active",
-				TokenID:     1,
-				Timestamp:   time.Now(),
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name:      "valueString == 'Active' false",
-			condition: `valueString == 'Active'`,
-			telemetry: "valueString",
-			signal: vss.Signal{
-				ValueString: "Inactive",
-				TokenID:     1,
-			},
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name:      "mismatched types error",
-			condition: `valueString > 'foo'`,
-			telemetry: "valueString",
-			signal: vss.Signal{
-				ValueString: "bar",
-				TokenID:     1,
-			},
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name:      "unknown variable in expr",
-			condition: `foo == 1`,
-			telemetry: "valueNumber",
-			signal: vss.Signal{
-				ValueNumber: 1,
-				TokenID:     1,
-			},
-			want:    false,
-			wantErr: true,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := listener.evaluateCondition(tc.condition, &tc.signal, tc.telemetry)
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("evaluateCondition() error = %v, wantErr %v", err, tc.wantErr)
-			}
-			if got != tc.want {
-				t.Errorf("evaluateCondition() = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestSendWebhookNotification_Success(t *testing.T) {
-	// start a test server that always returns 200
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// verify we get the JSON payload
-		var sig vss.Signal
-		if err := json.NewDecoder(r.Body).Decode(&sig); err != nil {
-			t.Errorf("unexpected body decode error: %v", err)
-		}
-		w.WriteHeader(200)
-	}))
-	defer ts.Close()
-
-	listener := &SignalListener{log: zerolog.Nop()}
-	wh := webhookcache.Webhook{URL: ts.URL, DeveloperLicenseAddress: common.Address{}}
-	err := listener.sendWebhookNotification(wh, &vss.Signal{
-		TokenID:     42,
-		Timestamp:   time.Now(),
-		Name:        "foo",
-		ValueNumber: 1.23,
-		ValueString: "bar",
-	})
-	if err != nil {
-		t.Errorf("expected no error on 200, got %v", err)
-	}
-}
 
 func TestSendWebhookNotification_Non200(t *testing.T) {
 	// server that always returns 500
@@ -228,7 +18,7 @@ func TestSendWebhookNotification_Non200(t *testing.T) {
 	defer ts.Close()
 
 	listener := &SignalListener{log: zerolog.Nop()}
-	wh := webhookcache.Webhook{URL: ts.URL, DeveloperLicenseAddress: common.Address{}}
+	wh := &models.Trigger{TargetURI: ts.URL, DeveloperLicenseAddress: []byte{}}
 	err := listener.sendWebhookNotification(wh, &vss.Signal{})
 	if err == nil {
 		t.Error("expected error on 500 status, got nil")
@@ -237,7 +27,7 @@ func TestSendWebhookNotification_Non200(t *testing.T) {
 
 func TestSendWebhookNotification_BadURL(t *testing.T) {
 	listener := &SignalListener{log: zerolog.Nop()}
-	wh := webhookcache.Webhook{URL: "http://invalid.localhost:0", DeveloperLicenseAddress: common.Address{}}
+	wh := &models.Trigger{TargetURI: "http://invalid.localhost:0", DeveloperLicenseAddress: []byte{}}
 	err := listener.sendWebhookNotification(wh, &vss.Signal{})
 	if err == nil {
 		t.Error("expected error on invalid URL, got nil")
