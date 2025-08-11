@@ -2,16 +2,16 @@ replicaCount: 3
 image:
   repository: dimozone/vehicle-triggers-api
   pullPolicy: IfNotPresent
-  tag: 1.0.20
+  tag: 1.1.0
 env:
   ENVIRONMENT: prod
-  PORT: "8080"
-  MON_PORT: "8888"
+  PORT: '8080'
+  MON_PORT: '8888'
   LOG_LEVEL: info
-  DB_PORT: "5432"
+  DB_PORT: '5432'
   DB_NAME: vehicle_triggers_api
-  DB_MAX_OPEN_CONNECTIONS: "100"
-  DB_MAX_IDLE_CONNECTIONS: "30"
+  DB_MAX_OPEN_CONNECTIONS: '100'
+  DB_MAX_IDLE_CONNECTIONS: '30'
   SERVICE_NAME: vehicle-triggers-api
   JWT_KEY_SET_URL: https://auth.dimo.zone/keys
   IDENTITY_API_URL: https://identity-api.dimo.zone/query
@@ -25,10 +25,10 @@ ingress:
   className: nginx
   annotations:
     nginx.ingress.kubernetes.io/auth-tls-secret: ingress/cf-origin-ca
-    nginx.ingress.kubernetes.io/auth-tls-verify-client: "on"
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
-    nginx.ingress.kubernetes.io/limit-rps: "9"
+    nginx.ingress.kubernetes.io/auth-tls-verify-client: 'on'
+    nginx.ingress.kubernetes.io/enable-cors: 'true'
+    nginx.ingress.kubernetes.io/cors-allow-origin: '*'
+    nginx.ingress.kubernetes.io/limit-rps: '9'
     external-dns.alpha.kubernetes.io/hostname: vehicle-triggers-api.dimo.zone
   hosts:
     - host: vehicle-triggers-api.dimo.zone
