@@ -11,6 +11,9 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
+// SchemaName is the name of the schema to use for the database.
+const SchemaName = "vehicle_triggers_api"
+
 //go:embed *.sql
 var baseFS embed.FS
 
@@ -38,7 +41,7 @@ func RunGoose(ctx context.Context, gooseArgs []string, settings db.Settings) err
 	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("failed to set dialect: %w", err)
 	}
-	goose.SetTableName(dbName + ".migrations")
+	goose.SetTableName(SchemaName + ".migrations")
 	err = goose.RunContext(ctx, cmd, db, ".", args...)
 	if err != nil {
 		return fmt.Errorf("failed to run goose command: %w", err)
@@ -52,9 +55,6 @@ func setMigrations(baseFS embed.FS) {
 	goose.SetBaseFS(baseFS)
 	goose.ResetGlobalMigrations()
 }
-
-const dbName = "vehicle_events_api"
-
 func setupDatabase(ctx context.Context, settings db.Settings) (*sql.DB, error) {
 	// setup database
 	db, err := sql.Open("postgres", settings.BuildConnectionString(true))
@@ -65,7 +65,7 @@ func setupDatabase(ctx context.Context, settings db.Settings) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to ping db: %w", err)
 	}
 
-	_, err = db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS "+dbName+";")
+	_, err = db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS "+SchemaName+";")
 	if err != nil {
 		return nil, fmt.Errorf("could not create schema: %w", err)
 	}

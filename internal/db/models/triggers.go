@@ -37,6 +37,7 @@ type Trigger struct {
 	Description                null.String `boil:"description" json:"description,omitempty" toml:"description" yaml:"description,omitempty"`
 	FailureCount               int         `boil:"failure_count" json:"failure_count" toml:"failure_count" yaml:"failure_count"`
 	DeveloperLicenseAddressHex []byte      `boil:"developer_license_address_hex" json:"developer_license_address_hex" toml:"developer_license_address_hex" yaml:"developer_license_address_hex"`
+	DisplayName                string      `boil:"display_name" json:"display_name" toml:"display_name" yaml:"display_name"`
 
 	R *triggerR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L triggerL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -56,6 +57,7 @@ var TriggerColumns = struct {
 	Description                string
 	FailureCount               string
 	DeveloperLicenseAddressHex string
+	DisplayName                string
 }{
 	ID:                         "id",
 	Service:                    "service",
@@ -70,6 +72,7 @@ var TriggerColumns = struct {
 	Description:                "description",
 	FailureCount:               "failure_count",
 	DeveloperLicenseAddressHex: "developer_license_address_hex",
+	DisplayName:                "display_name",
 }
 
 var TriggerTableColumns = struct {
@@ -86,6 +89,7 @@ var TriggerTableColumns = struct {
 	Description                string
 	FailureCount               string
 	DeveloperLicenseAddressHex string
+	DisplayName                string
 }{
 	ID:                         "triggers.id",
 	Service:                    "triggers.service",
@@ -100,6 +104,7 @@ var TriggerTableColumns = struct {
 	Description:                "triggers.description",
 	FailureCount:               "triggers.failure_count",
 	DeveloperLicenseAddressHex: "triggers.developer_license_address_hex",
+	DisplayName:                "triggers.display_name",
 }
 
 // Generated where
@@ -150,20 +155,22 @@ var TriggerWhere = struct {
 	Description                whereHelpernull_String
 	FailureCount               whereHelperint
 	DeveloperLicenseAddressHex whereHelper__byte
+	DisplayName                whereHelperstring
 }{
-	ID:                         whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"id\""},
-	Service:                    whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"service\""},
-	MetricName:                 whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"metric_name\""},
-	Condition:                  whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"condition\""},
-	TargetURI:                  whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"target_uri\""},
-	CooldownPeriod:             whereHelperint{field: "\"vehicle_events_api\".\"triggers\".\"cooldown_period\""},
-	DeveloperLicenseAddress:    whereHelper__byte{field: "\"vehicle_events_api\".\"triggers\".\"developer_license_address\""},
-	CreatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"triggers\".\"created_at\""},
-	UpdatedAt:                  whereHelpertime_Time{field: "\"vehicle_events_api\".\"triggers\".\"updated_at\""},
-	Status:                     whereHelperstring{field: "\"vehicle_events_api\".\"triggers\".\"status\""},
-	Description:                whereHelpernull_String{field: "\"vehicle_events_api\".\"triggers\".\"description\""},
-	FailureCount:               whereHelperint{field: "\"vehicle_events_api\".\"triggers\".\"failure_count\""},
-	DeveloperLicenseAddressHex: whereHelper__byte{field: "\"vehicle_events_api\".\"triggers\".\"developer_license_address_hex\""},
+	ID:                         whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"id\""},
+	Service:                    whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"service\""},
+	MetricName:                 whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"metric_name\""},
+	Condition:                  whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"condition\""},
+	TargetURI:                  whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"target_uri\""},
+	CooldownPeriod:             whereHelperint{field: "\"vehicle_triggers_api\".\"triggers\".\"cooldown_period\""},
+	DeveloperLicenseAddress:    whereHelper__byte{field: "\"vehicle_triggers_api\".\"triggers\".\"developer_license_address\""},
+	CreatedAt:                  whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"triggers\".\"created_at\""},
+	UpdatedAt:                  whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"triggers\".\"updated_at\""},
+	Status:                     whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"status\""},
+	Description:                whereHelpernull_String{field: "\"vehicle_triggers_api\".\"triggers\".\"description\""},
+	FailureCount:               whereHelperint{field: "\"vehicle_triggers_api\".\"triggers\".\"failure_count\""},
+	DeveloperLicenseAddressHex: whereHelper__byte{field: "\"vehicle_triggers_api\".\"triggers\".\"developer_license_address_hex\""},
+	DisplayName:                whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"display_name\""},
 }
 
 // TriggerRels is where relationship names are stored.
@@ -222,9 +229,9 @@ func (r *triggerR) GetVehicleSubscriptions() VehicleSubscriptionSlice {
 type triggerL struct{}
 
 var (
-	triggerAllColumns            = []string{"id", "service", "metric_name", "condition", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description", "failure_count", "developer_license_address_hex"}
+	triggerAllColumns            = []string{"id", "service", "metric_name", "condition", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description", "failure_count", "developer_license_address_hex", "display_name"}
 	triggerColumnsWithoutDefault = []string{"id", "service", "metric_name", "condition", "target_uri", "developer_license_address", "status", "developer_license_address_hex"}
-	triggerColumnsWithDefault    = []string{"cooldown_period", "created_at", "updated_at", "description", "failure_count"}
+	triggerColumnsWithDefault    = []string{"cooldown_period", "created_at", "updated_at", "description", "failure_count", "display_name"}
 	triggerPrimaryKeyColumns     = []string{"id"}
 	triggerGeneratedColumns      = []string{}
 )
@@ -542,7 +549,7 @@ func (o *Trigger) TriggerLogs(mods ...qm.QueryMod) triggerLogQuery {
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"vehicle_events_api\".\"trigger_logs\".\"trigger_id\"=?", o.ID),
+		qm.Where("\"vehicle_triggers_api\".\"trigger_logs\".\"trigger_id\"=?", o.ID),
 	)
 
 	return TriggerLogs(queryMods...)
@@ -556,7 +563,7 @@ func (o *Trigger) VehicleSubscriptions(mods ...qm.QueryMod) vehicleSubscriptionQ
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"vehicle_events_api\".\"vehicle_subscriptions\".\"trigger_id\"=?", o.ID),
+		qm.Where("\"vehicle_triggers_api\".\"vehicle_subscriptions\".\"trigger_id\"=?", o.ID),
 	)
 
 	return VehicleSubscriptions(queryMods...)
@@ -617,8 +624,8 @@ func (triggerL) LoadTriggerLogs(ctx context.Context, e boil.ContextExecutor, sin
 	}
 
 	query := NewQuery(
-		qm.From(`vehicle_events_api.trigger_logs`),
-		qm.WhereIn(`vehicle_events_api.trigger_logs.trigger_id in ?`, argsSlice...),
+		qm.From(`vehicle_triggers_api.trigger_logs`),
+		qm.WhereIn(`vehicle_triggers_api.trigger_logs.trigger_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -730,8 +737,8 @@ func (triggerL) LoadVehicleSubscriptions(ctx context.Context, e boil.ContextExec
 	}
 
 	query := NewQuery(
-		qm.From(`vehicle_events_api.vehicle_subscriptions`),
-		qm.WhereIn(`vehicle_events_api.vehicle_subscriptions.trigger_id in ?`, argsSlice...),
+		qm.From(`vehicle_triggers_api.vehicle_subscriptions`),
+		qm.WhereIn(`vehicle_triggers_api.vehicle_subscriptions.trigger_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -802,7 +809,7 @@ func (o *Trigger) AddTriggerLogs(ctx context.Context, exec boil.ContextExecutor,
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"vehicle_events_api\".\"trigger_logs\" SET %s WHERE %s",
+				"UPDATE \"vehicle_triggers_api\".\"trigger_logs\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"trigger_id"}),
 				strmangle.WhereClause("\"", "\"", 2, triggerLogPrimaryKeyColumns),
 			)
@@ -855,7 +862,7 @@ func (o *Trigger) AddVehicleSubscriptions(ctx context.Context, exec boil.Context
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"vehicle_events_api\".\"vehicle_subscriptions\" SET %s WHERE %s",
+				"UPDATE \"vehicle_triggers_api\".\"vehicle_subscriptions\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"trigger_id"}),
 				strmangle.WhereClause("\"", "\"", 2, vehicleSubscriptionPrimaryKeyColumns),
 			)
@@ -896,10 +903,10 @@ func (o *Trigger) AddVehicleSubscriptions(ctx context.Context, exec boil.Context
 
 // Triggers retrieves all the records using an executor.
 func Triggers(mods ...qm.QueryMod) triggerQuery {
-	mods = append(mods, qm.From("\"vehicle_events_api\".\"triggers\""))
+	mods = append(mods, qm.From("\"vehicle_triggers_api\".\"triggers\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"vehicle_events_api\".\"triggers\".*"})
+		queries.SetSelect(q, []string{"\"vehicle_triggers_api\".\"triggers\".*"})
 	}
 
 	return triggerQuery{q}
@@ -915,7 +922,7 @@ func FindTrigger(ctx context.Context, exec boil.ContextExecutor, iD string, sele
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"vehicle_events_api\".\"triggers\" where \"id\"=$1", sel,
+		"select %s from \"vehicle_triggers_api\".\"triggers\" where \"id\"=$1", sel,
 	)
 
 	q := queries.Raw(query, iD)
@@ -982,9 +989,9 @@ func (o *Trigger) Insert(ctx context.Context, exec boil.ContextExecutor, columns
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"vehicle_events_api\".\"triggers\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"vehicle_triggers_api\".\"triggers\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"vehicle_events_api\".\"triggers\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"vehicle_triggers_api\".\"triggers\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -1056,7 +1063,7 @@ func (o *Trigger) Update(ctx context.Context, exec boil.ContextExecutor, columns
 			return 0, errors.New("models: unable to update triggers, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"vehicle_events_api\".\"triggers\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"vehicle_triggers_api\".\"triggers\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, triggerPrimaryKeyColumns),
 		)
@@ -1137,7 +1144,7 @@ func (o TriggerSlice) UpdateAll(ctx context.Context, exec boil.ContextExecutor, 
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"vehicle_events_api\".\"triggers\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"vehicle_triggers_api\".\"triggers\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, triggerPrimaryKeyColumns, len(o)))
 
@@ -1241,7 +1248,7 @@ func (o *Trigger) Upsert(ctx context.Context, exec boil.ContextExecutor, updateO
 			conflict = make([]string, len(triggerPrimaryKeyColumns))
 			copy(conflict, triggerPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"vehicle_events_api\".\"triggers\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"vehicle_triggers_api\".\"triggers\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(triggerType, triggerMapping, insert)
 		if err != nil {
@@ -1300,7 +1307,7 @@ func (o *Trigger) Delete(ctx context.Context, exec boil.ContextExecutor) (int64,
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), triggerPrimaryKeyMapping)
-	sql := "DELETE FROM \"vehicle_events_api\".\"triggers\" WHERE \"id\"=$1"
+	sql := "DELETE FROM \"vehicle_triggers_api\".\"triggers\" WHERE \"id\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1365,7 +1372,7 @@ func (o TriggerSlice) DeleteAll(ctx context.Context, exec boil.ContextExecutor) 
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"vehicle_events_api\".\"triggers\" WHERE " +
+	sql := "DELETE FROM \"vehicle_triggers_api\".\"triggers\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, triggerPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1420,7 +1427,7 @@ func (o *TriggerSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor)
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"vehicle_events_api\".\"triggers\".* FROM \"vehicle_events_api\".\"triggers\" WHERE " +
+	sql := "SELECT \"vehicle_triggers_api\".\"triggers\".* FROM \"vehicle_triggers_api\".\"triggers\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, triggerPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1438,7 +1445,7 @@ func (o *TriggerSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor)
 // TriggerExists checks if the Trigger row exists.
 func TriggerExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"vehicle_events_api\".\"triggers\" where \"id\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"vehicle_triggers_api\".\"triggers\" where \"id\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

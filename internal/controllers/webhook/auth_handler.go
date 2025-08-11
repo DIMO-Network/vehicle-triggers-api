@@ -1,4 +1,4 @@
-package controllers
+package webhook
 
 import (
 	"errors"
@@ -8,7 +8,6 @@ import (
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
 	"github.com/gofiber/fiber/v2"
@@ -18,7 +17,7 @@ import (
 
 // JWTMiddleware extracts the "ethereum_address" from the JWT,
 // verifies it against the identity API, and stores it in the request context.
-func JWTMiddleware(store db.Store, identityAPI *identity.Client, logger zerolog.Logger) fiber.Handler {
+func JWTMiddleware(identityAPI *identity.Client, logger zerolog.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		tokenString := c.Get("Authorization")
 		if tokenString == "" || !strings.HasPrefix(tokenString, "Bearer ") {
@@ -41,7 +40,7 @@ func JWTMiddleware(store db.Store, identityAPI *identity.Client, logger zerolog.
 		}
 
 		// Verify that this developer license exists on identity API and in our DB.
-		if err := auth.EnsureDeveloperLicenseExists(c.Context(), developerLicenseStr, identityAPI, store, logger); err != nil {
+		if err := auth.EnsureDeveloperLicenseExists(c.Context(), developerLicenseStr, identityAPI, logger); err != nil {
 			return fmt.Errorf("failed to ensure developer license exists: %w", err)
 		}
 

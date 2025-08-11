@@ -42,7 +42,7 @@ func main() {
 	runnerGroup, runnerCtx := errgroup.WithContext(mainCtx)
 
 	migrationCommand := flag.String("migrations", "", "run migrations")
-	envFile := flag.String("env-file", "", "path to env file")
+	envFile := flag.String("env-file", ".env", "path to env file")
 	migrateOnly := flag.Bool("migrate-only", false, "run migrations only")
 	flag.Parse()
 

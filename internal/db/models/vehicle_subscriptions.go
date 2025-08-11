@@ -65,10 +65,10 @@ var VehicleSubscriptionWhere = struct {
 	CreatedAt      whereHelpertime_Time
 	UpdatedAt      whereHelpertime_Time
 }{
-	VehicleTokenID: whereHelpertypes_Decimal{field: "\"vehicle_events_api\".\"vehicle_subscriptions\".\"vehicle_token_id\""},
-	TriggerID:      whereHelperstring{field: "\"vehicle_events_api\".\"vehicle_subscriptions\".\"trigger_id\""},
-	CreatedAt:      whereHelpertime_Time{field: "\"vehicle_events_api\".\"vehicle_subscriptions\".\"created_at\""},
-	UpdatedAt:      whereHelpertime_Time{field: "\"vehicle_events_api\".\"vehicle_subscriptions\".\"updated_at\""},
+	VehicleTokenID: whereHelpertypes_Decimal{field: "\"vehicle_triggers_api\".\"vehicle_subscriptions\".\"vehicle_token_id\""},
+	TriggerID:      whereHelperstring{field: "\"vehicle_triggers_api\".\"vehicle_subscriptions\".\"trigger_id\""},
+	CreatedAt:      whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"vehicle_subscriptions\".\"created_at\""},
+	UpdatedAt:      whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"vehicle_subscriptions\".\"updated_at\""},
 }
 
 // VehicleSubscriptionRels is where relationship names are stored.
@@ -489,8 +489,8 @@ func (vehicleSubscriptionL) LoadTrigger(ctx context.Context, e boil.ContextExecu
 	}
 
 	query := NewQuery(
-		qm.From(`vehicle_events_api.triggers`),
-		qm.WhereIn(`vehicle_events_api.triggers.id in ?`, argsSlice...),
+		qm.From(`vehicle_triggers_api.triggers`),
+		qm.WhereIn(`vehicle_triggers_api.triggers.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -563,7 +563,7 @@ func (o *VehicleSubscription) SetTrigger(ctx context.Context, exec boil.ContextE
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"vehicle_events_api\".\"vehicle_subscriptions\" SET %s WHERE %s",
+		"UPDATE \"vehicle_triggers_api\".\"vehicle_subscriptions\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"trigger_id"}),
 		strmangle.WhereClause("\"", "\"", 2, vehicleSubscriptionPrimaryKeyColumns),
 	)
@@ -600,10 +600,10 @@ func (o *VehicleSubscription) SetTrigger(ctx context.Context, exec boil.ContextE
 
 // VehicleSubscriptions retrieves all the records using an executor.
 func VehicleSubscriptions(mods ...qm.QueryMod) vehicleSubscriptionQuery {
-	mods = append(mods, qm.From("\"vehicle_events_api\".\"vehicle_subscriptions\""))
+	mods = append(mods, qm.From("\"vehicle_triggers_api\".\"vehicle_subscriptions\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"vehicle_events_api\".\"vehicle_subscriptions\".*"})
+		queries.SetSelect(q, []string{"\"vehicle_triggers_api\".\"vehicle_subscriptions\".*"})
 	}
 
 	return vehicleSubscriptionQuery{q}
@@ -619,7 +619,7 @@ func FindVehicleSubscription(ctx context.Context, exec boil.ContextExecutor, veh
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"vehicle_events_api\".\"vehicle_subscriptions\" where \"vehicle_token_id\"=$1 AND \"trigger_id\"=$2", sel,
+		"select %s from \"vehicle_triggers_api\".\"vehicle_subscriptions\" where \"vehicle_token_id\"=$1 AND \"trigger_id\"=$2", sel,
 	)
 
 	q := queries.Raw(query, vehicleTokenID, triggerID)
@@ -686,9 +686,9 @@ func (o *VehicleSubscription) Insert(ctx context.Context, exec boil.ContextExecu
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"vehicle_events_api\".\"vehicle_subscriptions\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"vehicle_triggers_api\".\"vehicle_subscriptions\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"vehicle_events_api\".\"vehicle_subscriptions\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"vehicle_triggers_api\".\"vehicle_subscriptions\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -760,7 +760,7 @@ func (o *VehicleSubscription) Update(ctx context.Context, exec boil.ContextExecu
 			return 0, errors.New("models: unable to update vehicle_subscriptions, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"vehicle_events_api\".\"vehicle_subscriptions\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"vehicle_triggers_api\".\"vehicle_subscriptions\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, vehicleSubscriptionPrimaryKeyColumns),
 		)
@@ -841,7 +841,7 @@ func (o VehicleSubscriptionSlice) UpdateAll(ctx context.Context, exec boil.Conte
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"vehicle_events_api\".\"vehicle_subscriptions\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"vehicle_triggers_api\".\"vehicle_subscriptions\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, vehicleSubscriptionPrimaryKeyColumns, len(o)))
 
@@ -945,7 +945,7 @@ func (o *VehicleSubscription) Upsert(ctx context.Context, exec boil.ContextExecu
 			conflict = make([]string, len(vehicleSubscriptionPrimaryKeyColumns))
 			copy(conflict, vehicleSubscriptionPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"vehicle_events_api\".\"vehicle_subscriptions\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"vehicle_triggers_api\".\"vehicle_subscriptions\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(vehicleSubscriptionType, vehicleSubscriptionMapping, insert)
 		if err != nil {
@@ -1004,7 +1004,7 @@ func (o *VehicleSubscription) Delete(ctx context.Context, exec boil.ContextExecu
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), vehicleSubscriptionPrimaryKeyMapping)
-	sql := "DELETE FROM \"vehicle_events_api\".\"vehicle_subscriptions\" WHERE \"vehicle_token_id\"=$1 AND \"trigger_id\"=$2"
+	sql := "DELETE FROM \"vehicle_triggers_api\".\"vehicle_subscriptions\" WHERE \"vehicle_token_id\"=$1 AND \"trigger_id\"=$2"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1069,7 +1069,7 @@ func (o VehicleSubscriptionSlice) DeleteAll(ctx context.Context, exec boil.Conte
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"vehicle_events_api\".\"vehicle_subscriptions\" WHERE " +
+	sql := "DELETE FROM \"vehicle_triggers_api\".\"vehicle_subscriptions\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, vehicleSubscriptionPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1124,7 +1124,7 @@ func (o *VehicleSubscriptionSlice) ReloadAll(ctx context.Context, exec boil.Cont
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"vehicle_events_api\".\"vehicle_subscriptions\".* FROM \"vehicle_events_api\".\"vehicle_subscriptions\" WHERE " +
+	sql := "SELECT \"vehicle_triggers_api\".\"vehicle_subscriptions\".* FROM \"vehicle_triggers_api\".\"vehicle_subscriptions\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, vehicleSubscriptionPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1142,7 +1142,7 @@ func (o *VehicleSubscriptionSlice) ReloadAll(ctx context.Context, exec boil.Cont
 // VehicleSubscriptionExists checks if the VehicleSubscription row exists.
 func VehicleSubscriptionExists(ctx context.Context, exec boil.ContextExecutor, vehicleTokenID types.Decimal, triggerID string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"vehicle_events_api\".\"vehicle_subscriptions\" where \"vehicle_token_id\"=$1 AND \"trigger_id\"=$2 limit 1)"
+	sql := "select exists(select 1 from \"vehicle_triggers_api\".\"vehicle_subscriptions\" where \"vehicle_token_id\"=$1 AND \"trigger_id\"=$2 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

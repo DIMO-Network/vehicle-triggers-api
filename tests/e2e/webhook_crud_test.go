@@ -10,7 +10,8 @@ import (
 	"testing"
 
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/app"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -58,14 +59,14 @@ func TestWebhookCRUDOperations(t *testing.T) {
 	t.Run("Step 1: Create Webhook", func(t *testing.T) {
 		t.Log("Creating initial webhook")
 
-		webhookPayload := controllers.RegisterWebhookRequest{
+		webhookPayload := webhook.RegisterWebhookRequest{
 			Service:           "Telemetry",
 			MetricName:        "speed",
 			Condition:         "valueNumber > 20",
 			CoolDownPeriod:    10,
 			Description:       "Alert when vehicle speed exceeds 20 kph",
-			TargetURI:         webhookReceiver.URL(),
-			Status:            "Active",
+			TargetURL:         webhookReceiver.URL(),
+			Status:            triggersrepo.StatusEnabled,
 			VerificationToken: "test-verification-token",
 		}
 
@@ -238,10 +239,10 @@ func TestWebhookCRUDOperations(t *testing.T) {
 	t.Run("Step 7: Update Webhook", func(t *testing.T) {
 		t.Log("Updating webhook configuration")
 
-		updatePayload := controllers.UpdateWebhookRequest{
+		updatePayload := webhook.UpdateWebhookRequest{
 			Description:    ref("Updated description for speed alert"),
 			CoolDownPeriod: ref(15),
-			Status:         ref("Active"),
+			Status:         ref(triggersrepo.StatusEnabled),
 		}
 
 		updateBody, err := json.Marshal(updatePayload)

@@ -4,21 +4,32 @@
 
 The DIMO Vehicle Triggers API is being developed to deliver real-time vehicle notifications via webhooks. It aims to provide scalable and flexible event handling using Kafka.
 
-## Objectives
-
-Real-Time Notifications
-Scalable Event Processing
-Customizable Webhook Configurations
-
-Currently in the planning and development phase. Further documentation and features will be added as the project progresses.
-
 ## How To
+
+Most actions are done via make commands. use `make help` to see all available commands.
+
+```bash
+make help
+Specify a subcommand:
+  build                build the binary
+  run                  run the binary
+  clean                clean the binary
+  install              install the binary
+  tidy                 tidy the go mod
+  test                 run tests
+  lint                 run linter
+  docker               build docker image
+  tools-golangci-lint  install golangci-lint
+  add-migration        Generate migration file specify name with name=your_migration_name
+  generate             run all file generation for the project
+  generate-swagger     generate swagger documentation
+  generate-go          run go generate
+  ...
+```
 
 To create a db:
 
-`$ createdb -h localhost -p 5432 vehicle_events_api`
-`$ psql -h localhost -p 5432 -d vehicle_events_api`
-`# ALTER DATABASE vehicle_events_api OWNER TO dimo;`
+`$ docker compose up -d`
 
 Add a migrations:
 `$ make add-migration name=<migration_name>`
@@ -31,12 +42,10 @@ To regenerate models:
 
 # Running locally
 
-- in your postgres: `create database vehicle_events_api with owner dimo;` make sure you have user `dimo` setup in your local db.
+- in your postgres: `create database vehicle_triggers_api with owner dimo;` make sure you have user `dimo` setup in your local db.
 - check to see if kafka is installed locally `brew services list`
 - install kafka with brew services
 - list all topics: `/opt/homebrew/opt/kafka/bin/kafka-topics --list --bootstrap-server localhost:9092`
 - Create a topic:
 - `/opt/homebrew/opt/kafka/bin/kafka-topics --create --topic topics.signals --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1`
-- Make sure to check settings.yaml to have the correct KAFKA_BROKERS and TOPIC name
-- Pending: nee sample webhook config
-- need example of sending a payload in the kafka topic
+- Make sure to check .env to have the correct KAFKA_BROKERS and DEVICE_SIGNALS_TOPIC name

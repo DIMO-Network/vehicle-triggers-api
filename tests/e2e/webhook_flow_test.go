@@ -12,7 +12,8 @@ import (
 
 	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/app"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -35,14 +36,14 @@ func TestWebhookFlow(t *testing.T) {
 
 	// Step 1: Create a webhook
 	t.Log("Step 1: Creating webhook")
-	webhookPayload := controllers.RegisterWebhookRequest{
+	webhookPayload := webhook.RegisterWebhookRequest{
 		Service:           "Telemetry",
 		MetricName:        "speed",
 		Condition:         "valueNumber > 20",
 		CoolDownPeriod:    10,
 		Description:       "Alert when vehicle speed exceeds 20 kph",
-		TargetURI:         webhookReceiver.URL(),
-		Status:            "Active",
+		TargetURL:         webhookReceiver.URL(),
+		Status:            triggersrepo.StatusEnabled,
 		VerificationToken: "test-verification-token",
 	}
 

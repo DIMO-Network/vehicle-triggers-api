@@ -9,7 +9,7 @@ env:
   MON_PORT: "8888"
   LOG_LEVEL: info
   DB_PORT: "5432"
-  DB_NAME: vehicle_events_api
+  DB_NAME: vehicle_triggers_api
   DB_MAX_OPEN_CONNECTIONS: "100"
   DB_MAX_IDLE_CONNECTIONS: "30"
   SERVICE_NAME: vehicle-triggers-api
@@ -29,9 +29,9 @@ ingress:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "*"
     nginx.ingress.kubernetes.io/limit-rps: "9"
-    external-dns.alpha.kubernetes.io/hostname: vehicle-events-api.dimo.zone
+    external-dns.alpha.kubernetes.io/hostname: vehicle-triggers-api.dimo.zone
   hosts:
-    - host: vehicle-events-api.dimo.zone
+    - host: vehicle-triggers-api.dimo.zone
       paths:
         - path: /
           pathType: ImplementationSpecific

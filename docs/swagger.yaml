@@ -1,68 +1,176 @@
 definitions:
-  controllers.RegisterWebhookRequest:
+  internal_controllers_webhook.GenericResponse:
+    properties:
+      message:
+        description: Message provides a brief status message for the operation.
+        type: string
+    type: object
+  internal_controllers_webhook.RegisterWebhookRequest:
     properties:
       condition:
-        description: Condition expressed as a CEL expression that needs to be true
-          for the webhook to be triggered.
+        description: Condition is a CEL expression evaluated against the metric to
+          decide when to fire.
+        example: value > 55
         type: string
       coolDownPeriod:
-        description: |-
-          CoolDownPeriod is the number of seconds to wait before a webhook can be triggered again.
-          If the webhook is triggered again within the cool down period, the webhook will not be triggered again.
+        description: CoolDownPeriod is the minimum number of seconds between successive
+          firings.
+        example: 30
         type: integer
       description:
-        description: Description is the description of the webhook.
+        description: Description is an optional human-friendly explanation of the
+          webhook.
+        example: This webhook is used to notify when the speed of the vehicle exceeds
+          55 mph.
+        type: string
+      displayName:
+        description: DisplayName is a user-friendly unique name per developer license.
+        example: Speed Alert
         type: string
       metricName:
-        description: MetricName is the name of the metric that the webhook is associated
-          with.
+        description: MetricName is the fully qualified signal/metric to monitor.
+        example: speed
         type: string
       service:
-        description: Service is the service that the webhook is associated with.
+        description: Service is the subsystem producing the metric (e.g. "vehicles").
+        example: telemetry.signals
         type: string
       status:
-        description: Status is the status of the webhook.
+        description: Status sets the initial state for the webhook (e.g. "enabled"
+          or "Disabled").
+        example: enabled
         type: string
-      targetURI:
-        description: TargetURI is the URI that the webhook will be sent to.
+      targetURL:
+        description: TargetURL is the HTTPS endpoint that will receive webhook callbacks.
+        example: https://example.com/webhook
         type: string
       verificationToken:
-        description: VerificationToken is the token that wukk
+        description: VerificationToken is the expected token that your endpoint must
+          echo back during verification.
+        example: "1234567890"
         type: string
     required:
     - condition
     - coolDownPeriod
     - metricName
     - service
-    - targetURI
+    - targetURL
     - verificationToken
     type: object
-  controllers.SubscriptionView:
+  internal_controllers_webhook.RegisterWebhookResponse:
     properties:
-      created_at:
+      id:
+        description: ID is the unique identifier of the created webhook.
         type: string
-      description:
-        type: string
-      event_id:
-        type: string
-      vehicle_token_id:
+      message:
+        description: Message provides a brief status message for the operation.
         type: string
     type: object
-  controllers.UpdateWebhookRequest:
+  internal_controllers_webhook.SignalDefinition:
+    properties:
+      description:
+        description: Description briefly explains what the signal represents.
+        type: string
+      name:
+        description: Name is the JSON-safe name of the signal.
+        type: string
+      unit:
+        description: Unit is the unit of measurement for the signal value (if any).
+        type: string
+    type: object
+  internal_controllers_webhook.SubscriptionView:
+    properties:
+      createdAt:
+        description: CreatedAt is when the subscription was created.
+        type: string
+      description:
+        description: Description is the optional description from the webhook trigger.
+        type: string
+      vehicleTokenId:
+        description: VehicleTokenID is the on-chain token ID of the vehicle.
+        type: string
+      webhookId:
+        description: webhookID is the identifier of the webhook trigger.
+        type: string
+    type: object
+  internal_controllers_webhook.UpdateWebhookRequest:
     properties:
       condition:
+        description: Condition updates the CEL expression used to decide when to fire.
         type: string
       coolDownPeriod:
+        description: CoolDownPeriod updates the minimum number of seconds between
+          firings.
         type: integer
       description:
+        description: Description updates the optional human-friendly explanation of
+          the webhook.
+        type: string
+      displayName:
+        description: DisplayName updates the user-friendly unique name per developer
+          license.
         type: string
       metricName:
-        type: string
-      service:
+        description: MetricName updates the signal/event name used by the webhook.
         type: string
       status:
+        description: Status updates the current state of the webhook (e.g. "enabled"
+          or "Disabled").
         type: string
-      targetURI:
+      targetURL:
+        description: TargetURL updates the HTTPS endpoint that will receive callbacks.
+        type: string
+    type: object
+  internal_controllers_webhook.UpdateWebhookResponse:
+    properties:
+      id:
+        description: ID is the unique identifier of the updated webhook.
+        type: string
+      message:
+        description: Message provides a brief status message for the operation.
+        type: string
+    type: object
+  internal_controllers_webhook.WebhookView:
+    properties:
+      condition:
+        description: Condition is the CEL expression evaluated to decide when to fire.
+        type: string
+      coolDownPeriod:
+        description: CoolDownPeriod is the minimum number of seconds between successive
+          firings.
+        type: integer
+      createdAt:
+        description: CreatedAt is when the webhook was created.
+        type: string
+      description:
+        description: Description is an optional human-friendly explanation of the
+          webhook.
+        type: string
+      displayName:
+        description: DisplayName is the user-friendly unique name per developer license.
+        type: string
+      failureCount:
+        description: FailureCount counts consecutive delivery failures for observability.
+        type: integer
+      id:
+        description: ID is the unique identifier of the webhook.
+        type: string
+      metricName:
+        description: MetricName is the fully qualified signal/metric monitored by
+          the webhook.
+        type: string
+      service:
+        description: Service is the subsystem producing the metric (e.g. "vehicles").
+        type: string
+      status:
+        description: Status is the current state of the webhook (e.g. "enabled" or
+          "Disabled").
+        type: string
+      targetURL:
+        description: TargetURL is the HTTPS endpoint that receives webhook callbacks.
+        type: string
+      updatedAt:
+        description: UpdatedAt is when the webhook was last modified.
         type: string
     type: object
 info:
@@ -80,7 +188,7 @@ paths:
           description: List of webhooks
           schema:
             items:
-              type: object
+              $ref: '#/definitions/internal_controllers_webhook.WebhookView'
             type: array
         "401":
           description: Unauthorized
@@ -103,12 +211,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/controllers.RegisterWebhookRequest'
+          $ref: '#/definitions/internal_controllers_webhook.RegisterWebhookRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Webhook registered successfully
+          schema:
+            $ref: '#/definitions/internal_controllers_webhook.RegisterWebhookResponse'
         "400":
           description: Invalid request payload or target URI
         "500":
@@ -130,8 +240,10 @@ paths:
       produces:
       - application/json
       responses:
-        "204":
+        "200":
           description: Webhook deleted successfully
+          schema:
+            $ref: '#/definitions/internal_controllers_webhook.GenericResponse'
         "404":
           description: Webhook not found
         "500":
@@ -178,7 +290,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Updates the configuration of a webhook by its ID.
+      description: Updates the configuration of a webhook by its ID. The failure count
+        is reset to 0 when updating a webhook.
       parameters:
       - description: Webhook ID
         in: path
@@ -190,12 +303,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/controllers.UpdateWebhookRequest'
+          $ref: '#/definitions/internal_controllers_webhook.UpdateWebhookRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Webhook updated successfully
+          schema:
+            $ref: '#/definitions/internal_controllers_webhook.UpdateWebhookResponse'
         "400":
           description: Invalid request payload
         "404":
@@ -229,9 +344,7 @@ paths:
         "201":
           description: Vehicle assigned
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/internal_controllers_webhook.GenericResponse'
         "400":
           description: Bad request
           schema:
@@ -270,9 +383,7 @@ paths:
         "201":
           description: Count of subscribed vehicles
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/internal_controllers_webhook.GenericResponse'
         "400":
           description: Bad request
           schema:
@@ -296,12 +407,11 @@ paths:
       summary: Subscribe all shared vehicles
       tags:
       - Webhooks
-  /v1/webhooks/{webhookId}/subscribe/csv:
+  /v1/webhooks/{webhookId}/subscribe/list:
     post:
       consumes:
-      - text/csv
-      description: Parses a CSV file from the request body and subscribes each vehicleTokenId
-        to the webhook.
+      - application/json
+      description: Subscribes each vehicleTokenId to the webhook.
       parameters:
       - description: Webhook ID
         in: path
@@ -314,9 +424,7 @@ paths:
         "201":
           description: Count of subscribed vehicles
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/internal_controllers_webhook.GenericResponse'
         "400":
           description: Bad request
           schema:
@@ -337,12 +445,12 @@ paths:
             type: object
       security:
       - BearerAuth: []
-      summary: Assign multiple vehicles to a webhook from CSV
+      summary: Assign multiple vehicles to a webhook from a list
       tags:
       - Webhooks
   /v1/webhooks/{webhookId}/unsubscribe/{vehicleTokenId}:
     delete:
-      description: Removes a vehicle’s subscription.
+      description: Removes a vehicle's subscription.
       parameters:
       - description: Webhook ID
         in: path
@@ -360,9 +468,7 @@ paths:
         "200":
           description: Vehicle removed
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/internal_controllers_webhook.GenericResponse'
         "400":
           description: Bad request
           schema:
@@ -401,9 +507,7 @@ paths:
         "200":
           description: Count of unsubscribed vehicles
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/internal_controllers_webhook.GenericResponse'
         "400":
           description: Bad request
           schema:
@@ -427,12 +531,11 @@ paths:
       summary: Unsubscribe all shared vehicles
       tags:
       - Webhooks
-  /v1/webhooks/{webhookId}/unsubscribe/csv:
+  /v1/webhooks/{webhookId}/unsubscribe/list:
     delete:
       consumes:
-      - text/csv
-      description: Parses a CSV file from the request body and unsubscribes each vehicleTokenId
-        from the webhook.
+      - application/json
+      description: Unsubscribes each vehicleTokenId from the webhook.
       parameters:
       - description: Webhook ID
         in: path
@@ -445,9 +548,7 @@ paths:
         "200":
           description: Count of unsubscribed vehicles
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/internal_controllers_webhook.GenericResponse'
         "400":
           description: Bad request
           schema:
@@ -468,7 +569,7 @@ paths:
             type: object
       security:
       - BearerAuth: []
-      summary: Unsubscribe multiple vehicles from a webhook using CSV
+      summary: Unsubscribe multiple vehicles from a webhook using a list
       tags:
       - Webhooks
   /v1/webhooks/signals:
@@ -481,7 +582,7 @@ paths:
           description: List of signal names
           schema:
             items:
-              type: string
+              $ref: '#/definitions/internal_controllers_webhook.SignalDefinition'
             type: array
         "500":
           description: Internal server error
@@ -506,7 +607,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/controllers.SubscriptionView'
+              $ref: '#/definitions/internal_controllers_webhook.SubscriptionView'
             type: array
         "401":
           description: Unauthorized

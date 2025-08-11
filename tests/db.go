@@ -14,8 +14,6 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
-var DBName = "vehicle_events_api"
-
 type TestContainer struct {
 	container testcontainers.Container
 	DB        *sql.DB
@@ -50,7 +48,7 @@ func SetupTestContainer(t *testing.T) *TestContainer {
 		var err error
 		globalTestContainer.container, err = postgres.Run(ctx,
 			"postgres:15",
-			postgres.WithDatabase(DBName),
+			postgres.WithDatabase(migrations.SchemaName),
 			postgres.WithUsername("postgres"),
 			postgres.WithPassword("postgres"),
 			postgres.BasicWaitStrategies(),
@@ -67,7 +65,7 @@ func SetupTestContainer(t *testing.T) *TestContainer {
 			Port:     port.Port(),
 			User:     "postgres",
 			Password: "postgres",
-			Name:     DBName,
+			Name:     migrations.SchemaName,
 			SSLMode:  "disable",
 		}
 
@@ -77,5 +75,6 @@ func SetupTestContainer(t *testing.T) *TestContainer {
 		err = migrations.RunGoose(ctx, []string{"up"}, globalTestContainer.Settings)
 		require.NoError(t, err)
 	})
+	globalTestContainer.TeardownIfLastTest(t)
 	return &globalTestContainer
 }

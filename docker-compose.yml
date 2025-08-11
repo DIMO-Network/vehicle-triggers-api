@@ -6,4 +6,4 @@ services:
     environment:
       - POSTGRES_USER=dimo
       - POSTGRES_PASSWORD=dimo
-      - POSTGRES_DB=vehicle_events_api
+      - POSTGRES_DB=vehicle_triggers_api

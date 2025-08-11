@@ -234,13 +234,13 @@ var TriggerLogWhere = struct {
 	CreatedAt       whereHelpertime_Time
 	FailureReason   whereHelpernull_String
 }{
-	ID:              whereHelperstring{field: "\"vehicle_events_api\".\"trigger_logs\".\"id\""},
-	VehicleTokenID:  whereHelpertypes_Decimal{field: "\"vehicle_events_api\".\"trigger_logs\".\"vehicle_token_id\""},
-	TriggerID:       whereHelperstring{field: "\"vehicle_events_api\".\"trigger_logs\".\"trigger_id\""},
-	SnapshotData:    whereHelpertypes_JSON{field: "\"vehicle_events_api\".\"trigger_logs\".\"snapshot_data\""},
-	LastTriggeredAt: whereHelpertime_Time{field: "\"vehicle_events_api\".\"trigger_logs\".\"last_triggered_at\""},
-	CreatedAt:       whereHelpertime_Time{field: "\"vehicle_events_api\".\"trigger_logs\".\"created_at\""},
-	FailureReason:   whereHelpernull_String{field: "\"vehicle_events_api\".\"trigger_logs\".\"failure_reason\""},
+	ID:              whereHelperstring{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"id\""},
+	VehicleTokenID:  whereHelpertypes_Decimal{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"vehicle_token_id\""},
+	TriggerID:       whereHelperstring{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"trigger_id\""},
+	SnapshotData:    whereHelpertypes_JSON{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"snapshot_data\""},
+	LastTriggeredAt: whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"last_triggered_at\""},
+	CreatedAt:       whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"created_at\""},
+	FailureReason:   whereHelpernull_String{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"failure_reason\""},
 }
 
 // TriggerLogRels is where relationship names are stored.
@@ -661,8 +661,8 @@ func (triggerLogL) LoadTrigger(ctx context.Context, e boil.ContextExecutor, sing
 	}
 
 	query := NewQuery(
-		qm.From(`vehicle_events_api.triggers`),
-		qm.WhereIn(`vehicle_events_api.triggers.id in ?`, argsSlice...),
+		qm.From(`vehicle_triggers_api.triggers`),
+		qm.WhereIn(`vehicle_triggers_api.triggers.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -735,7 +735,7 @@ func (o *TriggerLog) SetTrigger(ctx context.Context, exec boil.ContextExecutor, 
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"vehicle_events_api\".\"trigger_logs\" SET %s WHERE %s",
+		"UPDATE \"vehicle_triggers_api\".\"trigger_logs\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"trigger_id"}),
 		strmangle.WhereClause("\"", "\"", 2, triggerLogPrimaryKeyColumns),
 	)
@@ -772,10 +772,10 @@ func (o *TriggerLog) SetTrigger(ctx context.Context, exec boil.ContextExecutor, 
 
 // TriggerLogs retrieves all the records using an executor.
 func TriggerLogs(mods ...qm.QueryMod) triggerLogQuery {
-	mods = append(mods, qm.From("\"vehicle_events_api\".\"trigger_logs\""))
+	mods = append(mods, qm.From("\"vehicle_triggers_api\".\"trigger_logs\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"vehicle_events_api\".\"trigger_logs\".*"})
+		queries.SetSelect(q, []string{"\"vehicle_triggers_api\".\"trigger_logs\".*"})
 	}
 
 	return triggerLogQuery{q}
@@ -791,7 +791,7 @@ func FindTriggerLog(ctx context.Context, exec boil.ContextExecutor, iD string, s
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"vehicle_events_api\".\"trigger_logs\" where \"id\"=$1", sel,
+		"select %s from \"vehicle_triggers_api\".\"trigger_logs\" where \"id\"=$1", sel,
 	)
 
 	q := queries.Raw(query, iD)
@@ -855,9 +855,9 @@ func (o *TriggerLog) Insert(ctx context.Context, exec boil.ContextExecutor, colu
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"vehicle_events_api\".\"trigger_logs\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"vehicle_triggers_api\".\"trigger_logs\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"vehicle_events_api\".\"trigger_logs\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"vehicle_triggers_api\".\"trigger_logs\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -923,7 +923,7 @@ func (o *TriggerLog) Update(ctx context.Context, exec boil.ContextExecutor, colu
 			return 0, errors.New("models: unable to update trigger_logs, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"vehicle_events_api\".\"trigger_logs\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"vehicle_triggers_api\".\"trigger_logs\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, triggerLogPrimaryKeyColumns),
 		)
@@ -1004,7 +1004,7 @@ func (o TriggerLogSlice) UpdateAll(ctx context.Context, exec boil.ContextExecuto
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"vehicle_events_api\".\"trigger_logs\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"vehicle_triggers_api\".\"trigger_logs\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, triggerLogPrimaryKeyColumns, len(o)))
 
@@ -1107,7 +1107,7 @@ func (o *TriggerLog) Upsert(ctx context.Context, exec boil.ContextExecutor, upda
 			conflict = make([]string, len(triggerLogPrimaryKeyColumns))
 			copy(conflict, triggerLogPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"vehicle_events_api\".\"trigger_logs\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"vehicle_triggers_api\".\"trigger_logs\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(triggerLogType, triggerLogMapping, insert)
 		if err != nil {
@@ -1166,7 +1166,7 @@ func (o *TriggerLog) Delete(ctx context.Context, exec boil.ContextExecutor) (int
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), triggerLogPrimaryKeyMapping)
-	sql := "DELETE FROM \"vehicle_events_api\".\"trigger_logs\" WHERE \"id\"=$1"
+	sql := "DELETE FROM \"vehicle_triggers_api\".\"trigger_logs\" WHERE \"id\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1231,7 +1231,7 @@ func (o TriggerLogSlice) DeleteAll(ctx context.Context, exec boil.ContextExecuto
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"vehicle_events_api\".\"trigger_logs\" WHERE " +
+	sql := "DELETE FROM \"vehicle_triggers_api\".\"trigger_logs\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, triggerLogPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1286,7 +1286,7 @@ func (o *TriggerLogSlice) ReloadAll(ctx context.Context, exec boil.ContextExecut
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"vehicle_events_api\".\"trigger_logs\".* FROM \"vehicle_events_api\".\"trigger_logs\" WHERE " +
+	sql := "SELECT \"vehicle_triggers_api\".\"trigger_logs\".* FROM \"vehicle_triggers_api\".\"trigger_logs\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, triggerLogPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1304,7 +1304,7 @@ func (o *TriggerLogSlice) ReloadAll(ctx context.Context, exec boil.ContextExecut
 // TriggerLogExists checks if the TriggerLog row exists.
 func TriggerLogExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"vehicle_events_api\".\"trigger_logs\" where \"id\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"vehicle_triggers_api\".\"trigger_logs\" where \"id\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
