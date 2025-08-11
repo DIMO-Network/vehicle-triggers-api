@@ -25,15 +25,13 @@ import (
 )
 
 type SignalListener struct {
-	log                 zerolog.Logger
 	webhookCache        *webhookcache.WebhookCache
 	repo                *triggersrepo.Repository
 	tokenExchangeClient *tokenexchange.Client
 }
 
-func NewSignalListener(logger zerolog.Logger, wc *webhookcache.WebhookCache, repo *triggersrepo.Repository, tokenExchangeAPI *tokenexchange.Client) *SignalListener {
+func NewSignalListener(wc *webhookcache.WebhookCache, repo *triggersrepo.Repository, tokenExchangeAPI *tokenexchange.Client) *SignalListener {
 	return &SignalListener{
-		log:                 logger,
 		webhookCache:        wc,
 		repo:                repo,
 		tokenExchangeClient: tokenExchangeAPI,
@@ -41,15 +39,17 @@ func NewSignalListener(logger zerolog.Logger, wc *webhookcache.WebhookCache, rep
 }
 
 func (l *SignalListener) ProcessSignals(ctx context.Context, messages <-chan *message.Message) {
+	logger := zerolog.Ctx(ctx)
 	for msg := range messages {
-		if err := l.processMessage(ctx, msg); err != nil {
-			l.log.Err(err).Msg("error processing signal message")
+		msg.SetContext(ctx)
+		if err := l.processMessage(msg); err != nil {
+			logger.Error().Err(err).Msg("error processing signal message")
 		}
 		msg.Ack()
 	}
 }
 
-func (l *SignalListener) processMessage(ctx context.Context, msg *message.Message) error {
+func (l *SignalListener) processMessage(msg *message.Message) error {
 	var signal vss.Signal
 	if err := json.Unmarshal(msg.Payload, &signal); err != nil {
 		return fmt.Errorf("failed to parse vehicle signal JSON: %w", err)
@@ -58,15 +58,16 @@ func (l *SignalListener) processMessage(ctx context.Context, msg *message.Messag
 	webhooks := l.webhookCache.GetWebhooks(signal.TokenID, signal.Name)
 
 	if len(webhooks) == 0 {
+		// no webhooks found for this signal, skip
 		return nil
 	}
 
-	group, _ := errgroup.WithContext(ctx)
+	group, groupCtx := errgroup.WithContext(msg.Context())
 	group.SetLimit(100)
 	for _, wh := range webhooks {
 		group.Go(func() error {
-			if err := l.processWebhook(ctx, wh, &signal); err != nil {
-				zerolog.Ctx(ctx).Error().Err(err).Msg("failed to process webhook")
+			if err := l.processWebhook(groupCtx, wh, &signal); err != nil {
+				zerolog.Ctx(groupCtx).Error().Str("trigger_id", wh.Trigger.ID).Err(err).Msg("failed to process webhook")
 			}
 			return nil
 		})
@@ -111,10 +112,10 @@ func (l *SignalListener) processWebhook(ctx context.Context, wh *webhookcache.We
 		return nil
 	}
 
-	if err := l.sendWebhookNotification(wh.Trigger, signal); err != nil {
+	if err := l.sendWebhookNotification(ctx, wh.Trigger, signal); err != nil {
 		return fmt.Errorf("failed to send webhook: %w", err)
 	}
-	if err := l.logWebhookTrigger(wh.Trigger.ID, signal.TokenID); err != nil {
+	if err := l.logWebhookTrigger(ctx, wh.Trigger.ID, signal.TokenID); err != nil {
 		return fmt.Errorf("failed to log webhook trigger: %w", err)
 	}
 
@@ -134,10 +135,9 @@ func (l *SignalListener) checkCooldown(webhook *models.Trigger, tokenID uint32) 
 	return false, nil
 }
 
-func (l *SignalListener) logWebhookTrigger(eventID string, tokenID uint32) error {
+func (l *SignalListener) logWebhookTrigger(ctx context.Context, eventID string, tokenID uint32) error {
 	var dec types.Decimal
 	if err := dec.Scan(fmt.Sprint(tokenID)); err != nil {
-		l.log.Error().Err(err).Msg("failed to convert tokenID")
 		return err
 	}
 	now := time.Now()
@@ -149,15 +149,13 @@ func (l *SignalListener) logWebhookTrigger(eventID string, tokenID uint32) error
 		LastTriggeredAt: now,
 		CreatedAt:       now,
 	}
-	if err := l.repo.CreateTriggerLog(context.Background(), eventLog); err != nil {
-		l.log.Error().Err(err).Msg("Error inserting EventLog")
-		return err
+	if err := l.repo.CreateTriggerLog(ctx, eventLog); err != nil {
+		return fmt.Errorf("failed to create trigger log: %w", err)
 	}
-	l.log.Debug().Msgf("Logged webhook trigger for event %s, vehicle %d", eventID, tokenID)
 	return nil
 }
 
-func (l *SignalListener) sendWebhookNotification(wh *models.Trigger, signal *vss.Signal) error {
+func (l *SignalListener) sendWebhookNotification(ctx context.Context, wh *models.Trigger, signal *vss.Signal) error {
 	body, err := json.Marshal(signal)
 	if err != nil {
 		return fmt.Errorf("failed to marshal signal for webhook: %w", err)
@@ -165,9 +163,8 @@ func (l *SignalListener) sendWebhookNotification(wh *models.Trigger, signal *vss
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Post(wh.TargetURI, "application/json", bytes.NewBuffer(body))
 	if err != nil {
-		l.log.Error().Msgf("HTTP POST error for URL %s: %v", wh.TargetURI, err)
-		if wh.ID != "" {
-			l.handleWebhookFailure(wh)
+		if err := l.handleWebhookFailure(ctx, wh); err != nil {
+			zerolog.Ctx(ctx).Error().Err(err).Msg("failed to handle webhook failure")
 		}
 		return fmt.Errorf("failed to POST to webhook: %w", err)
 	}
@@ -175,50 +172,49 @@ func (l *SignalListener) sendWebhookNotification(wh *models.Trigger, signal *vss
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
-		l.log.Error().Msgf("Received non‑200 response from %s: status %d, body: %s",
-			wh.TargetURI, resp.StatusCode, string(respBody))
-		if wh.ID != "" {
-			l.handleWebhookFailure(wh)
+		if err := l.handleWebhookFailure(ctx, wh); err != nil {
+			zerolog.Ctx(ctx).Error().Err(err).Msg("failed to handle webhook failure")
 		}
-		return fmt.Errorf("webhook returned status code %d", resp.StatusCode)
+
+		return fmt.Errorf("webhook returned status code %d: %s", resp.StatusCode, string(respBody))
+	}
+	if err := l.resetWebhookFailure(ctx, wh); err != nil {
+		return fmt.Errorf("failed to reset webhook failure: %w", err)
 	}
 
-	l.log.Debug().Msgf("Webhook notification sent successfully to %s", wh.TargetURI)
-	if wh.ID != "" {
-		l.resetWebhookFailure(wh)
+	return nil
+}
+
+func (l *SignalListener) handleWebhookFailure(ctx context.Context, webhook *models.Trigger) error {
+	event, err := l.repo.GetTriggerByIDAndDeveloperLicense(ctx, webhook.ID, common.BytesToAddress(webhook.DeveloperLicenseAddress))
+	if err != nil {
+		return fmt.Errorf("could not fetch event: %w", err)
+	}
+	event.FailureCount += 1
+
+	if event.FailureCount >= 5 {
+		event.Status = triggersrepo.StatusFailed
+		zerolog.Ctx(ctx).Info().Msgf("Webhook %s disabled due to excessive failures", webhook.ID)
+	}
+	if err := l.repo.UpdateTrigger(ctx, event); err != nil {
+		return fmt.Errorf("failed to update event failure count: %w", err)
 	}
 	return nil
 }
 
-func (l *SignalListener) handleWebhookFailure(webhook *models.Trigger) {
-	ctx := context.Background()
+func (l *SignalListener) resetWebhookFailure(ctx context.Context, webhook *models.Trigger) error {
 	event, err := l.repo.GetTriggerByIDAndDeveloperLicense(ctx, webhook.ID, common.BytesToAddress(webhook.DeveloperLicenseAddress))
 	if err != nil {
-		l.log.Error().Err(err).Msg("handleWebhookFailure: could not fetch event")
-		return
+		return fmt.Errorf("could not fetch event: %w", err)
 	}
-	event.FailureCount += 1
-	l.log.Debug().Msgf("Incremented FailureCount for webhook %s to %d", webhook.ID, event.FailureCount)
-
-	if event.FailureCount >= 5 {
-		event.Status = triggersrepo.StatusFailed
-		l.log.Info().Msgf("Webhook %s disabled due to excessive failures", webhook.ID)
-	}
-	if err := l.repo.UpdateTrigger(ctx, event); err != nil {
-		l.log.Error().Err(err).Msg("handleWebhookFailure: failed to update event failure count")
-	}
-}
-
-func (l *SignalListener) resetWebhookFailure(webhook *models.Trigger) {
-	ctx := context.Background()
-	event, err := l.repo.GetTriggerByIDAndDeveloperLicense(ctx, webhook.ID, common.BytesToAddress(webhook.DeveloperLicenseAddress))
-	if err != nil {
-		l.log.Error().Err(err).Msg("resetWebhookFailure: could not fetch event")
-		return
+	if event.FailureCount == 0 {
+		// if the failure count is 0, we don't need to reset it
+		return nil
 	}
 	event.FailureCount = 0
-	l.log.Debug().Msgf("Reset FailureCount for webhook %s", webhook.ID)
+	zerolog.Ctx(ctx).Debug().Msgf("Reset FailureCount for webhook %s", webhook.ID)
 	if err := l.repo.UpdateTrigger(ctx, event); err != nil {
-		l.log.Error().Err(err).Msg("resetWebhookFailure: failed to reset event failure count")
+		return fmt.Errorf("failed to reset event failure count: %w", err)
 	}
+	return nil
 }

@@ -148,7 +148,7 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 		}
 	}()
 
-	signalListener := vehiclelistener.NewSignalListener(logger, webhookCache, repo, tokenExchangeAPI)
+	signalListener := vehiclelistener.NewSignalListener(webhookCache, repo, tokenExchangeAPI)
 	if err := consumer.Start(ctx, signalListener.ProcessSignals); err != nil {
 		return nil, fmt.Errorf("failed to start device signals consumer: %w", err)
 	}

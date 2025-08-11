@@ -1,13 +1,13 @@
 package vehiclelistener
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
-	"github.com/rs/zerolog"
 )
 
 func TestSendWebhookNotification_Non200(t *testing.T) {
@@ -17,18 +17,18 @@ func TestSendWebhookNotification_Non200(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	listener := &SignalListener{log: zerolog.Nop()}
+	listener := &SignalListener{}
 	wh := &models.Trigger{TargetURI: ts.URL, DeveloperLicenseAddress: []byte{}}
-	err := listener.sendWebhookNotification(wh, &vss.Signal{})
+	err := listener.sendWebhookNotification(context.Background(), wh, &vss.Signal{})
 	if err == nil {
 		t.Error("expected error on 500 status, got nil")
 	}
 }
 
 func TestSendWebhookNotification_BadURL(t *testing.T) {
-	listener := &SignalListener{log: zerolog.Nop()}
+	listener := &SignalListener{}
 	wh := &models.Trigger{TargetURI: "http://invalid.localhost:0", DeveloperLicenseAddress: []byte{}}
-	err := listener.sendWebhookNotification(wh, &vss.Signal{})
+	err := listener.sendWebhookNotification(t.Context(), wh, &vss.Signal{})
 	if err == nil {
 		t.Error("expected error on invalid URL, got nil")
 	}
