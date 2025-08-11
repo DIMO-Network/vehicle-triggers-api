@@ -9,23 +9,23 @@ import (
 // It defines what to monitor, how often to notify, and where to send callbacks.
 type RegisterWebhookRequest struct {
 	// Service is the subsystem producing the metric (e.g. "vehicles").
-	Service string `json:"service" validate:"required"`
+	Service string `json:"service" validate:"required" example:"telemetry.signals"`
 	// MetricName is the fully qualified signal/metric to monitor.
-	MetricName string `json:"metricName" validate:"required"`
+	MetricName string `json:"metricName" validate:"required" example:"speed"`
 	// Condition is a CEL expression evaluated against the metric to decide when to fire.
-	Condition string `json:"condition" validate:"required"`
+	Condition string `json:"condition" validate:"required" example:"value > 55"`
 	// CoolDownPeriod is the minimum number of seconds between successive firings.
-	CoolDownPeriod int `json:"coolDownPeriod" validate:"required"`
+	CoolDownPeriod int `json:"coolDownPeriod" validate:"required" example:"30"`
 	// Description is an optional human-friendly explanation of the webhook.
-	Description string `json:"description"`
+	Description string `json:"description" example:"This webhook is used to notify when the speed of the vehicle exceeds 55 mph."`
 	// DisplayName is a user-friendly unique name per developer license.
-	DisplayName string `json:"displayName"`
+	DisplayName string `json:"displayName" example:"Speed Alert"`
 	// TargetURL is the HTTPS endpoint that will receive webhook callbacks.
-	TargetURL string `json:"targetURL" validate:"required"`
+	TargetURL string `json:"targetURL" validate:"required" example:"https://example.com/webhook"`
 	// Status sets the initial state for the webhook (e.g. "enabled" or "Disabled").
-	Status string `json:"status"`
+	Status string `json:"status" example:"enabled"`
 	// VerificationToken is the expected token that your endpoint must echo back during verification.
-	VerificationToken string `json:"verificationToken" validate:"required"`
+	VerificationToken string `json:"verificationToken" validate:"required" example:"1234567890"`
 }
 
 // RegisterWebhookResponse is returned after a webhook is successfully created.

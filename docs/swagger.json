@@ -728,39 +728,48 @@
             "properties": {
                 "condition": {
                     "description": "Condition is a CEL expression evaluated against the metric to decide when to fire.",
-                    "type": "string"
+                    "type": "string",
+                    "example": "value \u003e 55"
                 },
                 "coolDownPeriod": {
                     "description": "CoolDownPeriod is the minimum number of seconds between successive firings.",
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 30
                 },
                 "description": {
                     "description": "Description is an optional human-friendly explanation of the webhook.",
-                    "type": "string"
+                    "type": "string",
+                    "example": "This webhook is used to notify when the speed of the vehicle exceeds 55 mph."
                 },
                 "displayName": {
                     "description": "DisplayName is a user-friendly unique name per developer license.",
-                    "type": "string"
+                    "type": "string",
+                    "example": "Speed Alert"
                 },
                 "metricName": {
                     "description": "MetricName is the fully qualified signal/metric to monitor.",
-                    "type": "string"
+                    "type": "string",
+                    "example": "speed"
                 },
                 "service": {
                     "description": "Service is the subsystem producing the metric (e.g. \"vehicles\").",
-                    "type": "string"
+                    "type": "string",
+                    "example": "telemetry.signals"
                 },
                 "status": {
                     "description": "Status sets the initial state for the webhook (e.g. \"enabled\" or \"Disabled\").",
-                    "type": "string"
+                    "type": "string",
+                    "example": "enabled"
                 },
                 "targetURL": {
                     "description": "TargetURL is the HTTPS endpoint that will receive webhook callbacks.",
-                    "type": "string"
+                    "type": "string",
+                    "example": "https://example.com/webhook"
                 },
                 "verificationToken": {
                     "description": "VerificationToken is the expected token that your endpoint must echo back during verification.",
-                    "type": "string"
+                    "type": "string",
+                    "example": "1234567890"
                 }
             }
         },
