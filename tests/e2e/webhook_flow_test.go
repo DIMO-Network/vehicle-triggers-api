@@ -56,12 +56,11 @@ func TestWebhookFlow(t *testing.T) {
 
 	// add dev license to identity api
 	err = tc.Identity.SetRequestResponse(
-		`{"query":"\n\t\tquery($clientId: Address){\n\t\tdeveloperLicense(by: { clientId: $clientId }) {\n\t\t\tclientId\n\t\t\ttokenId\n\t\t}\n\t}","variables":{"clientId":"0x1234567890123456789012345678901234567890"}}`,
+		`{"query":"\n\tquery($clientId: Address){\n\t\tdeveloperLicense(by: { clientId: $clientId }) {\n\t\t\tclientId\n\t\t}\n\t}","variables":{"clientId":"0x1234567890123456789012345678901234567890"}}`,
 		map[string]any{
 			"data": map[string]any{
 				"developerLicense": map[string]any{
 					"clientId": devAddress.String(),
-					"tokenId":  54321,
 				},
 			},
 		})

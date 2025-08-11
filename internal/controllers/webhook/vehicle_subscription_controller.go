@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
@@ -426,15 +427,11 @@ func getVehicleTokenID(c *fiber.Ctx) (*big.Int, error) {
 }
 
 func getDevLicense(c *fiber.Ctx) (common.Address, error) {
-	dl, ok := c.Locals("developer_license_address").([]byte)
-	if !ok {
-		return common.Address{}, richerrors.Error{
-			ExternalMsg: "Developer license not found in request context",
-			Err:         fmt.Errorf("developer license not found in request context"),
-			Code:        fiber.StatusInternalServerError,
-		}
+	token, err := auth.GetDexJWT(c)
+	if err != nil {
+		return common.Address{}, err
 	}
-	return common.BytesToAddress(dl), nil
+	return token.EthereumAddress, nil
 }
 
 func getWebhookID(c *fiber.Ctx) (string, error) {

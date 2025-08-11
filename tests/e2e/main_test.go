@@ -35,9 +35,9 @@ func GetTestServices(t *testing.T) *TestServices {
 		logger := zerolog.New(os.Stdout).Level(zerolog.WarnLevel)
 		zerolog.DefaultContextLogger = &logger
 		settings := config.Settings{
-			Port:    8080,
-			MonPort: 9090,
-			// TokenExchangeIssuer:          "http://127.0.0.1:3003",
+			Port:                8080,
+			MonPort:             9090,
+			JWKKeySetURL:        "http://127.0.0.1:3003/keys",
 			VehicleNFTAddress:   common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
 			DIMORegistryChainID: 137,
 		}
@@ -55,7 +55,7 @@ func GetTestServices(t *testing.T) *TestServices {
 		waitForSetup(t, &wg, func(t *testing.T) {
 			auth := setupAuthServer(t)
 			testServices.Auth = auth
-			// testServices.Settings.TokenExchangeJWTKeySetURL = auth.URL() + "/keys"
+			testServices.Settings.JWKKeySetURL = auth.URL() + "/keys"
 		})
 		waitForSetup(t, &wg, func(t *testing.T) {
 			kafka := setupMockKafkaServer(t)

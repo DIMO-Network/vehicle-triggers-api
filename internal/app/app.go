@@ -9,6 +9,7 @@ import (
 	"github.com/DIMO-Network/server-garage/pkg/fibercommon"
 	"github.com/DIMO-Network/shared/pkg/db"
 	_ "github.com/DIMO-Network/vehicle-triggers-api/docs" // Import Swagger docs
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
@@ -74,7 +75,7 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 
 	// Create a JWT middleware that verifies developer licenses.
 	// settings.IdentityAPIURL is loaded from your settings.yaml.
-	jwtMiddleware := webhook.JWTMiddleware(identityClient, logger)
+
 	// Register Webhook routes.
 	webhookController, err := webhook.NewWebhookController(repo, webhookCache)
 	if err != nil {
@@ -88,22 +89,25 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 		})
 	})
 
+	jwtMiddleware := auth.Middleware(settings)
+	devLicenseMiddleware := auth.NewDevLicenseValidator(identityClient)
+	devJWTAuth := app.Use(jwtMiddleware, devLicenseMiddleware)
 	// Webhook CRUD
-	app.Get("/v1/webhooks", jwtMiddleware, webhookController.ListWebhooks)
-	app.Post("/v1/webhooks", jwtMiddleware, webhookController.RegisterWebhook)
-	app.Get("/v1/webhooks/signals", jwtMiddleware, webhookController.GetSignalNames)
-	app.Get("/v1/webhooks/:webhookId", jwtMiddleware, vehicleSubscriptionController.ListVehiclesForWebhook)
-	app.Put("/v1/webhooks/:webhookId", jwtMiddleware, webhookController.UpdateWebhook)
-	app.Delete("/v1/webhooks/:webhookId", jwtMiddleware, webhookController.DeleteWebhook)
+	devJWTAuth.Get("/v1/webhooks", webhookController.ListWebhooks)
+	devJWTAuth.Post("/v1/webhooks", webhookController.RegisterWebhook)
+	devJWTAuth.Get("/v1/webhooks/signals", webhookController.GetSignalNames)
+	devJWTAuth.Get("/v1/webhooks/:webhookId", vehicleSubscriptionController.ListVehiclesForWebhook)
+	devJWTAuth.Put("/v1/webhooks/:webhookId", webhookController.UpdateWebhook)
+	devJWTAuth.Delete("/v1/webhooks/:webhookId", webhookController.DeleteWebhook)
 
 	// Vehicle subscriptions
-	app.Post("/v1/webhooks/:webhookId/subscribe/list", jwtMiddleware, vehicleSubscriptionController.SubscribeVehiclesFromList)
-	app.Post("/v1/webhooks/:webhookId/subscribe/all", jwtMiddleware, vehicleSubscriptionController.SubscribeAllVehiclesToWebhook)
-	app.Post("/v1/webhooks/:webhookId/subscribe/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.AssignVehicleToWebhook)
-	app.Delete("/v1/webhooks/:webhookId/unsubscribe/list", jwtMiddleware, vehicleSubscriptionController.UnsubscribeVehiclesFromList)
-	app.Delete("/v1/webhooks/:webhookId/unsubscribe/all", jwtMiddleware, vehicleSubscriptionController.UnsubscribeAllVehiclesFromWebhook)
-	app.Delete("/v1/webhooks/:webhookId/unsubscribe/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.RemoveVehicleFromWebhook)
-	app.Get("/v1/webhooks/vehicles/:vehicleTokenId", jwtMiddleware, vehicleSubscriptionController.ListSubscriptions)
+	devJWTAuth.Post("/v1/webhooks/:webhookId/subscribe/list", vehicleSubscriptionController.SubscribeVehiclesFromList)
+	devJWTAuth.Post("/v1/webhooks/:webhookId/subscribe/all", vehicleSubscriptionController.SubscribeAllVehiclesToWebhook)
+	devJWTAuth.Post("/v1/webhooks/:webhookId/subscribe/:vehicleTokenId", vehicleSubscriptionController.AssignVehicleToWebhook)
+	devJWTAuth.Delete("/v1/webhooks/:webhookId/unsubscribe/list", vehicleSubscriptionController.UnsubscribeVehiclesFromList)
+	devJWTAuth.Delete("/v1/webhooks/:webhookId/unsubscribe/all", vehicleSubscriptionController.UnsubscribeAllVehiclesFromWebhook)
+	devJWTAuth.Delete("/v1/webhooks/:webhookId/unsubscribe/:vehicleTokenId", vehicleSubscriptionController.RemoveVehicleFromWebhook)
+	devJWTAuth.Get("/v1/webhooks/vehicles/:vehicleTokenId", vehicleSubscriptionController.ListSubscriptions)
 
 	return app, nil
 }
