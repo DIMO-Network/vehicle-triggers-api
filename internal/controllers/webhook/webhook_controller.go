@@ -11,10 +11,10 @@ import (
 
 	"github.com/DIMO-Network/model-garage/pkg/schema"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/celcondition"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 	"github.com/volatiletech/null/v8"
@@ -119,8 +119,10 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 	}
 	// --- End URI Validation ---
 
-	developerLicenseAddress := c.Locals("developer_license_address").([]byte)
-	devLicenseAddr := common.BytesToAddress(developerLicenseAddress)
+	token, err := auth.GetDexJWT(c)
+	if err != nil {
+		return err
+	}
 
 	req := triggersrepo.CreateTriggerRequest{
 		Service:                 payload.Service,
@@ -130,7 +132,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		Status:                  payload.Status,
 		Description:             payload.Description,
 		CooldownPeriod:          payload.CoolDownPeriod,
-		DeveloperLicenseAddress: devLicenseAddr,
+		DeveloperLicenseAddress: token.EthereumAddress,
 		DisplayName:             payload.DisplayName,
 	}
 

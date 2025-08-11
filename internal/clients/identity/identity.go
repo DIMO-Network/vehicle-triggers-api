@@ -41,12 +41,11 @@ func New(settings *config.Settings, logger zerolog.Logger) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) VerifyDeveloperLicense(ctx context.Context, clientID string) (bool, int, error) {
+func (c *Client) IsDevLicense(ctx context.Context, clientID common.Address) (bool, error) {
 	query := `
-		query($clientId: Address){
+	query($clientId: Address){
 		developerLicense(by: { clientId: $clientId }) {
 			clientId
-			tokenId
 		}
 	}`
 
@@ -54,7 +53,7 @@ func (c *Client) VerifyDeveloperLicense(ctx context.Context, clientID string) (b
 		"clientId": clientID,
 	})
 	if err != nil {
-		return false, 0, richerrors.Error{
+		return false, richerrors.Error{
 			Code:        http.StatusInternalServerError,
 			ExternalMsg: "Failed to verify developer license",
 			Err:         err,
@@ -63,18 +62,22 @@ func (c *Client) VerifyDeveloperLicense(ctx context.Context, clientID string) (b
 
 	var resp IdentityResponse[DeveloperLicenseResponse]
 	if err := json.Unmarshal(bodyBytes, &resp); err != nil {
-		return false, 0, fmt.Errorf("failed to unmarshal GraphQL response: %w", err)
+		return false, richerrors.Error{
+			Code:        http.StatusInternalServerError,
+			ExternalMsg: "Failed to verify developer license",
+			Err:         fmt.Errorf("failed to unmarshal GraphQL response: %w", err),
+		}
 	}
-	if len(resp.Errors) > 0 || resp.Data.DeveloperLicense.ClientID == "" {
-		return false, 0, nil
+	if len(resp.Errors) > 0 || resp.Data.DeveloperLicense.ClientID != clientID {
+		return false, nil
 	}
-	return true, resp.Data.DeveloperLicense.TokenID, nil
+	return true, nil
 }
 
 func (c *Client) GetSharedVehicles(ctx context.Context, devLicense []byte) ([]*big.Int, error) {
 	ethAddress := common.BytesToAddress(devLicense).Hex()
 	query := `
-		query($clientId: Address){
+	query($clientId: Address){
 		vehicles(first: 50, filterBy: { privileged: $clientId }) {
 			nodes {
 				tokenDID
@@ -147,7 +150,7 @@ func (c *Client) SendRequest(ctx context.Context, query string, variables map[st
 		return nil, fmt.Errorf("failed to read GraphQL response body: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("non-200 status code: %s", string(bodyBytes))
+		return nil, fmt.Errorf("identity API returned non-200 status code got %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 	return bodyBytes, nil
 }

@@ -1,6 +1,9 @@
 package identity
 
-import "github.com/DIMO-Network/cloudevent"
+import (
+	"github.com/DIMO-Network/cloudevent"
+	"github.com/ethereum/go-ethereum/common"
+)
 
 // IdentityResponse is a generic response from the Identity API.
 type IdentityResponse[T any] struct {
@@ -30,6 +33,6 @@ type DeveloperLicenseResponse struct {
 }
 
 type DeveloperLicense struct {
-	ClientID string `json:"clientId"`
-	TokenID  int    `json:"tokenId"`
+	ClientID common.Address `json:"clientId"`
+	TokenID  int            `json:"tokenId"`
 }

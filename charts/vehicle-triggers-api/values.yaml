@@ -35,13 +35,10 @@ env:
   DB_MAX_OPEN_CONNECTIONS: '10'
   DB_MAX_IDLE_CONNECTIONS: '3'
   SERVICE_NAME: vehicle-triggers-api
-  JWT_KEY_SET_URL: https://auth.dev.dimo.zone/keys
+  JWK_KEY_SET_URL: https://auth.dev.dimo.zone/keys
   IDENTITY_API_URL: https://identity-api.dev.dimo.zone/query
   KAFKA_BROKERS: kafka-dev-dimo-kafka-kafka-brokers:9092
   DEVICE_SIGNALS_TOPIC: topic.device.signals
-  TOKEN_EXCHANGE_JWK_KEY_SET_URL: http://dex-roles-rights.dev.svc.cluster.local:5556/keys
-  TOKEN_EXCHANGE_GRPC_ADDR: token-exchange-api-dev:8086
-  DIMORegistryChainID: 80002
   VEHICLE_NFT_ADDRESS: '0x45fbCD3ef7361d156e8b16F5538AE36DEdf61Da8'
 service:
   type: ClusterIP

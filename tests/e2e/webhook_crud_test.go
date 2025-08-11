@@ -38,12 +38,11 @@ func TestWebhookCRUDOperations(t *testing.T) {
 
 	// Set up identity API mock to return developer license
 	err = tc.Identity.SetRequestResponse(
-		fmt.Sprintf(`{"query":"\n\t\tquery($clientId: Address){\n\t\tdeveloperLicense(by: { clientId: $clientId }) {\n\t\t\tclientId\n\t\t\ttokenId\n\t\t}\n\t}","variables":{"clientId":"%s"}}`, devAddress.String()),
+		fmt.Sprintf(`{"query":"\n\tquery($clientId: Address){\n\t\tdeveloperLicense(by: { clientId: $clientId }) {\n\t\t\tclientId\n\t\t}\n\t}","variables":{"clientId":"%s"}}`, devAddress.String()),
 		map[string]any{
 			"data": map[string]any{
 				"developerLicense": map[string]any{
 					"clientId": devAddress.String(),
-					"tokenId":  54321,
 				},
 			},
 		})

@@ -12,6 +12,7 @@ type Settings struct {
 	EnablePprof           bool           `env:"ENABLE_PPROF"`
 	LogLevel              string         `env:"LOG_LEVEL"`
 	ServiceName           string         `env:"SERVICE_NAME"`
+	JWKKeySetURL          string         `env:"JWT_KEY_SET_URL"`
 	IdentityAPIURL        string         `env:"IDENTITY_API_URL"`
 	KafkaBrokers          string         `env:"KAFKA_BROKERS"`
 	DeviceSignalsTopic    string         `env:"DEVICE_SIGNALS_TOPIC"`
