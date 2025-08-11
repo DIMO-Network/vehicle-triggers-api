@@ -34,7 +34,7 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 
 	repo := triggersrepo.NewRepository(store.DBS().Writer.DB)
 
-	webhookCache, err := startDeviceSignalsConsumer(ctx, logger, settings, tokenExchangeAPI, repo)
+	webhookCache, err := startDeviceSignalsConsumer(ctx, settings, tokenExchangeAPI, repo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start device signals consumer: %w", err)
 	}
@@ -57,7 +57,6 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 	tokenExchangeClient *tokenexchange.Client,
 	identityClient *identity.Client,
 	settings *config.Settings) (*fiber.App, error) {
-	logger.Info().Msg("Starting Vehicle Triggers API...")
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
@@ -82,7 +81,6 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 		return nil, fmt.Errorf("failed to create webhook controller: %w", err)
 	}
 	vehicleSubscriptionController := webhook.NewVehicleSubscriptionController(repo, identityClient, tokenExchangeClient, webhookCache)
-	logger.Info().Msg("Registering routes...")
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
@@ -111,7 +109,7 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 }
 
 // startDeviceSignalsConsumer sets up and starts the Kafka consumer for topic.device.signals
-func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, repo *triggersrepo.Repository) (*webhookcache.WebhookCache, error) {
+func startDeviceSignalsConsumer(ctx context.Context, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, repo *triggersrepo.Repository) (*webhookcache.WebhookCache, error) {
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
@@ -120,7 +118,7 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 		ClusterConfig:   clusterConfig,
 		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
 		Topic:           settings.DeviceSignalsTopic,
-		GroupID:         "vehicle-events",
+		GroupID:         "vehicle-triggers",
 		MaxInFlight:     1,
 	}
 
@@ -137,10 +135,12 @@ func startDeviceSignalsConsumer(ctx context.Context, logger zerolog.Logger, sett
 		return nil, fmt.Errorf("failed to populate webhook cache at startup: %w", err)
 	}
 
+	logger := zerolog.Ctx(ctx)
 	// Periodically refresh the cache so new/updated webhooks show up without a restart
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
+		logger := zerolog.Ctx(ctx)
 		for range ticker.C {
 			if err := webhookCache.PopulateCache(ctx); err != nil {
 				logger.Error().Err(err).Msg("Periodic cache refresh failed")

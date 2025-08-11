@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/migrations"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/ericlagergren/decimal"
 	"github.com/ethereum/go-ethereum/common"
@@ -22,7 +23,6 @@ import (
 )
 
 const (
-	schemaName = "vehicle_events_api"
 	// StatusEnabled is the status of a trigger that is enabled.
 	StatusEnabled = "enabled"
 	// StatusDisabled is the status of a trigger that is disabled.
@@ -352,7 +352,7 @@ func (r *Repository) GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx con
 	subscriptions, err := models.VehicleSubscriptions(
 		models.VehicleSubscriptionWhere.VehicleTokenID.EQ(dec),
 		qm.InnerJoin(fmt.Sprintf("%s.%s on %s = %s",
-			schemaName,
+			migrations.SchemaName,
 			models.TableNames.Triggers,
 			models.TriggerTableColumns.ID,
 			models.VehicleSubscriptionTableColumns.TriggerID,
@@ -456,7 +456,7 @@ func (r *Repository) GetWebhookOwner(ctx context.Context, triggerID string) (com
 func (r *Repository) InternalGetAllVehicleSubscriptions(ctx context.Context) ([]*models.VehicleSubscription, error) {
 	subs, err := models.VehicleSubscriptions(
 		qm.InnerJoin(fmt.Sprintf("%s.%s on %s = %s",
-			schemaName,
+			migrations.SchemaName,
 			models.TableNames.Triggers,
 			models.TriggerTableColumns.ID,
 			models.VehicleSubscriptionTableColumns.TriggerID,

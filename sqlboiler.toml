@@ -2,11 +2,11 @@ output = "internal/db/models"
 no-tests = true
 
 [psql]
-dbname = "vehicle_events_api"
+dbname = "vehicle_triggers_api"
 blacklist = ["migrations"]
 host   = "localhost"
 port   = 5432
 user   = "dimo"
 pass   = "dimo"
-schema = "vehicle_events_api"
+schema = "vehicle_triggers_api"
 sslmode= "disable"
