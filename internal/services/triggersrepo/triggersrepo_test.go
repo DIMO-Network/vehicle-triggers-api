@@ -62,6 +62,21 @@ func TestCreateTrigger(t *testing.T) {
 		assert.NotEqual(t, trigger1.ID, trigger2.ID)
 	})
 
+	t.Run("disallow duplicates triggers with display name", func(t *testing.T) {
+		// Create first trigger
+		duplicateReq := baseReq
+		duplicateReq.DisplayName = "Duplicate Trigger"
+		_, err := repo.CreateTrigger(ctx, duplicateReq)
+		require.NoError(t, err)
+
+		// This should fail since display name must be unique
+		_, err = repo.CreateTrigger(ctx, duplicateReq)
+		require.Error(t, err)
+		var richErr richerrors.Error
+		require.ErrorAs(t, err, &richErr)
+		assert.Equal(t, richErr.Code, http.StatusBadRequest)
+	})
+
 	t.Run("Missing Metric Name", func(t *testing.T) {
 		reqCopy := baseReq
 		reqCopy.MetricName = ""

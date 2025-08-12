@@ -109,8 +109,15 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 	}
 
 	if err := trigger.Insert(ctx, r.db, boil.Infer()); err != nil {
+		if isDuplicateDisplayNameError(err) {
+			return nil, richerrors.Error{
+				ExternalMsg: "Display name must be unique",
+				Err:         err,
+				Code:        http.StatusBadRequest,
+			}
+		}
 		return nil, richerrors.Error{
-			ExternalMsg: "Error creating trigger",
+			ExternalMsg: "Error during creation",
 			Err:         err,
 			Code:        http.StatusInternalServerError,
 		}
@@ -192,6 +199,14 @@ func (r *Repository) UpdateTrigger(ctx context.Context, trigger *models.Trigger)
 		models.TriggerColumns.CreatedAt,
 	))
 	if err != nil {
+		if isDuplicateDisplayNameError(err) {
+			return richerrors.Error{
+				ExternalMsg: "Display name must be unique",
+				Err:         err,
+				Code:        http.StatusBadRequest,
+			}
+		}
+
 		return richerrors.Error{
 			ExternalMsg: "Error updating trigger",
 			Err:         err,
