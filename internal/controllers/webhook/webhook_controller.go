@@ -13,7 +13,6 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
-	"github.com/rs/zerolog"
 	"github.com/volatiletech/null/v8"
 )
 
@@ -35,7 +34,7 @@ type Repository interface {
 }
 
 type WebhookCache interface {
-	PopulateCache(ctx context.Context) error
+	ScheduleRefresh(ctx context.Context)
 }
 
 // WebhookController is the controller for creating and managing webhooks.
@@ -256,9 +255,7 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		return fmt.Errorf("failed to update webhook: %w", err)
 	}
 
-	if err := w.cache.PopulateCache(c.Context()); err != nil {
-		zerolog.Ctx(c.UserContext()).Error().Err(err).Msg("Failed to populate cache after updating webhook")
-	}
+	w.cache.ScheduleRefresh(c.Context())
 
 	return c.Status(fiber.StatusOK).JSON(UpdateWebhookResponse{ID: event.ID, Message: "Webhook updated successfully"})
 }
@@ -292,9 +289,7 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 	if err := w.repo.DeleteTrigger(c.Context(), webhookID, devLicense); err != nil {
 		return fmt.Errorf("failed to delete webhook: %w", err)
 	}
-	if err := w.cache.PopulateCache(c.Context()); err != nil {
-		zerolog.Ctx(c.UserContext()).Error().Err(err).Msg("Failed to populate cache after deleting webhook")
-	}
+	w.cache.ScheduleRefresh(c.Context())
 
 	return c.Status(fiber.StatusOK).JSON(GenericResponse{Message: "Webhook deleted successfully"})
 }

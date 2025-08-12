@@ -1,6 +1,8 @@
 package config
 
 import (
+	"time"
+
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -19,6 +21,8 @@ type Settings struct {
 	TokenExchangeGRPCAddr string         `env:"TOKEN_EXCHANGE_GRPC_ADDR"`
 	VehicleNFTAddress     common.Address `env:"VEHICLE_NFT_ADDRESS"`
 	DIMORegistryChainID   uint64         `env:"DIMO_REGISTRY_CHAIN_ID"`
+	// CacheDebounceTime wait time betweeen to successive cache refreshes
+	CacheDebounceTime time.Duration `env:"CACHE_DEBOUNCE_TIME"`
 
 	DB db.Settings `envPrefix:"DB_"`
 }

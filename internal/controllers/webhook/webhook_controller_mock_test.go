@@ -231,16 +231,14 @@ func (m *MockWebhookCache) EXPECT() *MockWebhookCacheMockRecorder {
 	return m.recorder
 }
 
-// PopulateCache mocks base method.
-func (m *MockWebhookCache) PopulateCache(ctx context.Context) error {
+// ScheduleRefresh mocks base method.
+func (m *MockWebhookCache) ScheduleRefresh(ctx context.Context) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PopulateCache", ctx)
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "ScheduleRefresh", ctx)
 }
 
-// PopulateCache indicates an expected call of PopulateCache.
-func (mr *MockWebhookCacheMockRecorder) PopulateCache(ctx any) *gomock.Call {
+// ScheduleRefresh indicates an expected call of ScheduleRefresh.
+func (mr *MockWebhookCacheMockRecorder) ScheduleRefresh(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PopulateCache", reflect.TypeOf((*MockWebhookCache)(nil).PopulateCache), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScheduleRefresh", reflect.TypeOf((*MockWebhookCache)(nil).ScheduleRefresh), ctx)
 }

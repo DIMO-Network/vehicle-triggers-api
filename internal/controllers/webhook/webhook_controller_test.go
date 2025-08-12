@@ -59,7 +59,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 		// Setup test server for webhook verification
 		testServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, "test-token")
+			_, _ = fmt.Fprint(w, "test-token")
 		}))
 		defer testServer.Close()
 
@@ -98,7 +98,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		if !assert.Equal(t, fiber.StatusCreated, resp.StatusCode) {
 			body, _ := io.ReadAll(resp.Body)
@@ -126,7 +126,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
 	})
@@ -155,7 +155,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		if !assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode) {
 			body, _ := io.ReadAll(resp.Body)
@@ -188,7 +188,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
 	})
@@ -204,7 +204,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 		// Setup test server that returns wrong token
 		testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, "wrong-token")
+			_, _ = fmt.Fprint(w, "wrong-token")
 		}))
 		defer testServer.Close()
 
@@ -224,7 +224,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
 	})
@@ -265,7 +265,7 @@ func TestWebhookController_ListWebhooks(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
 
@@ -294,7 +294,7 @@ func TestWebhookController_ListWebhooks(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
 
@@ -347,8 +347,7 @@ func TestWebhookController_UpdateWebhook(t *testing.T) {
 			Times(1)
 
 		mockCache.EXPECT().
-			PopulateCache(gomock.Any()).
-			Return(nil).
+			ScheduleRefresh(gomock.Any()).
 			Times(1)
 
 		body, _ := json.Marshal(payload)
@@ -357,7 +356,7 @@ func TestWebhookController_UpdateWebhook(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
 
@@ -392,15 +391,14 @@ func TestWebhookController_DeleteWebhook(t *testing.T) {
 			Times(1)
 
 		mockCache.EXPECT().
-			PopulateCache(gomock.Any()).
-			Return(nil).
+			ScheduleRefresh(gomock.Any()).
 			Times(1)
 
 		req := httptest.NewRequest(http.MethodDelete, "/webhooks/"+triggerID, nil)
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
 
@@ -426,7 +424,7 @@ func TestWebhookController_GetSignalNames(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
 

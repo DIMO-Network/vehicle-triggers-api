@@ -115,7 +115,7 @@ func (w *WebhookController) validateSignalName(signalName string) error {
 func validateCondition(condition string) error {
 	_, err := celcondition.PrepareCondition(condition)
 	if err != nil {
-		err := fmt.Errorf("Invalid CEL condition: %w", err)
+		err := fmt.Errorf("invalid CEL condition: %w", err)
 		return richerrors.Error{
 			ExternalMsg: err.Error(),
 			Err:         err,

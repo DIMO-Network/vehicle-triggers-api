@@ -40,6 +40,7 @@ func GetTestServices(t *testing.T) *TestServices {
 			JWKKeySetURL:        "http://127.0.0.1:3003/keys",
 			VehicleNFTAddress:   common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
 			DIMORegistryChainID: 137,
+			CacheDebounceTime:   -1,
 		}
 
 		// Setup services

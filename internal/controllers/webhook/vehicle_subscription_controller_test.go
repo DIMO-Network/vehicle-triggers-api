@@ -89,15 +89,14 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 			Times(1)
 
 		testCtrl.mockCache.EXPECT().
-			PopulateCache(gomock.Any()).
-			Return(nil).
+			ScheduleRefresh(gomock.Any()).
 			Times(1)
 
 		req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID+"/subscribe/12345", nil)
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -117,7 +116,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
@@ -148,7 +147,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
@@ -184,7 +183,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	})
@@ -231,7 +230,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 	})
@@ -285,8 +284,7 @@ func TestVehicleSubscriptionController_SubscribeVehiclesFromList(t *testing.T) {
 		}
 
 		testCtrl.mockCache.EXPECT().
-			PopulateCache(gomock.Any()).
-			Return(nil).
+			ScheduleRefresh(gomock.Any()).
 			Times(1)
 
 		body, _ := json.Marshal(payload)
@@ -295,7 +293,7 @@ func TestVehicleSubscriptionController_SubscribeVehiclesFromList(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -326,7 +324,7 @@ func TestVehicleSubscriptionController_SubscribeVehiclesFromList(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
@@ -355,19 +353,18 @@ func TestVehicleSubscriptionController_RemoveVehicleFromWebhook(t *testing.T) {
 		// Mock subscription deletion
 		testCtrl.mockRepo.EXPECT().
 			DeleteVehicleSubscription(gomock.Any(), webhookID, vehicleTokenID).
-			Return(1, nil).
+			Return(int64(1), nil).
 			Times(1)
 
 		testCtrl.mockCache.EXPECT().
-			PopulateCache(gomock.Any()).
-			Return(nil).
+			ScheduleRefresh(gomock.Any()).
 			Times(1)
 
 		req := httptest.NewRequest(http.MethodDelete, "/webhooks/"+webhookID+"/unsubscribe/12345", nil)
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -427,15 +424,14 @@ func TestVehicleSubscriptionController_SubscribeAllVehiclesToWebhook(t *testing.
 				Times(1)
 		}
 		testCtrl.mockCache.EXPECT().
-			PopulateCache(gomock.Any()).
-			Return(nil).
+			ScheduleRefresh(gomock.Any()).
 			Times(1)
 
 		req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID+"/subscribe/all", nil)
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -471,7 +467,7 @@ func TestVehicleSubscriptionController_SubscribeAllVehiclesToWebhook(t *testing.
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	})
@@ -502,15 +498,14 @@ func TestVehicleSubscriptionController_UnsubscribeAllVehiclesFromWebhook(t *test
 			Times(1)
 
 		testCtrl.mockCache.EXPECT().
-			PopulateCache(gomock.Any()).
-			Return(nil).
+			ScheduleRefresh(gomock.Any()).
 			Times(1)
 
 		req := httptest.NewRequest(http.MethodDelete, "/webhooks/"+webhookID+"/unsubscribe/all", nil)
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -554,7 +549,7 @@ func TestVehicleSubscriptionController_ListSubscriptions(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -606,7 +601,7 @@ func TestVehicleSubscriptionController_ListVehiclesForWebhook(t *testing.T) {
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 

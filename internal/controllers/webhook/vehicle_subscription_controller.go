@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 )
 
 type IdentityClient interface {
@@ -96,9 +95,7 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		return fmt.Errorf("failed to assign vehicle: %w", err)
 	}
 
-	if err := v.cache.PopulateCache(c.Context()); err != nil {
-		zerolog.Ctx(c.UserContext()).Error().Err(err).Msg("Failed to populate cache after assigning vehicle")
-	}
+	v.cache.ScheduleRefresh(c.Context())
 	return c.Status(http.StatusCreated).JSON(GenericResponse{Message: "Vehicle assigned successfully"})
 }
 
@@ -197,9 +194,7 @@ func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromList(c *fiber.Ctx
 	if len(failedUnSubscriptions) > 0 {
 		return c.JSON(FailedSubscriptionResponse{FailedSubscriptions: failedUnSubscriptions})
 	}
-	if err := v.cache.PopulateCache(c.Context()); err != nil {
-		zerolog.Ctx(c.UserContext()).Error().Err(err).Msg("Failed to populate cache after subscribing vehicles")
-	}
+	v.cache.ScheduleRefresh(c.Context())
 	return c.JSON(GenericResponse{Message: fmt.Sprintf("Unsubscribed %d vehicles", len(req.VehicleTokenIDs)-len(failedUnSubscriptions))})
 
 }
@@ -239,9 +234,7 @@ func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) e
 	if err != nil {
 		return richerrors.Error{ExternalMsg: "Failed to unsubscribe", Err: err, Code: http.StatusInternalServerError}
 	}
-	if err := v.cache.PopulateCache(c.Context()); err != nil {
-		zerolog.Ctx(c.UserContext()).Error().Err(err).Msg("Failed to populate cache after unsubscribing vehicle")
-	}
+	v.cache.ScheduleRefresh(c.Context())
 	return c.JSON(GenericResponse{Message: "Vehicle unsubscribed successfully"})
 }
 
@@ -308,9 +301,7 @@ func (v *VehicleSubscriptionController) UnsubscribeAllVehiclesFromWebhook(c *fib
 	if err != nil {
 		return fmt.Errorf("failed to unsubscribe all vehicles: %w", err)
 	}
-	if err := v.cache.PopulateCache(c.Context()); err != nil {
-		zerolog.Ctx(c.UserContext()).Error().Err(err).Msg("Failed to populate cache after assigning vehicle")
-	}
+	v.cache.ScheduleRefresh(c.Context())
 	return c.JSON(GenericResponse{Message: fmt.Sprintf("Unsubscribed %d vehicles", res)})
 }
 
@@ -510,8 +501,6 @@ func (v *VehicleSubscriptionController) subscribeMultipleVehiclesToWebhook(c *fi
 	if len(failedSubscriptions) > 0 {
 		return c.JSON(FailedSubscriptionResponse{FailedSubscriptions: failedSubscriptions})
 	}
-	if err := v.cache.PopulateCache(c.Context()); err != nil {
-		zerolog.Ctx(c.UserContext()).Error().Err(err).Msg("Failed to populate cache after subscribing vehicles")
-	}
+	v.cache.ScheduleRefresh(c.Context())
 	return c.JSON(GenericResponse{Message: fmt.Sprintf("Subscribed %d vehicles", len(tokenIDs)-len(failedSubscriptions))})
 }
