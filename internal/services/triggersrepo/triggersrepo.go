@@ -31,6 +31,13 @@ const (
 	StatusDeleted = "deleted"
 )
 
+const (
+	// ServiceSignal is the service name for signal webhooks.
+	ServiceSignal = "telemetry.signals"
+	// ServiceEvent is the service name for event webhooks.
+	ServiceEvent = "telemetry.events"
+)
+
 type Repository struct {
 	db *sql.DB
 }

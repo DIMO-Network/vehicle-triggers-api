@@ -50,6 +50,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 
 		trigger1 := &models.Trigger{
 			ID:         "trigger-1",
+			Service:    triggersrepo.ServiceSignal,
 			MetricName: "speed",
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
@@ -57,6 +58,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 
 		trigger2 := &models.Trigger{
 			ID:         "trigger-2",
+			Service:    triggersrepo.ServiceSignal,
 			MetricName: "temperature",
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
@@ -85,19 +87,19 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check that cache was populated correctly
-		webhooks := cache.GetWebhooks(assetDid1.String(), "speed")
+		webhooks := cache.GetWebhooks(assetDid1.String(), triggersrepo.ServiceSignal, "speed")
 		require.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-1", webhooks[0].Trigger.ID)
 
-		webhooks = cache.GetWebhooks(assetDid2.String(), "speed")
+		webhooks = cache.GetWebhooks(assetDid2.String(), triggersrepo.ServiceSignal, "speed")
 		require.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-1", webhooks[0].Trigger.ID)
 
-		webhooks = cache.GetWebhooks(assetDid1.String(), "temperature")
+		webhooks = cache.GetWebhooks(assetDid1.String(), triggersrepo.ServiceSignal, "temperature")
 		require.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-2", webhooks[0].Trigger.ID)
 
-		webhooks = cache.GetWebhooks(assetDid2.String(), "temperature")
+		webhooks = cache.GetWebhooks(assetDid2.String(), triggersrepo.ServiceSignal, "temperature")
 		require.Nil(t, webhooks)
 	})
 
@@ -122,7 +124,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		require.NoError(t, err)
 
 		// Cache should be empty
-		webhooks := cache.GetWebhooks(randAssetDID(t).String(), "speed")
+		webhooks := cache.GetWebhooks(randAssetDID(t).String(), triggersrepo.ServiceSignal, "speed")
 		assert.Nil(t, webhooks)
 	})
 
@@ -182,7 +184,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		require.NoError(t, err)
 
 		// Cache should be empty since trigger couldn't be loaded
-		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), triggersrepo.ServiceSignal, "speed")
 		assert.Nil(t, webhooks)
 	})
 
@@ -204,6 +206,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 
 		disabledTrigger := &models.Trigger{
 			ID:         "trigger-1",
+			Service:    triggersrepo.ServiceSignal,
 			MetricName: "speed",
 			Status:     triggersrepo.StatusDisabled,
 			Condition:  "valueNumber > 10",
@@ -226,7 +229,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		require.NoError(t, err)
 
 		// Cache should be empty since trigger is disabled
-		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), triggersrepo.ServiceSignal, "speed")
 		assert.Nil(t, webhooks)
 	})
 
@@ -252,6 +255,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 
 		trigger1 := &models.Trigger{
 			ID:         "trigger-1",
+			Service:    triggersrepo.ServiceSignal,
 			MetricName: "speed",
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
@@ -259,6 +263,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 
 		trigger2 := &models.Trigger{
 			ID:         "trigger-2",
+			Service:    triggersrepo.ServiceSignal,
 			MetricName: "speed", // Same metric name
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
@@ -286,7 +291,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should have both triggers for the same metric
-		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), triggersrepo.ServiceSignal, "speed")
 		require.Len(t, webhooks, 2)
 
 		triggerIDs := []string{webhooks[0].Trigger.ID, webhooks[1].Trigger.ID}
@@ -319,6 +324,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 
 		trigger1 := &models.Trigger{
 			ID:         "trigger-1",
+			Service:    triggersrepo.ServiceSignal,
 			MetricName: "speed",
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
@@ -341,8 +347,8 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		// Verify
 		require.NoError(t, err)
 
-		webhooks1 := cache.GetWebhooks(assetDid1.String(), "speed")
-		webhooks2 := cache.GetWebhooks(assetDid2.String(), "speed")
+		webhooks1 := cache.GetWebhooks(assetDid1.String(), triggersrepo.ServiceSignal, "speed")
+		webhooks2 := cache.GetWebhooks(assetDid2.String(), triggersrepo.ServiceSignal, "speed")
 
 		require.Len(t, webhooks1, 1)
 		require.Len(t, webhooks2, 1)
@@ -365,6 +371,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		// Manually populate cache
 		trigger := &models.Trigger{
 			ID:         "trigger-1",
+			Service:    triggersrepo.ServiceSignal,
 			MetricName: "speed",
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
@@ -373,7 +380,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		assetDid := randAssetDID(t)
 		testData := map[string]map[string][]*Webhook{
 			assetDid.String(): {
-				"speed": []*Webhook{
+				webhookKey(triggersrepo.ServiceSignal, "speed"): []*Webhook{
 					{
 						Trigger: trigger,
 						Program: nil,
@@ -385,7 +392,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		cache.Update(testData)
 
 		// Test
-		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), triggersrepo.ServiceSignal, "speed")
 
 		// Verify
 		require.Len(t, webhooks, 1)
@@ -400,7 +407,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		cache := NewWebhookCache(mockRepo, &config.Settings{})
 
 		// Test with empty cache
-		webhooks := cache.GetWebhooks(randAssetDID(t).String(), "speed")
+		webhooks := cache.GetWebhooks(randAssetDID(t).String(), triggersrepo.ServiceSignal, "speed")
 
 		// Verify
 		assert.Nil(t, webhooks)
@@ -416,6 +423,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		// Manually populate cache with different metric
 		trigger := &models.Trigger{
 			ID:         "trigger-1",
+			Service:    triggersrepo.ServiceSignal,
 			MetricName: "temperature",
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
@@ -436,7 +444,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		cache.Update(testData)
 
 		// Test with different metric
-		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), triggersrepo.ServiceSignal, "speed")
 
 		// Verify
 		assert.Nil(t, webhooks)
@@ -452,6 +460,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		// Create multiple triggers for same metric
 		trigger1 := &models.Trigger{
 			ID:         "trigger-1",
+			Service:    triggersrepo.ServiceSignal,
 			MetricName: "speed",
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
@@ -459,6 +468,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 
 		trigger2 := &models.Trigger{
 			ID:         "trigger-2",
+			Service:    triggersrepo.ServiceSignal,
 			MetricName: "speed",
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
@@ -467,7 +477,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		assetDid := randAssetDID(t)
 		testData := map[string]map[string][]*Webhook{
 			assetDid.String(): {
-				"speed": []*Webhook{
+				webhookKey(triggersrepo.ServiceSignal, "speed"): []*Webhook{
 					{
 						Trigger: trigger1,
 						Program: nil,
@@ -483,7 +493,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		cache.Update(testData)
 
 		// Test
-		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), triggersrepo.ServiceSignal, "speed")
 
 		// Verify
 		require.Len(t, webhooks, 2)
@@ -506,6 +516,7 @@ func TestWebhookCache_Update(t *testing.T) {
 		// Initial data
 		trigger1 := &models.Trigger{
 			ID:         "trigger-1",
+			Service:    triggersrepo.ServiceSignal,
 			MetricName: "speed",
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
@@ -514,7 +525,7 @@ func TestWebhookCache_Update(t *testing.T) {
 		assetDid1 := randAssetDID(t)
 		initialData := map[string]map[string][]*Webhook{
 			assetDid1.String(): {
-				"speed": []*Webhook{
+				webhookKey(triggersrepo.ServiceSignal, "speed"): []*Webhook{
 					{
 						Trigger: trigger1,
 						Program: nil,
@@ -526,13 +537,14 @@ func TestWebhookCache_Update(t *testing.T) {
 		cache.Update(initialData)
 
 		// Verify initial state
-		webhooks := cache.GetWebhooks(assetDid1.String(), "speed")
+		webhooks := cache.GetWebhooks(assetDid1.String(), triggersrepo.ServiceSignal, "speed")
 		require.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-1", webhooks[0].Trigger.ID)
 
 		// New data
 		trigger2 := &models.Trigger{
 			ID:         "trigger-2",
+			Service:    triggersrepo.ServiceSignal,
 			MetricName: "temperature",
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
@@ -541,7 +553,7 @@ func TestWebhookCache_Update(t *testing.T) {
 		assetDid2 := randAssetDID(t)
 		newData := map[string]map[string][]*Webhook{
 			assetDid2.String(): {
-				"temperature": []*Webhook{
+				webhookKey(triggersrepo.ServiceSignal, "temperature"): []*Webhook{
 					{
 						Trigger: trigger2,
 						Program: nil,
@@ -553,10 +565,10 @@ func TestWebhookCache_Update(t *testing.T) {
 		cache.Update(newData)
 
 		// Verify old data is gone and new data is present
-		webhooks = cache.GetWebhooks(assetDid1.String(), "speed")
+		webhooks = cache.GetWebhooks(assetDid1.String(), triggersrepo.ServiceSignal, "speed")
 		assert.Nil(t, webhooks)
 
-		webhooks = cache.GetWebhooks(assetDid2.String(), "temperature")
+		webhooks = cache.GetWebhooks(assetDid2.String(), triggersrepo.ServiceSignal, "temperature")
 		require.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-2", webhooks[0].Trigger.ID)
 	})
@@ -571,6 +583,7 @@ func TestWebhookCache_Update(t *testing.T) {
 		// Initial data
 		trigger := &models.Trigger{
 			ID:         "trigger-1",
+			Service:    triggersrepo.ServiceSignal,
 			MetricName: "speed",
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
@@ -579,7 +592,7 @@ func TestWebhookCache_Update(t *testing.T) {
 		assetDid := randAssetDID(t)
 		initialData := map[string]map[string][]*Webhook{
 			assetDid.String(): {
-				"speed": []*Webhook{
+				webhookKey(triggersrepo.ServiceSignal, "speed"): []*Webhook{
 					{
 						Trigger: trigger,
 						Program: nil,
@@ -594,7 +607,7 @@ func TestWebhookCache_Update(t *testing.T) {
 		cache.Update(map[string]map[string][]*Webhook{})
 
 		// Verify cache is now empty
-		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), triggersrepo.ServiceSignal, "speed")
 		assert.Nil(t, webhooks)
 	})
 }

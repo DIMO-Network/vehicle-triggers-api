@@ -83,7 +83,9 @@ func (wc *WebhookCache) ScheduleRefresh(ctx context.Context) {
 	}
 }
 
-func (wc *WebhookCache) GetWebhooks(assetDID string, telemetry string) []*Webhook {
+// GetWebhooks returns the webhooks for a given vehicle token id, service, and metric name
+// Do not modify the returned slice or the webhooks themselves since they are shared with other callers.
+func (wc *WebhookCache) GetWebhooks(assetDID string, service, metricName string) []*Webhook {
 	wc.mu.RLock()
 	defer wc.mu.RUnlock()
 
@@ -91,8 +93,9 @@ func (wc *WebhookCache) GetWebhooks(assetDID string, telemetry string) []*Webhoo
 	if !exists {
 		return nil
 	}
+	key := webhookKey(service, metricName)
 
-	return byVehicle[telemetry]
+	return byVehicle[key]
 }
 
 func (wc *WebhookCache) Update(newData map[string]map[string][]*Webhook) {
@@ -138,10 +141,15 @@ func (wc *WebhookCache) fetchEventVehicleWebhooks(ctx context.Context) (map[stri
 			newData[sub.AssetDid] = make(map[string][]*Webhook)
 		}
 
-		newData[sub.AssetDid][webhook.Trigger.MetricName] = append(newData[sub.AssetDid][webhook.Trigger.MetricName], webhook)
+		key := webhookKey(webhook.Trigger.Service, webhook.Trigger.MetricName)
+		newData[sub.AssetDid][key] = append(newData[sub.AssetDid][key], webhook)
 	}
 	if len(newData) == 0 {
 		return nil, errNoWebhookConfig
 	}
 	return newData, nil
+}
+
+func webhookKey(service, metricName string) string {
+	return service + ":" + metricName
 }

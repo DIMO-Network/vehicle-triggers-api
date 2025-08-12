@@ -39,7 +39,7 @@ func TestWebhookFlow(t *testing.T) {
 	// Step 1: Create a webhook
 	t.Log("Step 1: Creating webhook")
 	webhookPayload := webhook.RegisterWebhookRequest{
-		Service:           "telemetry.signals",
+		Service:           triggersrepo.ServiceSignal,
 		MetricName:        "speed",
 		Condition:         "valueNumber > 20",
 		CoolDownPeriod:    10,

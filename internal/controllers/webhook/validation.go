@@ -12,6 +12,7 @@ import (
 
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/celcondition"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -88,9 +89,9 @@ func validateTargetURL(targetURL string) error {
 
 func (w *WebhookController) validateServiceAndMetricName(serviceName string, metricName string) error {
 	switch serviceName {
-	case "telemetry.signals":
+	case triggersrepo.ServiceSignal:
 		return w.validateSignalName(metricName)
-	case "telemetry.events":
+	case triggersrepo.ServiceEvent:
 		return nil
 	default:
 		return richerrors.Error{

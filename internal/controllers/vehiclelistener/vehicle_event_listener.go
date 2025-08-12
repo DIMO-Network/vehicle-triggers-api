@@ -72,7 +72,7 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 		TokenID:         big.NewInt(int64(signal.TokenID)),
 	}
 
-	webhooks := l.webhookCache.GetWebhooks(did.String(), signal.Name)
+	webhooks := l.webhookCache.GetWebhooks(did.String(), triggersrepo.ServiceSignal, signal.Name)
 
 	if len(webhooks) == 0 {
 		// no webhooks found for this signal, skip
