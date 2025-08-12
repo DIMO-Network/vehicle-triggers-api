@@ -39,8 +39,6 @@ type RegisterWebhookResponse struct {
 // UpdateWebhookRequest represents the fields that can be modified on an existing webhook.
 // All fields are optional; only provided fields will be updated.
 type UpdateWebhookRequest struct {
-	// MetricName updates the signal/event name used by the webhook.
-	MetricName *string `json:"metricName"`
 	// Condition updates the CEL expression used to decide when to fire.
 	Condition *string `json:"condition"`
 	// CoolDownPeriod updates the minimum number of seconds between firings.

@@ -852,10 +852,6 @@ const docTemplate = `{
                     "description": "DisplayName updates the user-friendly unique name per developer license.",
                     "type": "string"
                 },
-                "metricName": {
-                    "description": "MetricName updates the signal/event name used by the webhook.",
-                    "type": "string"
-                },
                 "status": {
                     "description": "Status updates the current state of the webhook (e.g. \"enabled\" or \"Disabled\").",
                     "type": "string"

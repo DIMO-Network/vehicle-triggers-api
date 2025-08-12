@@ -212,12 +212,6 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	if payload.MetricName != nil {
-		if err := w.validateServiceAndMetricName(event.Service, *payload.MetricName); err != nil {
-			return err
-		}
-		event.MetricName = *payload.MetricName
-	}
 	if payload.TargetURL != nil {
 		if err := validateTargetURL(*payload.TargetURL); err != nil {
 			return err

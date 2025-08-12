@@ -14,7 +14,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/server-garage/pkg/fibercommon"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
@@ -327,9 +326,9 @@ func TestWebhookController_UpdateWebhook(t *testing.T) {
 			FailureCount:   5,
 		}
 
-		newMetricName := vss.FieldPowertrainTransmissionTravelledDistance
+		newCondition := "valueNumber > 60"
 		payload := UpdateWebhookRequest{
-			MetricName: &newMetricName,
+			Condition: &newCondition,
 		}
 
 		mockRepo.EXPECT().
@@ -340,7 +339,7 @@ func TestWebhookController_UpdateWebhook(t *testing.T) {
 		mockRepo.EXPECT().
 			UpdateTrigger(gomock.Any(), gomock.Any()).
 			DoAndReturn(func(ctx context.Context, trigger *models.Trigger) error {
-				assert.Equal(t, newMetricName, trigger.MetricName)
+				assert.Equal(t, newCondition, trigger.Condition)
 				assert.Equal(t, 0, trigger.FailureCount) // Should be reset
 				return nil
 			}).
