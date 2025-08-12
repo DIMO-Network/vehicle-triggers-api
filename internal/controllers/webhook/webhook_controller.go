@@ -1,34 +1,52 @@
 package webhook
 
 import (
-	"bytes"
+	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
+	"math/big"
 	"strings"
-	"time"
 
 	"github.com/DIMO-Network/model-garage/pkg/schema"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/celcondition"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 	"github.com/volatiletech/null/v8"
 )
 
+type Repository interface {
+	CreateTrigger(ctx context.Context, req triggersrepo.CreateTriggerRequest) (*models.Trigger, error)
+	GetTriggersByDeveloperLicense(ctx context.Context, developerLicense common.Address) ([]*models.Trigger, error)
+	GetTriggerByIDAndDeveloperLicense(ctx context.Context, triggerID string, developerLicense common.Address) (*models.Trigger, error)
+	UpdateTrigger(ctx context.Context, trigger *models.Trigger) error
+	DeleteTrigger(ctx context.Context, triggerID string, developerLicense common.Address) error
+
+	// subscriptions
+	CreateVehicleSubscription(ctx context.Context, tokenID *big.Int, triggerID string) (*models.VehicleSubscription, error)
+	GetVehicleSubscriptionsByTriggerID(ctx context.Context, triggerID string) ([]*models.VehicleSubscription, error)
+	GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx context.Context, tokenID *big.Int, developerLicense common.Address) ([]*models.VehicleSubscription, error)
+	DeleteVehicleSubscription(ctx context.Context, triggerID string, tokenID *big.Int) (int64, error)
+	DeleteAllVehicleSubscriptionsForTrigger(ctx context.Context, triggerID string) (int64, error)
+
+	GetWebhookOwner(ctx context.Context, webhookID string) (common.Address, error)
+}
+
+type WebhookCache interface {
+	PopulateCache(ctx context.Context) error
+}
+
 // WebhookController is the controller for creating and managing webhooks.
 type WebhookController struct {
-	repo       *triggersrepo.Repository
+	repo       Repository
 	signalDefs []SignalDefinition
-	cache      *webhookcache.WebhookCache
+	cache      WebhookCache
 }
 
 // NewWebhookController creates a new WebhookController.
-func NewWebhookController(repo *triggersrepo.Repository, cache *webhookcache.WebhookCache) (*WebhookController, error) {
+func NewWebhookController(repo Repository, cache WebhookCache) (*WebhookController, error) {
 	signalDefs, err := loadSignalDefs()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load signal definitions: %w", err)
@@ -62,62 +80,29 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	parsedURL, err := url.ParseRequestURI(payload.TargetURL)
-	if err != nil {
-		return richerrors.Error{
-			ExternalMsg: "Invalid webhook URL",
-			Err:         err,
-			Code:        fiber.StatusBadRequest,
-		}
+	if err := validateTargetURL(payload.TargetURL); err != nil {
+		return err
 	}
 
-	if parsedURL.Scheme != "https" {
-		return richerrors.Error{
-			ExternalMsg: "Webhook URL must be HTTPS",
-			Code:        fiber.StatusBadRequest,
-		}
+	if err := w.validateServiceAndMetricName(payload.Service, payload.MetricName); err != nil {
+		return err
 	}
 
-	// --- Begin URI Validation ---
-	// Instead of a GET request, we perform a POST with a dummy payload.
-	dummyPayload := []byte(`{"verification": "test"}`)
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Post(parsedURL.String(), "application/json", bytes.NewBuffer(dummyPayload))
-	if err != nil {
-		return richerrors.Error{
-			ExternalMsg: "Failed to call target URI",
-			Err:         err,
-			Code:        fiber.StatusBadRequest,
-		}
-	}
-	defer resp.Body.Close() //nolint:errcheck
-	if resp.StatusCode != http.StatusOK {
-		return richerrors.Error{
-			ExternalMsg: fmt.Sprintf("Target URI did not return status 200 (got %d)", resp.StatusCode),
-			Code:        fiber.StatusBadRequest,
-		}
+	if err := validateCondition(payload.Condition); err != nil {
+		return err
 	}
 
-	// 3. Verify that the target URI returns the expected verification token.
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return richerrors.Error{
-			ExternalMsg: "Failed to read response from target URI",
-			Err:         err,
-			Code:        fiber.StatusBadRequest,
-		}
+	if err := validateCoolDownPeriod(payload.CoolDownPeriod); err != nil {
+		return err
 	}
 
-	responseToken := strings.TrimSpace(string(bodyBytes))
-	if responseToken != payload.VerificationToken {
-		err := fmt.Errorf("verification token mismatch. Expected '%s', got '%s'", payload.VerificationToken, responseToken)
-		return richerrors.Error{
-			ExternalMsg: err.Error(),
-			Err:         err,
-			Code:        fiber.StatusBadRequest,
-		}
+	if err := validateStatus(payload.Status); err != nil {
+		return err
 	}
-	// --- End URI Validation ---
+
+	if err := verifyWebhookURL(c.Context(), payload.TargetURL, payload.VerificationToken); err != nil {
+		return err
+	}
 
 	token, err := auth.GetDexJWT(c)
 	if err != nil {
@@ -229,35 +214,37 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	}
 
 	if payload.MetricName != nil {
+		if err := w.validateServiceAndMetricName(event.Service, *payload.MetricName); err != nil {
+			return err
+		}
 		event.MetricName = *payload.MetricName
 	}
 	if payload.TargetURL != nil {
+		if err := validateTargetURL(*payload.TargetURL); err != nil {
+			return err
+		}
 		event.TargetURI = *payload.TargetURL
 	}
 	if payload.Status != nil {
-		if *payload.Status != "enabled" && *payload.Status != "disabled" {
-			return richerrors.Error{
-				ExternalMsg: "Invalid status. Must be either 'enabled' or 'disabled'",
-				Code:        fiber.StatusBadRequest,
-			}
+		if err := validateStatus(*payload.Status); err != nil {
+			return err
 		}
 		event.Status = *payload.Status
 	}
 	if payload.Condition != nil {
-		_, err := celcondition.PrepareCondition(*payload.Condition)
-		if err != nil {
-			return richerrors.Error{
-				ExternalMsg: "Invalid CEL condition: " + err.Error(),
-				Code:        fiber.StatusBadRequest,
-			}
+		if err := validateCondition(*payload.Condition); err != nil {
+			return err
 		}
 		event.Condition = *payload.Condition
 	}
+	if payload.CoolDownPeriod != nil {
+		if err := validateCoolDownPeriod(*payload.CoolDownPeriod); err != nil {
+			return err
+		}
+		event.CooldownPeriod = *payload.CoolDownPeriod
+	}
 	if payload.Description != nil {
 		event.Description = null.StringFrom(*payload.Description)
-	}
-	if payload.CoolDownPeriod != nil {
-		event.CooldownPeriod = *payload.CoolDownPeriod
 	}
 	if payload.DisplayName != nil {
 		event.DisplayName = *payload.DisplayName
@@ -267,6 +254,10 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 
 	if err := w.repo.UpdateTrigger(c.Context(), event); err != nil {
 		return fmt.Errorf("failed to update webhook: %w", err)
+	}
+
+	if err := w.cache.PopulateCache(c.Context()); err != nil {
+		zerolog.Ctx(c.UserContext()).Error().Err(err).Msg("Failed to populate cache after updating webhook")
 	}
 
 	return c.Status(fiber.StatusOK).JSON(UpdateWebhookResponse{ID: event.ID, Message: "Webhook updated successfully"})

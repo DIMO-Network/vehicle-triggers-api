@@ -13,7 +13,7 @@ type RegisterWebhookRequest struct {
 	// MetricName is the fully qualified signal/metric to monitor.
 	MetricName string `json:"metricName" validate:"required" example:"speed"`
 	// Condition is a CEL expression evaluated against the metric to decide when to fire.
-	Condition string `json:"condition" validate:"required" example:"value > 55"`
+	Condition string `json:"condition" validate:"required" example:"valueNumber > 55"`
 	// CoolDownPeriod is the minimum number of seconds between successive firings.
 	CoolDownPeriod int `json:"coolDownPeriod" validate:"required" example:"30"`
 	// Description is an optional human-friendly explanation of the webhook.
