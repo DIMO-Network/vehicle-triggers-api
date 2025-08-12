@@ -10,28 +10,30 @@ import (
 
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 )
+
+type IdentityClient interface {
+	GetSharedVehicles(ctx context.Context, developerLicense []byte) ([]*big.Int, error)
+}
+type TokenExchangeClient interface {
+	HasVehiclePermissions(ctx context.Context, tokenID *big.Int, developerLicense common.Address, permissions []string) (bool, error)
+}
 
 // VehicleSubscriptionController is a controller for creating, and managing vehicle subscriptions.
 type VehicleSubscriptionController struct {
-	identityAPI         *identity.Client
-	tokenExchangeClient *tokenexchange.Client
-	cache               *webhookcache.WebhookCache
-	repo                *triggersrepo.Repository
+	identityClient      IdentityClient
+	tokenExchangeClient TokenExchangeClient
+	cache               WebhookCache
+	repo                Repository
 }
 
 // NewVehicleSubscriptionController creates a new VehicleSubscriptionController.
-func NewVehicleSubscriptionController(repo *triggersrepo.Repository, identityAPI *identity.Client, tokenExchangeClient *tokenexchange.Client, cache *webhookcache.WebhookCache) *VehicleSubscriptionController {
+func NewVehicleSubscriptionController(repo Repository, identityClient IdentityClient, tokenExchangeClient TokenExchangeClient, cache WebhookCache) *VehicleSubscriptionController {
 	return &VehicleSubscriptionController{
-		identityAPI:         identityAPI,
+		identityClient:      identityClient,
 		tokenExchangeClient: tokenExchangeClient,
 		cache:               cache,
 		repo:                repo,
@@ -93,7 +95,7 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		return fmt.Errorf("failed to assign vehicle: %w", err)
 	}
 
-	_ = v.cache.PopulateCache(c.Context())
+	v.cache.ScheduleRefresh(c.Context())
 	return c.Status(http.StatusCreated).JSON(GenericResponse{Message: "Vehicle assigned successfully"})
 }
 
@@ -192,9 +194,7 @@ func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromList(c *fiber.Ctx
 	if len(failedUnSubscriptions) > 0 {
 		return c.JSON(FailedSubscriptionResponse{FailedSubscriptions: failedUnSubscriptions})
 	}
-	if err := v.cache.PopulateCache(c.Context()); err != nil {
-		zerolog.Ctx(c.UserContext()).Error().Err(err).Msg("Failed to populate cache after subscribing vehicles")
-	}
+	v.cache.ScheduleRefresh(c.Context())
 	return c.JSON(GenericResponse{Message: fmt.Sprintf("Unsubscribed %d vehicles", len(req.VehicleTokenIDs)-len(failedUnSubscriptions))})
 
 }
@@ -234,6 +234,7 @@ func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) e
 	if err != nil {
 		return richerrors.Error{ExternalMsg: "Failed to unsubscribe", Err: err, Code: http.StatusInternalServerError}
 	}
+	v.cache.ScheduleRefresh(c.Context())
 	return c.JSON(GenericResponse{Message: "Vehicle unsubscribed successfully"})
 }
 
@@ -263,7 +264,7 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 		return err
 	}
 
-	vehicles, err := v.identityAPI.GetSharedVehicles(c.Context(), dl.Bytes())
+	vehicles, err := v.identityClient.GetSharedVehicles(c.Context(), dl.Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to fetch shared vehicles: %w", err)
 	}
@@ -300,6 +301,7 @@ func (v *VehicleSubscriptionController) UnsubscribeAllVehiclesFromWebhook(c *fib
 	if err != nil {
 		return fmt.Errorf("failed to unsubscribe all vehicles: %w", err)
 	}
+	v.cache.ScheduleRefresh(c.Context())
 	return c.JSON(GenericResponse{Message: fmt.Sprintf("Unsubscribed %d vehicles", res)})
 }
 
@@ -383,7 +385,14 @@ func (v *VehicleSubscriptionController) ListVehiclesForWebhook(c *fiber.Ctx) err
 	return c.JSON(ids)
 }
 
-func ownerCheck(ctx context.Context, repo *triggersrepo.Repository, webhookID string, developerLicense common.Address) error {
+func ownerCheck(ctx context.Context, repo Repository, webhookID string, developerLicense common.Address) error {
+	if uuid.Validate(webhookID) != nil {
+		return richerrors.Error{
+			ExternalMsg: "Invalid webhook id",
+			Err:         fmt.Errorf("invalid webhook Id is not a valid uuid '%s'", webhookID),
+			Code:        http.StatusBadRequest,
+		}
+	}
 	owner, err := repo.GetWebhookOwner(ctx, webhookID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -492,8 +501,6 @@ func (v *VehicleSubscriptionController) subscribeMultipleVehiclesToWebhook(c *fi
 	if len(failedSubscriptions) > 0 {
 		return c.JSON(FailedSubscriptionResponse{FailedSubscriptions: failedSubscriptions})
 	}
-	if err := v.cache.PopulateCache(c.Context()); err != nil {
-		zerolog.Ctx(c.UserContext()).Error().Err(err).Msg("Failed to populate cache after subscribing vehicles")
-	}
+	v.cache.ScheduleRefresh(c.Context())
 	return c.JSON(GenericResponse{Message: fmt.Sprintf("Subscribed %d vehicles", len(tokenIDs)-len(failedSubscriptions))})
 }

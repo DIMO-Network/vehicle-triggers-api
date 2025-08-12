@@ -132,7 +132,7 @@ func startDeviceSignalsConsumer(ctx context.Context, settings *config.Settings, 
 	}
 
 	// Initialize the in-memory webhook cache.
-	webhookCache := webhookcache.NewWebhookCache(repo)
+	webhookCache := webhookcache.NewWebhookCache(repo, settings)
 
 	//load all existing webhooks into memory** so GetWebhooks() won't be empty
 	if err := webhookCache.PopulateCache(ctx); err != nil {
@@ -144,11 +144,8 @@ func startDeviceSignalsConsumer(ctx context.Context, settings *config.Settings, 
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
-		logger := zerolog.Ctx(ctx)
 		for range ticker.C {
-			if err := webhookCache.PopulateCache(ctx); err != nil {
-				logger.Error().Err(err).Msg("Periodic cache refresh failed")
-			}
+			webhookCache.ScheduleRefresh(ctx)
 		}
 	}()
 

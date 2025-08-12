@@ -37,7 +37,7 @@ func TestWebhookFlow(t *testing.T) {
 	// Step 1: Create a webhook
 	t.Log("Step 1: Creating webhook")
 	webhookPayload := webhook.RegisterWebhookRequest{
-		Service:           "Telemetry",
+		Service:           "telemetry.signals",
 		MetricName:        "speed",
 		Condition:         "valueNumber > 20",
 		CoolDownPeriod:    10,
@@ -121,7 +121,8 @@ func TestWebhookFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	t.Logf("Subscribed vehicle %s to webhook %s", vehicleTokenID, webhookID)
+	t.Logf("Subscribed vehicle %s to webhook %s waiting for webhook to be updated", vehicleTokenID, webhookID)
+	time.Sleep(1 * time.Second)
 
 	// Step 3: Send a signal to Kafka to trigger the webhook
 	t.Log("Step 3: Sending signal to Kafka")

@@ -10,7 +10,7 @@ definitions:
       condition:
         description: Condition is a CEL expression evaluated against the metric to
           decide when to fire.
-        example: value > 55
+        example: valueNumber > 55
         type: string
       coolDownPeriod:
         description: CoolDownPeriod is the minimum number of seconds between successive

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/celcondition"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/google/cel-go/cel"
@@ -17,6 +18,8 @@ import (
 )
 
 var errNoWebhookConfig = errors.New("no webhook configurations found in the database")
+
+const defaultCacheDebounceTime = 5 * time.Second
 
 type Webhook struct {
 	Trigger *models.Trigger
@@ -35,12 +38,18 @@ type WebhookCache struct {
 	repo        Repository
 	lastRefresh time.Time // last time the cache was refreshed
 	schedule    atomic.Bool
+	debounce    time.Duration
 }
 
-func NewWebhookCache(repo Repository) *WebhookCache {
+func NewWebhookCache(repo Repository, settings *config.Settings) *WebhookCache {
+	debounce := settings.CacheDebounceTime
+	if debounce == 0 {
+		debounce = defaultCacheDebounceTime
+	}
 	return &WebhookCache{
 		webhooks: make(map[uint32]map[string][]*Webhook),
 		repo:     repo,
+		debounce: debounce,
 	}
 }
 
@@ -60,18 +69,19 @@ func (wc *WebhookCache) PopulateCache(ctx context.Context) error {
 }
 
 func (wc *WebhookCache) ScheduleRefresh(ctx context.Context) {
-	wc.schedule.Store(true)
-	go func() {
-		time.Sleep(time.Second * 5)
-		if wc.schedule.Load() {
-			// if we waited and we still want to refresh, do it
-			wc.schedule.Store(false)
-			err := wc.PopulateCache(ctx)
-			if err != nil {
-				zerolog.Ctx(ctx).Error().Err(err).Msg("failed to populate webhook cache")
+	if wc.schedule.CompareAndSwap(false, true) {
+		go func() {
+			time.Sleep(wc.debounce)
+			if wc.schedule.Load() {
+				// if we waited and we still want to refresh, do it
+				wc.schedule.Store(false)
+				err := wc.PopulateCache(ctx)
+				if err != nil {
+					zerolog.Ctx(ctx).Error().Err(err).Msg("failed to populate webhook cache")
+				}
 			}
-		}
-	}()
+		}()
+	}
 }
 
 func (wc *WebhookCache) GetWebhooks(vehicleTokenID uint32, telemetry string) []*Webhook {

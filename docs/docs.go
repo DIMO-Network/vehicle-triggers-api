@@ -738,7 +738,7 @@ const docTemplate = `{
                 "condition": {
                     "description": "Condition is a CEL expression evaluated against the metric to decide when to fire.",
                     "type": "string",
-                    "example": "value \u003e 55"
+                    "example": "valueNumber \u003e 55"
                 },
                 "coolDownPeriod": {
                     "description": "CoolDownPeriod is the minimum number of seconds between successive firings.",

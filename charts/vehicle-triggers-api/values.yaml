@@ -40,6 +40,7 @@ env:
   KAFKA_BROKERS: kafka-dev-dimo-kafka-kafka-brokers:9092
   DEVICE_SIGNALS_TOPIC: topic.device.signals
   VEHICLE_NFT_ADDRESS: '0x45fbCD3ef7361d156e8b16F5538AE36DEdf61Da8'
+  CACHE_DEBOUNCE_TIME: 5s
 service:
   type: ClusterIP
   ports:

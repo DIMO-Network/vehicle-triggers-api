@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/ericlagergren/decimal"
@@ -31,7 +32,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockRepo := NewMockRepository(ctrl)
-		cache := NewWebhookCache(mockRepo)
+		cache := NewWebhookCache(mockRepo, &config.Settings{})
 		ctx := context.Background()
 
 		// Create test data
@@ -111,7 +112,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockRepo := NewMockRepository(ctrl)
-		cache := NewWebhookCache(mockRepo)
+		cache := NewWebhookCache(mockRepo, &config.Settings{})
 		ctx := context.Background()
 
 		// Return empty subscriptions
@@ -136,7 +137,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockRepo := NewMockRepository(ctrl)
-		cache := NewWebhookCache(mockRepo)
+		cache := NewWebhookCache(mockRepo, &config.Settings{})
 		ctx := context.Background()
 
 		expectedErr := errors.New("database error")
@@ -158,7 +159,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockRepo := NewMockRepository(ctrl)
-		cache := NewWebhookCache(mockRepo)
+		cache := NewWebhookCache(mockRepo, &config.Settings{})
 		ctx := context.Background()
 
 		vehicleTokenID, _ := new(big.Int).SetString("12345", 10)
@@ -196,7 +197,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockRepo := NewMockRepository(ctrl)
-		cache := NewWebhookCache(mockRepo)
+		cache := NewWebhookCache(mockRepo, &config.Settings{})
 		ctx := context.Background()
 
 		vehicleTokenID, _ := new(big.Int).SetString("12345", 10)
@@ -240,7 +241,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockRepo := NewMockRepository(ctrl)
-		cache := NewWebhookCache(mockRepo)
+		cache := NewWebhookCache(mockRepo, &config.Settings{})
 		ctx := context.Background()
 
 		vehicleTokenID, _ := new(big.Int).SetString("12345", 10)
@@ -304,7 +305,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockRepo := NewMockRepository(ctrl)
-		cache := NewWebhookCache(mockRepo)
+		cache := NewWebhookCache(mockRepo, &config.Settings{})
 		ctx := context.Background()
 
 		vehicleTokenID1, _ := new(big.Int).SetString("12345", 10)
@@ -365,7 +366,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockRepo := NewMockRepository(ctrl)
-		cache := NewWebhookCache(mockRepo)
+		cache := NewWebhookCache(mockRepo, &config.Settings{})
 
 		// Manually populate cache
 		trigger := &models.Trigger{
@@ -401,7 +402,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockRepo := NewMockRepository(ctrl)
-		cache := NewWebhookCache(mockRepo)
+		cache := NewWebhookCache(mockRepo, &config.Settings{})
 
 		// Test with empty cache
 		webhooks := cache.GetWebhooks(99999, "speed")
@@ -415,7 +416,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockRepo := NewMockRepository(ctrl)
-		cache := NewWebhookCache(mockRepo)
+		cache := NewWebhookCache(mockRepo, &config.Settings{})
 
 		// Manually populate cache with different metric
 		trigger := &models.Trigger{
@@ -450,7 +451,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockRepo := NewMockRepository(ctrl)
-		cache := NewWebhookCache(mockRepo)
+		cache := NewWebhookCache(mockRepo, &config.Settings{})
 
 		// Create multiple triggers for same metric
 		trigger1 := &models.Trigger{
@@ -503,7 +504,7 @@ func TestWebhookCache_Update(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockRepo := NewMockRepository(ctrl)
-		cache := NewWebhookCache(mockRepo)
+		cache := NewWebhookCache(mockRepo, &config.Settings{})
 
 		// Initial data
 		trigger1 := &models.Trigger{
@@ -566,7 +567,7 @@ func TestWebhookCache_Update(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockRepo := NewMockRepository(ctrl)
-		cache := NewWebhookCache(mockRepo)
+		cache := NewWebhookCache(mockRepo, &config.Settings{})
 
 		// Initial data
 		trigger := &models.Trigger{
