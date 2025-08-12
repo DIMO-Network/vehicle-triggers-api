@@ -56,7 +56,7 @@ func verifyWebhookURL(ctx context.Context, targetURL string, verificationToken s
 
 	responseToken := strings.TrimSpace(string(bodyBytes))
 	if responseToken != verificationToken {
-		err := fmt.Errorf("verification token mismatch. Expected '%s', got '%s'", verificationToken, responseToken)
+		err := fmt.Errorf("verification token mismatch. Expected '%s'", verificationToken)
 		return richerrors.Error{
 			ExternalMsg: err.Error(),
 			Err:         err,

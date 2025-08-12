@@ -35,3 +35,8 @@ type constError string
 func (e constError) Error() string {
 	return string(e)
 }
+
+func isDuplicateDisplayNameError(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == DuplicateKeyError && pqErr.Constraint == "triggers_devaddr_display_name_uniq_ci"
+}
