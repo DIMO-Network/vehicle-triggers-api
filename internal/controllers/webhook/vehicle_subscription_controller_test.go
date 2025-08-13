@@ -11,13 +11,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
-	"github.com/ericlagergren/decimal"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/volatiletech/sqlboiler/v4/types"
 	"go.uber.org/mock/gomock"
 )
 
@@ -58,10 +57,14 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 		app := newApp()
 		devLicense := common.HexToAddress("0x1234567890abcdef")
 		app.Use(tokenInjector(devLicense))
-		app.Post("/webhooks/:webhookId/subscribe/:vehicleTokenId", testCtrl.controller.AssignVehicleToWebhook)
+		app.Post("/webhooks/:webhookId/subscribe/:assetDID", testCtrl.controller.AssignVehicleToWebhook)
 
 		webhookID := "550e8400-e29b-41d4-a716-446655440000"
-		vehicleTokenID := big.NewInt(12345)
+		assetDid := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
 
 		// Mock owner check
 		testCtrl.mockRepo.EXPECT().
@@ -71,7 +74,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 
 		// Mock permission check
 		testCtrl.mockTokenExchange.EXPECT().
-			HasVehiclePermissions(gomock.Any(), vehicleTokenID, devLicense, []string{
+			HasVehiclePermissions(gomock.Any(), assetDid, devLicense, []string{
 				"privilege:GetNonLocationHistory",
 				"privilege:GetLocationHistory",
 			}).
@@ -80,11 +83,11 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 
 		// Mock subscription creation
 		expectedSubscription := &models.VehicleSubscription{
-			TriggerID:      webhookID,
-			VehicleTokenID: decimalFromBigInt(vehicleTokenID),
+			TriggerID: webhookID,
+			AssetDid:  assetDid.String(),
 		}
 		testCtrl.mockRepo.EXPECT().
-			CreateVehicleSubscription(gomock.Any(), vehicleTokenID, webhookID).
+			CreateVehicleSubscription(gomock.Any(), assetDid, webhookID).
 			Return(expectedSubscription, nil).
 			Times(1)
 
@@ -92,7 +95,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 			ScheduleRefresh(gomock.Any()).
 			Times(1)
 
-		req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID+"/subscribe/12345", nil)
+		req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID+"/subscribe/"+assetDid.String(), nil)
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
@@ -111,8 +114,8 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 		app := newApp()
 		devLicense := common.HexToAddress("0x1234567890abcdef")
 		app.Use(tokenInjector(devLicense))
-		app.Post("/webhooks/:webhookId/subscribe/:vehicleTokenId", testCtrl.controller.AssignVehicleToWebhook)
-		req := httptest.NewRequest(http.MethodPost, "/webhooks/invalid-uuid/subscribe/12345", nil)
+		app.Post("/webhooks/:webhookId/subscribe/:assetDID", testCtrl.controller.AssignVehicleToWebhook)
+		req := httptest.NewRequest(http.MethodPost, "/webhooks/invalid-uuid/subscribe/did:erc721:0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF:12345", nil)
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
@@ -139,7 +142,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 		app := newApp()
 		devLicense := common.HexToAddress("0x1234567890abcdef")
 		app.Use(tokenInjector(devLicense))
-		app.Post("/webhooks/:webhookId/subscribe/:vehicleTokenId", controller.AssignVehicleToWebhook)
+		app.Post("/webhooks/:webhookId/subscribe/:assetDID", controller.AssignVehicleToWebhook)
 
 		webhookID := "550e8400-e29b-41d4-a716-446655440000"
 
@@ -170,16 +173,21 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 		app := newApp()
 		devLicense := common.HexToAddress("0x1234567890abcdef")
 		app.Use(tokenInjector(devLicense))
-		app.Post("/webhooks/:webhookId/subscribe/:vehicleTokenId", controller.AssignVehicleToWebhook)
+		app.Post("/webhooks/:webhookId/subscribe/:assetDID", controller.AssignVehicleToWebhook)
 
 		webhookID := "550e8400-e29b-41d4-a716-446655440000"
+		assetDid := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
 
 		mockRepo.EXPECT().
 			GetWebhookOwner(gomock.Any(), webhookID).
 			Return(common.Address{}, sql.ErrNoRows).
 			Times(1)
 
-		req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID+"/subscribe/12345", nil)
+		req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID+"/subscribe/"+assetDid.String(), nil)
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
@@ -206,10 +214,14 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 		app := newApp()
 		devLicense := common.HexToAddress("0x1234567890abcdef")
 		app.Use(tokenInjector(devLicense))
-		app.Post("/webhooks/:webhookId/subscribe/:vehicleTokenId", controller.AssignVehicleToWebhook)
+		app.Post("/webhooks/:webhookId/subscribe/:assetDID", controller.AssignVehicleToWebhook)
 
 		webhookID := "550e8400-e29b-41d4-a716-446655440000"
-		vehicleTokenID := big.NewInt(12345)
+		assetDid := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
 
 		// Mock owner check
 		mockRepo.EXPECT().
@@ -219,14 +231,14 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 
 		// Mock permission check - return false for insufficient permissions
 		mockTokenExchange.EXPECT().
-			HasVehiclePermissions(gomock.Any(), vehicleTokenID, devLicense, []string{
+			HasVehiclePermissions(gomock.Any(), assetDid, devLicense, []string{
 				"privilege:GetNonLocationHistory",
 				"privilege:GetLocationHistory",
 			}).
 			Return(false, nil).
 			Times(1)
 
-		req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID+"/subscribe/12345", nil)
+		req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID+"/subscribe/"+assetDid.String(), nil)
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
@@ -248,10 +260,21 @@ func TestVehicleSubscriptionController_SubscribeVehiclesFromList(t *testing.T) {
 		app.Post("/webhooks/:webhookId/subscribe/list", testCtrl.controller.SubscribeVehiclesFromList)
 
 		webhookID := "550e8400-e29b-41d4-a716-446655440000"
-		vehicleTokenIDs := []*big.Int{big.NewInt(12345), big.NewInt(67890)}
+		assetDIDs := []cloudevent.ERC721DID{
+			{
+				ChainID:         137,
+				ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+				TokenID:         big.NewInt(12345),
+			},
+			{
+				ChainID:         137,
+				ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+				TokenID:         big.NewInt(67890),
+			},
+		}
 
 		payload := VehicleListRequest{
-			VehicleTokenIDs: vehicleTokenIDs,
+			AssetDIDs: assetDIDs,
 		}
 
 		// Mock owner check
@@ -261,9 +284,9 @@ func TestVehicleSubscriptionController_SubscribeVehiclesFromList(t *testing.T) {
 			Times(1)
 
 		// Mock permission checks for both vehicles
-		for _, tokenID := range vehicleTokenIDs {
+		for _, assetDid := range assetDIDs {
 			testCtrl.mockTokenExchange.EXPECT().
-				HasVehiclePermissions(gomock.Any(), tokenID, devLicense, []string{
+				HasVehiclePermissions(gomock.Any(), assetDid, devLicense, []string{
 					"privilege:GetNonLocationHistory",
 					"privilege:GetLocationHistory",
 				}).
@@ -272,13 +295,13 @@ func TestVehicleSubscriptionController_SubscribeVehiclesFromList(t *testing.T) {
 		}
 
 		// Mock subscription creation for both vehicles
-		for _, tokenID := range vehicleTokenIDs {
+		for _, assetDid := range assetDIDs {
 			expectedSubscription := &models.VehicleSubscription{
-				TriggerID:      webhookID,
-				VehicleTokenID: decimalFromBigInt(tokenID),
+				TriggerID: webhookID,
+				AssetDid:  assetDid.String(),
 			}
 			testCtrl.mockRepo.EXPECT().
-				CreateVehicleSubscription(gomock.Any(), tokenID, webhookID).
+				CreateVehicleSubscription(gomock.Any(), assetDid, webhookID).
 				Return(expectedSubscription, nil).
 				Times(1)
 		}
@@ -300,7 +323,7 @@ func TestVehicleSubscriptionController_SubscribeVehiclesFromList(t *testing.T) {
 		var response GenericResponse
 		err = json.NewDecoder(resp.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, "Subscribed 2 vehicles", response.Message)
+		assert.Equal(t, "Subscribed 2 assets", response.Message)
 	})
 
 	t.Run("invalid request body", func(t *testing.T) {
@@ -339,10 +362,14 @@ func TestVehicleSubscriptionController_RemoveVehicleFromWebhook(t *testing.T) {
 		app := newApp()
 		devLicense := common.HexToAddress("0x1234567890abcdef")
 		app.Use(tokenInjector(devLicense))
-		app.Delete("/webhooks/:webhookId/unsubscribe/:vehicleTokenId", testCtrl.controller.RemoveVehicleFromWebhook)
+		app.Delete("/webhooks/:webhookId/unsubscribe/:assetDID", testCtrl.controller.RemoveVehicleFromWebhook)
 
 		webhookID := "550e8400-e29b-41d4-a716-446655440000"
-		vehicleTokenID := big.NewInt(12345)
+		assetDid := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
 
 		// Mock owner check
 		testCtrl.mockRepo.EXPECT().
@@ -352,7 +379,7 @@ func TestVehicleSubscriptionController_RemoveVehicleFromWebhook(t *testing.T) {
 
 		// Mock subscription deletion
 		testCtrl.mockRepo.EXPECT().
-			DeleteVehicleSubscription(gomock.Any(), webhookID, vehicleTokenID).
+			DeleteVehicleSubscription(gomock.Any(), webhookID, assetDid).
 			Return(int64(1), nil).
 			Times(1)
 
@@ -360,7 +387,7 @@ func TestVehicleSubscriptionController_RemoveVehicleFromWebhook(t *testing.T) {
 			ScheduleRefresh(gomock.Any()).
 			Times(1)
 
-		req := httptest.NewRequest(http.MethodDelete, "/webhooks/"+webhookID+"/unsubscribe/12345", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/webhooks/"+webhookID+"/unsubscribe/"+assetDid.String(), nil)
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
@@ -387,7 +414,18 @@ func TestVehicleSubscriptionController_SubscribeAllVehiclesToWebhook(t *testing.
 		app.Post("/webhooks/:webhookId/subscribe/all", testCtrl.controller.SubscribeAllVehiclesToWebhook)
 
 		webhookID := "550e8400-e29b-41d4-a716-446655440000"
-		vehicleTokenIDs := []*big.Int{big.NewInt(12345), big.NewInt(67890)}
+		assetDIDs := []cloudevent.ERC721DID{
+			{
+				ChainID:         137,
+				ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+				TokenID:         big.NewInt(12345),
+			},
+			{
+				ChainID:         137,
+				ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+				TokenID:         big.NewInt(67890),
+			},
+		}
 
 		// Mock owner check
 		testCtrl.mockRepo.EXPECT().
@@ -398,13 +436,13 @@ func TestVehicleSubscriptionController_SubscribeAllVehiclesToWebhook(t *testing.
 		// Mock getting shared vehicles
 		testCtrl.mockIdentityAPI.EXPECT().
 			GetSharedVehicles(gomock.Any(), devLicense.Bytes()).
-			Return(vehicleTokenIDs, nil).
+			Return(assetDIDs, nil).
 			Times(1)
 
 		// Mock permission checks for both vehicles
-		for _, tokenID := range vehicleTokenIDs {
+		for _, assetDid := range assetDIDs {
 			testCtrl.mockTokenExchange.EXPECT().
-				HasVehiclePermissions(gomock.Any(), tokenID, devLicense, []string{
+				HasVehiclePermissions(gomock.Any(), assetDid, devLicense, []string{
 					"privilege:GetNonLocationHistory",
 					"privilege:GetLocationHistory",
 				}).
@@ -413,13 +451,13 @@ func TestVehicleSubscriptionController_SubscribeAllVehiclesToWebhook(t *testing.
 		}
 
 		// Mock subscription creation for both vehicles
-		for _, tokenID := range vehicleTokenIDs {
+		for _, assetDid := range assetDIDs {
 			expectedSubscription := &models.VehicleSubscription{
-				TriggerID:      webhookID,
-				VehicleTokenID: decimalFromBigInt(tokenID),
+				TriggerID: webhookID,
+				AssetDid:  assetDid.String(),
 			}
 			testCtrl.mockRepo.EXPECT().
-				CreateVehicleSubscription(gomock.Any(), tokenID, webhookID).
+				CreateVehicleSubscription(gomock.Any(), assetDid, webhookID).
 				Return(expectedSubscription, nil).
 				Times(1)
 		}
@@ -438,7 +476,7 @@ func TestVehicleSubscriptionController_SubscribeAllVehiclesToWebhook(t *testing.
 		var response GenericResponse
 		err = json.NewDecoder(resp.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, "Subscribed 2 vehicles", response.Message)
+		assert.Equal(t, "Subscribed 2 assets", response.Message)
 	})
 
 	t.Run("identity API error", func(t *testing.T) {
@@ -525,27 +563,31 @@ func TestVehicleSubscriptionController_ListSubscriptions(t *testing.T) {
 		app := newApp()
 		devLicense := common.HexToAddress("0x1234567890abcdef")
 		app.Use(tokenInjector(devLicense))
-		app.Get("/webhooks/vehicles/:vehicleTokenId", testCtrl.controller.ListSubscriptions)
+		app.Get("/webhooks/vehicles/:assetDID", testCtrl.controller.ListSubscriptions)
 
-		vehicleTokenID := big.NewInt(12345)
+		assetDid := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
 
 		subscriptions := []*models.VehicleSubscription{
 			{
-				TriggerID:      "webhook-1",
-				VehicleTokenID: decimalFromBigInt(vehicleTokenID),
+				TriggerID: "webhook-1",
+				AssetDid:  assetDid.String(),
 			},
 			{
-				TriggerID:      "webhook-2",
-				VehicleTokenID: decimalFromBigInt(vehicleTokenID),
+				TriggerID: "webhook-2",
+				AssetDid:  assetDid.String(),
 			},
 		}
 
 		testCtrl.mockRepo.EXPECT().
-			GetVehicleSubscriptionsByVehicleAndDeveloperLicense(gomock.Any(), vehicleTokenID, devLicense).
+			GetVehicleSubscriptionsByVehicleAndDeveloperLicense(gomock.Any(), assetDid, devLicense).
 			Return(subscriptions, nil).
 			Times(1)
 
-		req := httptest.NewRequest(http.MethodGet, "/webhooks/vehicles/12345", nil)
+		req := httptest.NewRequest(http.MethodGet, "/webhooks/vehicles/"+assetDid.String(), nil)
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
@@ -575,14 +617,24 @@ func TestVehicleSubscriptionController_ListVehiclesForWebhook(t *testing.T) {
 
 		webhookID := "550e8400-e29b-41d4-a716-446655440000"
 
+		assetDid1 := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
+		assetDid2 := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(67890),
+		}
 		subscriptions := []*models.VehicleSubscription{
 			{
-				TriggerID:      webhookID,
-				VehicleTokenID: decimalFromBigInt(big.NewInt(12345)),
+				TriggerID: webhookID,
+				AssetDid:  assetDid1.String(),
 			},
 			{
-				TriggerID:      webhookID,
-				VehicleTokenID: decimalFromBigInt(big.NewInt(67890)),
+				TriggerID: webhookID,
+				AssetDid:  assetDid2.String(),
 			},
 		}
 
@@ -609,14 +661,7 @@ func TestVehicleSubscriptionController_ListVehiclesForWebhook(t *testing.T) {
 		err = json.NewDecoder(resp.Body).Decode(&vehicleIDs)
 		require.NoError(t, err)
 		assert.Len(t, vehicleIDs, 2)
-		assert.Contains(t, vehicleIDs, "12345")
-		assert.Contains(t, vehicleIDs, "67890")
+		assert.Contains(t, vehicleIDs, assetDid1.String())
+		assert.Contains(t, vehicleIDs, assetDid2.String())
 	})
-}
-
-// Helper function to convert big.Int to types.Decimal for tests
-func decimalFromBigInt(value *big.Int) types.Decimal {
-	dec := types.NewDecimal(new(decimal.Big))
-	dec.SetBigMantScale(value, 0)
-	return dec
 }

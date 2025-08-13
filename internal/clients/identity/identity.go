@@ -7,10 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"net/url"
 
+	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/ethereum/go-ethereum/common"
@@ -74,7 +74,7 @@ func (c *Client) IsDevLicense(ctx context.Context, clientID common.Address) (boo
 	return true, nil
 }
 
-func (c *Client) GetSharedVehicles(ctx context.Context, devLicense []byte) ([]*big.Int, error) {
+func (c *Client) GetSharedVehicles(ctx context.Context, devLicense []byte) ([]cloudevent.ERC721DID, error) {
 	ethAddress := common.BytesToAddress(devLicense).Hex()
 	query := `
 	query($clientId: Address){
@@ -110,7 +110,7 @@ func (c *Client) GetSharedVehicles(ctx context.Context, devLicense []byte) ([]*b
 			Err:         errors.New("GraphQL errors occurred"),
 		}
 	}
-	tokenIDs := make([]*big.Int, len(result.Data.Vehicles.Nodes))
+	assetDIDs := make([]cloudevent.ERC721DID, len(result.Data.Vehicles.Nodes))
 	for i, node := range result.Data.Vehicles.Nodes {
 		if node.TokenDID.ContractAddress != c.vehicleContractAddress || node.TokenDID.ChainID != c.chainID {
 			return nil, richerrors.Error{
@@ -119,9 +119,9 @@ func (c *Client) GetSharedVehicles(ctx context.Context, devLicense []byte) ([]*b
 				Err:         errors.New("vehicle contract address or chain ID mismatch"),
 			}
 		}
-		tokenIDs[i] = node.TokenDID.TokenID
+		assetDIDs[i] = node.TokenDID
 	}
-	return tokenIDs, nil
+	return assetDIDs, nil
 }
 
 func (c *Client) SendRequest(ctx context.Context, query string, variables map[string]any) ([]byte, error) {

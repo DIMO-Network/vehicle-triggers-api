@@ -1,7 +1,6 @@
 package webhook
 
 import (
-	"math/big"
 	"time"
 
 	"github.com/DIMO-Network/cloudevent"
@@ -167,8 +166,8 @@ type EventData struct {
 type SubscriptionView struct {
 	// webhookID is the identifier of the webhook trigger.
 	WebhookID string `json:"webhookId"`
-	// VehicleTokenID is the on-chain token ID of the vehicle.
-	VehicleTokenID string `json:"vehicleTokenId"`
+	// AssetDid is the DID of the asset tied to the subscription.
+	AssetDid cloudevent.ERC721DID `json:"assetDid"`
 	// CreatedAt is when the subscription was created.
 	CreatedAt time.Time `json:"createdAt"`
 	// Description is the optional description from the webhook trigger.
@@ -177,8 +176,8 @@ type SubscriptionView struct {
 
 // FailedSubscription is a single failed subscription.
 type FailedSubscription struct {
-	// TokenID is the token ID of the vehicle that failed to subscribe.
-	VehicleTokenID *big.Int `json:"vehicleTokenId"`
+	// AssetDid is the DID of the asset that failed to subscribe.
+	AssetDid cloudevent.ERC721DID `json:"assetDid"`
 	// Message is the error message from the failed subscription.
 	Message string `json:"message"`
 }
@@ -190,6 +189,6 @@ type FailedSubscriptionResponse struct {
 }
 
 type VehicleListRequest struct {
-	// VehicleTokenIDs is the list of vehicle token IDs to subscribe to the webhook.
-	VehicleTokenIDs []*big.Int `json:"vehicleTokenIds"`
+	// AssetDIDs is the list of asset DIDs to subscribe to the webhook.
+	AssetDIDs []cloudevent.ERC721DID `json:"assetDIDs"`
 }

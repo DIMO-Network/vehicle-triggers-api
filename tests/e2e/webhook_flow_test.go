@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/app"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
@@ -100,13 +102,17 @@ func TestWebhookFlow(t *testing.T) {
 	t.Log("Step 2: Subscribing vehicle to webhook")
 
 	// Use a test vehicle token ID
-	vehicleTokenID := "12345"
+	assetDid := cloudevent.ERC721DID{
+		ChainID:         137,
+		ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+		TokenID:         big.NewInt(12345),
+	}
 
 	// Set up token exchange API mock to return permissions for this vehicle
 	tc.TokenExchange.SetAccessCheckReturn(devAddress.String(), true)
 
 	// Make the subscription request
-	subscribeURL := fmt.Sprintf("/v1/webhooks/%s/subscribe/%s", webhookID, vehicleTokenID)
+	subscribeURL := fmt.Sprintf("/v1/webhooks/%s/subscribe/%s", webhookID, assetDid.String())
 	req, err = http.NewRequestWithContext(
 		t.Context(),
 		"POST",
@@ -121,14 +127,13 @@ func TestWebhookFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	t.Logf("Subscribed vehicle %s to webhook %s waiting for webhook to be updated", vehicleTokenID, webhookID)
+	t.Logf("Subscribed vehicle %s to webhook %s waiting for webhook to be updated", assetDid.String(), webhookID)
 	time.Sleep(1 * time.Second)
 
 	// Step 3: Send a signal to Kafka to trigger the webhook
 	t.Log("Step 3: Sending signal to Kafka")
-
 	signalPayload := vss.Signal{
-		TokenID:      12345, // Same as vehicleTokenID
+		TokenID:      12345, // Same as assetDID.TokenID
 		Timestamp:    time.Now(),
 		Name:         "speed",
 		ValueNumber:  25.0, // Above the 20 threshold to trigger the webhook

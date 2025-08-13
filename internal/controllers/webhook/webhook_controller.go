@@ -3,8 +3,8 @@ package webhook
 import (
 	"context"
 	"fmt"
-	"math/big"
 
+	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
@@ -23,10 +23,10 @@ type Repository interface {
 	DeleteTrigger(ctx context.Context, triggerID string, developerLicense common.Address) error
 
 	// subscriptions
-	CreateVehicleSubscription(ctx context.Context, tokenID *big.Int, triggerID string) (*models.VehicleSubscription, error)
+	CreateVehicleSubscription(ctx context.Context, assetDID cloudevent.ERC721DID, triggerID string) (*models.VehicleSubscription, error)
 	GetVehicleSubscriptionsByTriggerID(ctx context.Context, triggerID string) ([]*models.VehicleSubscription, error)
-	GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx context.Context, tokenID *big.Int, developerLicense common.Address) ([]*models.VehicleSubscription, error)
-	DeleteVehicleSubscription(ctx context.Context, triggerID string, tokenID *big.Int) (int64, error)
+	GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx context.Context, assetDID cloudevent.ERC721DID, developerLicense common.Address) ([]*models.VehicleSubscription, error)
+	DeleteVehicleSubscription(ctx context.Context, triggerID string, assetDID cloudevent.ERC721DID) (int64, error)
 	DeleteAllVehicleSubscriptionsForTrigger(ctx context.Context, triggerID string) (int64, error)
 
 	GetWebhookOwner(ctx context.Context, webhookID string) (common.Address, error)

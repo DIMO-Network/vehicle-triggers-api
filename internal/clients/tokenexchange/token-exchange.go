@@ -3,7 +3,6 @@ package tokenexchange
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/DIMO-Network/cloudevent"
 	pb "github.com/DIMO-Network/token-exchange-api/pkg/grpc"
@@ -15,9 +14,7 @@ import (
 
 // Client for the Token Exchange API GRPC server
 type Client struct {
-	client      pb.TokenExchangeServiceClient
-	vehicleAddr common.Address
-	chainID     uint64
+	client pb.TokenExchangeServiceClient
 }
 
 // New creates a new instance of Client with the specified server address,
@@ -29,21 +26,14 @@ func New(settings *config.Settings) (*Client, error) {
 	}
 	client := pb.NewTokenExchangeServiceClient(conn)
 	return &Client{
-		client:      client,
-		vehicleAddr: settings.VehicleNFTAddress,
-		chainID:     settings.DIMORegistryChainID,
+		client: client,
 	}, nil
 }
 
 // HasVehiclePermissions checks if the given developer license has privileges 1,3,4 for the vehicle.
-func (c *Client) HasVehiclePermissions(ctx context.Context, vehicleTokenID *big.Int, devLicense common.Address, permissions []string) (bool, error) {
-	did := cloudevent.ERC721DID{
-		ChainID:         c.chainID,
-		ContractAddress: c.vehicleAddr,
-		TokenID:         vehicleTokenID,
-	}
+func (c *Client) HasVehiclePermissions(ctx context.Context, assetDid cloudevent.ERC721DID, devLicense common.Address, permissions []string) (bool, error) {
 	req := pb.AccessCheckRequest{
-		Asset:      did.String(),
+		Asset:      assetDid.String(),
 		Grantee:    devLicense.String(),
 		Privileges: permissions,
 	}

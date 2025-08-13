@@ -25,13 +25,13 @@ import (
 
 // TriggerLog is an object representing the database table.
 type TriggerLog struct {
-	ID              string        `boil:"id" json:"id" toml:"id" yaml:"id"`
-	VehicleTokenID  types.Decimal `boil:"vehicle_token_id" json:"vehicle_token_id" toml:"vehicle_token_id" yaml:"vehicle_token_id"`
-	TriggerID       string        `boil:"trigger_id" json:"trigger_id" toml:"trigger_id" yaml:"trigger_id"`
-	SnapshotData    types.JSON    `boil:"snapshot_data" json:"snapshot_data" toml:"snapshot_data" yaml:"snapshot_data"`
-	LastTriggeredAt time.Time     `boil:"last_triggered_at" json:"last_triggered_at" toml:"last_triggered_at" yaml:"last_triggered_at"`
-	CreatedAt       time.Time     `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	FailureReason   null.String   `boil:"failure_reason" json:"failure_reason,omitempty" toml:"failure_reason" yaml:"failure_reason,omitempty"`
+	ID              string      `boil:"id" json:"id" toml:"id" yaml:"id"`
+	TriggerID       string      `boil:"trigger_id" json:"trigger_id" toml:"trigger_id" yaml:"trigger_id"`
+	SnapshotData    types.JSON  `boil:"snapshot_data" json:"snapshot_data" toml:"snapshot_data" yaml:"snapshot_data"`
+	LastTriggeredAt time.Time   `boil:"last_triggered_at" json:"last_triggered_at" toml:"last_triggered_at" yaml:"last_triggered_at"`
+	CreatedAt       time.Time   `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	FailureReason   null.String `boil:"failure_reason" json:"failure_reason,omitempty" toml:"failure_reason" yaml:"failure_reason,omitempty"`
+	AssetDid        string      `boil:"asset_did" json:"asset_did" toml:"asset_did" yaml:"asset_did"`
 
 	R *triggerLogR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L triggerLogL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -39,38 +39,38 @@ type TriggerLog struct {
 
 var TriggerLogColumns = struct {
 	ID              string
-	VehicleTokenID  string
 	TriggerID       string
 	SnapshotData    string
 	LastTriggeredAt string
 	CreatedAt       string
 	FailureReason   string
+	AssetDid        string
 }{
 	ID:              "id",
-	VehicleTokenID:  "vehicle_token_id",
 	TriggerID:       "trigger_id",
 	SnapshotData:    "snapshot_data",
 	LastTriggeredAt: "last_triggered_at",
 	CreatedAt:       "created_at",
 	FailureReason:   "failure_reason",
+	AssetDid:        "asset_did",
 }
 
 var TriggerLogTableColumns = struct {
 	ID              string
-	VehicleTokenID  string
 	TriggerID       string
 	SnapshotData    string
 	LastTriggeredAt string
 	CreatedAt       string
 	FailureReason   string
+	AssetDid        string
 }{
 	ID:              "trigger_logs.id",
-	VehicleTokenID:  "trigger_logs.vehicle_token_id",
 	TriggerID:       "trigger_logs.trigger_id",
 	SnapshotData:    "trigger_logs.snapshot_data",
 	LastTriggeredAt: "trigger_logs.last_triggered_at",
 	CreatedAt:       "trigger_logs.created_at",
 	FailureReason:   "trigger_logs.failure_reason",
+	AssetDid:        "trigger_logs.asset_did",
 }
 
 // Generated where
@@ -104,27 +104,6 @@ func (w whereHelperstring) NIN(slice []string) qm.QueryMod {
 		values = append(values, value)
 	}
 	return qm.WhereNotIn(fmt.Sprintf("%s NOT IN ?", w.field), values...)
-}
-
-type whereHelpertypes_Decimal struct{ field string }
-
-func (w whereHelpertypes_Decimal) EQ(x types.Decimal) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.EQ, x)
-}
-func (w whereHelpertypes_Decimal) NEQ(x types.Decimal) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.NEQ, x)
-}
-func (w whereHelpertypes_Decimal) LT(x types.Decimal) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.LT, x)
-}
-func (w whereHelpertypes_Decimal) LTE(x types.Decimal) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.LTE, x)
-}
-func (w whereHelpertypes_Decimal) GT(x types.Decimal) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.GT, x)
-}
-func (w whereHelpertypes_Decimal) GTE(x types.Decimal) qm.QueryMod {
-	return qmhelper.Where(w.field, qmhelper.GTE, x)
 }
 
 type whereHelpertypes_JSON struct{ field string }
@@ -227,20 +206,20 @@ func (w whereHelpernull_String) IsNotNull() qm.QueryMod { return qmhelper.WhereI
 
 var TriggerLogWhere = struct {
 	ID              whereHelperstring
-	VehicleTokenID  whereHelpertypes_Decimal
 	TriggerID       whereHelperstring
 	SnapshotData    whereHelpertypes_JSON
 	LastTriggeredAt whereHelpertime_Time
 	CreatedAt       whereHelpertime_Time
 	FailureReason   whereHelpernull_String
+	AssetDid        whereHelperstring
 }{
 	ID:              whereHelperstring{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"id\""},
-	VehicleTokenID:  whereHelpertypes_Decimal{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"vehicle_token_id\""},
 	TriggerID:       whereHelperstring{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"trigger_id\""},
 	SnapshotData:    whereHelpertypes_JSON{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"snapshot_data\""},
 	LastTriggeredAt: whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"last_triggered_at\""},
 	CreatedAt:       whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"created_at\""},
 	FailureReason:   whereHelpernull_String{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"failure_reason\""},
+	AssetDid:        whereHelperstring{field: "\"vehicle_triggers_api\".\"trigger_logs\".\"asset_did\""},
 }
 
 // TriggerLogRels is where relationship names are stored.
@@ -280,8 +259,8 @@ func (r *triggerLogR) GetTrigger() *Trigger {
 type triggerLogL struct{}
 
 var (
-	triggerLogAllColumns            = []string{"id", "vehicle_token_id", "trigger_id", "snapshot_data", "last_triggered_at", "created_at", "failure_reason"}
-	triggerLogColumnsWithoutDefault = []string{"id", "vehicle_token_id", "trigger_id", "snapshot_data", "last_triggered_at"}
+	triggerLogAllColumns            = []string{"id", "trigger_id", "snapshot_data", "last_triggered_at", "created_at", "failure_reason", "asset_did"}
+	triggerLogColumnsWithoutDefault = []string{"id", "trigger_id", "snapshot_data", "last_triggered_at", "asset_did"}
 	triggerLogColumnsWithDefault    = []string{"created_at", "failure_reason"}
 	triggerLogPrimaryKeyColumns     = []string{"id"}
 	triggerLogGeneratedColumns      = []string{}

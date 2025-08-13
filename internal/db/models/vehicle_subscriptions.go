@@ -18,57 +18,56 @@ import (
 	"github.com/volatiletech/sqlboiler/v4/queries"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"github.com/volatiletech/sqlboiler/v4/queries/qmhelper"
-	"github.com/volatiletech/sqlboiler/v4/types"
 	"github.com/volatiletech/strmangle"
 )
 
 // VehicleSubscription is an object representing the database table.
 type VehicleSubscription struct {
-	VehicleTokenID types.Decimal `boil:"vehicle_token_id" json:"vehicle_token_id" toml:"vehicle_token_id" yaml:"vehicle_token_id"`
-	TriggerID      string        `boil:"trigger_id" json:"trigger_id" toml:"trigger_id" yaml:"trigger_id"`
-	CreatedAt      time.Time     `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	UpdatedAt      time.Time     `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	TriggerID string    `boil:"trigger_id" json:"trigger_id" toml:"trigger_id" yaml:"trigger_id"`
+	CreatedAt time.Time `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	UpdatedAt time.Time `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	AssetDid  string    `boil:"asset_did" json:"asset_did" toml:"asset_did" yaml:"asset_did"`
 
 	R *vehicleSubscriptionR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L vehicleSubscriptionL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var VehicleSubscriptionColumns = struct {
-	VehicleTokenID string
-	TriggerID      string
-	CreatedAt      string
-	UpdatedAt      string
+	TriggerID string
+	CreatedAt string
+	UpdatedAt string
+	AssetDid  string
 }{
-	VehicleTokenID: "vehicle_token_id",
-	TriggerID:      "trigger_id",
-	CreatedAt:      "created_at",
-	UpdatedAt:      "updated_at",
+	TriggerID: "trigger_id",
+	CreatedAt: "created_at",
+	UpdatedAt: "updated_at",
+	AssetDid:  "asset_did",
 }
 
 var VehicleSubscriptionTableColumns = struct {
-	VehicleTokenID string
-	TriggerID      string
-	CreatedAt      string
-	UpdatedAt      string
+	TriggerID string
+	CreatedAt string
+	UpdatedAt string
+	AssetDid  string
 }{
-	VehicleTokenID: "vehicle_subscriptions.vehicle_token_id",
-	TriggerID:      "vehicle_subscriptions.trigger_id",
-	CreatedAt:      "vehicle_subscriptions.created_at",
-	UpdatedAt:      "vehicle_subscriptions.updated_at",
+	TriggerID: "vehicle_subscriptions.trigger_id",
+	CreatedAt: "vehicle_subscriptions.created_at",
+	UpdatedAt: "vehicle_subscriptions.updated_at",
+	AssetDid:  "vehicle_subscriptions.asset_did",
 }
 
 // Generated where
 
 var VehicleSubscriptionWhere = struct {
-	VehicleTokenID whereHelpertypes_Decimal
-	TriggerID      whereHelperstring
-	CreatedAt      whereHelpertime_Time
-	UpdatedAt      whereHelpertime_Time
+	TriggerID whereHelperstring
+	CreatedAt whereHelpertime_Time
+	UpdatedAt whereHelpertime_Time
+	AssetDid  whereHelperstring
 }{
-	VehicleTokenID: whereHelpertypes_Decimal{field: "\"vehicle_triggers_api\".\"vehicle_subscriptions\".\"vehicle_token_id\""},
-	TriggerID:      whereHelperstring{field: "\"vehicle_triggers_api\".\"vehicle_subscriptions\".\"trigger_id\""},
-	CreatedAt:      whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"vehicle_subscriptions\".\"created_at\""},
-	UpdatedAt:      whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"vehicle_subscriptions\".\"updated_at\""},
+	TriggerID: whereHelperstring{field: "\"vehicle_triggers_api\".\"vehicle_subscriptions\".\"trigger_id\""},
+	CreatedAt: whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"vehicle_subscriptions\".\"created_at\""},
+	UpdatedAt: whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"vehicle_subscriptions\".\"updated_at\""},
+	AssetDid:  whereHelperstring{field: "\"vehicle_triggers_api\".\"vehicle_subscriptions\".\"asset_did\""},
 }
 
 // VehicleSubscriptionRels is where relationship names are stored.
@@ -108,10 +107,10 @@ func (r *vehicleSubscriptionR) GetTrigger() *Trigger {
 type vehicleSubscriptionL struct{}
 
 var (
-	vehicleSubscriptionAllColumns            = []string{"vehicle_token_id", "trigger_id", "created_at", "updated_at"}
-	vehicleSubscriptionColumnsWithoutDefault = []string{"vehicle_token_id", "trigger_id"}
+	vehicleSubscriptionAllColumns            = []string{"trigger_id", "created_at", "updated_at", "asset_did"}
+	vehicleSubscriptionColumnsWithoutDefault = []string{"trigger_id", "asset_did"}
 	vehicleSubscriptionColumnsWithDefault    = []string{"created_at", "updated_at"}
-	vehicleSubscriptionPrimaryKeyColumns     = []string{"vehicle_token_id", "trigger_id"}
+	vehicleSubscriptionPrimaryKeyColumns     = []string{"asset_did", "trigger_id"}
 	vehicleSubscriptionGeneratedColumns      = []string{}
 )
 
@@ -567,7 +566,7 @@ func (o *VehicleSubscription) SetTrigger(ctx context.Context, exec boil.ContextE
 		strmangle.SetParamNames("\"", "\"", 1, []string{"trigger_id"}),
 		strmangle.WhereClause("\"", "\"", 2, vehicleSubscriptionPrimaryKeyColumns),
 	)
-	values := []interface{}{related.ID, o.VehicleTokenID, o.TriggerID}
+	values := []interface{}{related.ID, o.AssetDid, o.TriggerID}
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -611,7 +610,7 @@ func VehicleSubscriptions(mods ...qm.QueryMod) vehicleSubscriptionQuery {
 
 // FindVehicleSubscription retrieves a single record by ID with an executor.
 // If selectCols is empty Find will return all columns.
-func FindVehicleSubscription(ctx context.Context, exec boil.ContextExecutor, vehicleTokenID types.Decimal, triggerID string, selectCols ...string) (*VehicleSubscription, error) {
+func FindVehicleSubscription(ctx context.Context, exec boil.ContextExecutor, assetDid string, triggerID string, selectCols ...string) (*VehicleSubscription, error) {
 	vehicleSubscriptionObj := &VehicleSubscription{}
 
 	sel := "*"
@@ -619,10 +618,10 @@ func FindVehicleSubscription(ctx context.Context, exec boil.ContextExecutor, veh
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"vehicle_triggers_api\".\"vehicle_subscriptions\" where \"vehicle_token_id\"=$1 AND \"trigger_id\"=$2", sel,
+		"select %s from \"vehicle_triggers_api\".\"vehicle_subscriptions\" where \"asset_did\"=$1 AND \"trigger_id\"=$2", sel,
 	)
 
-	q := queries.Raw(query, vehicleTokenID, triggerID)
+	q := queries.Raw(query, assetDid, triggerID)
 
 	err := q.Bind(ctx, exec, vehicleSubscriptionObj)
 	if err != nil {
@@ -1004,7 +1003,7 @@ func (o *VehicleSubscription) Delete(ctx context.Context, exec boil.ContextExecu
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), vehicleSubscriptionPrimaryKeyMapping)
-	sql := "DELETE FROM \"vehicle_triggers_api\".\"vehicle_subscriptions\" WHERE \"vehicle_token_id\"=$1 AND \"trigger_id\"=$2"
+	sql := "DELETE FROM \"vehicle_triggers_api\".\"vehicle_subscriptions\" WHERE \"asset_did\"=$1 AND \"trigger_id\"=$2"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1101,7 +1100,7 @@ func (o VehicleSubscriptionSlice) DeleteAll(ctx context.Context, exec boil.Conte
 // Reload refetches the object from the database
 // using the primary keys with an executor.
 func (o *VehicleSubscription) Reload(ctx context.Context, exec boil.ContextExecutor) error {
-	ret, err := FindVehicleSubscription(ctx, exec, o.VehicleTokenID, o.TriggerID)
+	ret, err := FindVehicleSubscription(ctx, exec, o.AssetDid, o.TriggerID)
 	if err != nil {
 		return err
 	}
@@ -1140,16 +1139,16 @@ func (o *VehicleSubscriptionSlice) ReloadAll(ctx context.Context, exec boil.Cont
 }
 
 // VehicleSubscriptionExists checks if the VehicleSubscription row exists.
-func VehicleSubscriptionExists(ctx context.Context, exec boil.ContextExecutor, vehicleTokenID types.Decimal, triggerID string) (bool, error) {
+func VehicleSubscriptionExists(ctx context.Context, exec boil.ContextExecutor, assetDid string, triggerID string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"vehicle_triggers_api\".\"vehicle_subscriptions\" where \"vehicle_token_id\"=$1 AND \"trigger_id\"=$2 limit 1)"
+	sql := "select exists(select 1 from \"vehicle_triggers_api\".\"vehicle_subscriptions\" where \"asset_did\"=$1 AND \"trigger_id\"=$2 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
 		fmt.Fprintln(writer, sql)
-		fmt.Fprintln(writer, vehicleTokenID, triggerID)
+		fmt.Fprintln(writer, assetDid, triggerID)
 	}
-	row := exec.QueryRowContext(ctx, sql, vehicleTokenID, triggerID)
+	row := exec.QueryRowContext(ctx, sql, assetDid, triggerID)
 
 	err := row.Scan(&exists)
 	if err != nil {
@@ -1161,5 +1160,5 @@ func VehicleSubscriptionExists(ctx context.Context, exec boil.ContextExecutor, v
 
 // Exists checks if the VehicleSubscription row exists.
 func (o *VehicleSubscription) Exists(ctx context.Context, exec boil.ContextExecutor) (bool, error) {
-	return VehicleSubscriptionExists(ctx, exec, o.VehicleTokenID, o.TriggerID)
+	return VehicleSubscriptionExists(ctx, exec, o.AssetDid, o.TriggerID)
 }

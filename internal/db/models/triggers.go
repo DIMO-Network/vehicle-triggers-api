@@ -866,7 +866,7 @@ func (o *Trigger) AddVehicleSubscriptions(ctx context.Context, exec boil.Context
 				strmangle.SetParamNames("\"", "\"", 1, []string{"trigger_id"}),
 				strmangle.WhereClause("\"", "\"", 2, vehicleSubscriptionPrimaryKeyColumns),
 			)
-			values := []interface{}{o.ID, rel.VehicleTokenID, rel.TriggerID}
+			values := []interface{}{o.ID, rel.AssetDid, rel.TriggerID}
 
 			if boil.IsDebug(ctx) {
 				writer := boil.DebugWriterFrom(ctx)
