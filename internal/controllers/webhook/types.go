@@ -159,7 +159,9 @@ type EventData struct {
 	// Producer is DID of device that produced the event.
 	Producer string `json:"producer,omitempty"`
 	// DurationNanos is the duration of the event in nanoseconds
-	DurationNs int64 `json:"durationNs"`
+	DurationNs uint64 `json:"durationNs"`
+	// Metadata is the metadata of the event
+	Metadata string `json:"metadata,omitempty"`
 }
 
 // SubscriptionView describes a vehicle's subscription to a webhook.

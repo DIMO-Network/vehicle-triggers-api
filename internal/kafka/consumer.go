@@ -6,9 +6,11 @@ import (
 
 	"github.com/IBM/sarama"
 	"github.com/ThreeDotsLabs/watermill"
-	wm_kafka "github.com/ThreeDotsLabs/watermill-kafka/v3/pkg/kafka"
+	wmkafka "github.com/ThreeDotsLabs/watermill-kafka/v3/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
 )
+
+type ProcessorFunc func(ctx context.Context, messages <-chan *message.Message) error
 
 type Config struct {
 	ClusterConfig   *sarama.Config
@@ -16,23 +18,25 @@ type Config struct {
 	Topic           string
 	GroupID         string
 	MaxInFlight     int64
+	Processor       ProcessorFunc
 }
 
 type Consumer struct {
-	subscriber *wm_kafka.Subscriber
+	subscriber *wmkafka.Subscriber
 	topic      string
+	Processor  ProcessorFunc
 }
 
 func NewConsumer(cfg *Config) (*Consumer, error) {
-	saramaSubscriberConfig := wm_kafka.DefaultSaramaSubscriberConfig()
+	saramaSubscriberConfig := wmkafka.DefaultSaramaSubscriberConfig()
 
 	saramaSubscriberConfig.Version = cfg.ClusterConfig.Version
 	saramaSubscriberConfig.Consumer.Offsets.Initial = cfg.ClusterConfig.Consumer.Offsets.Initial
 
-	subscriber, err := wm_kafka.NewSubscriber(
-		wm_kafka.SubscriberConfig{
+	subscriber, err := wmkafka.NewSubscriber(
+		wmkafka.SubscriberConfig{
 			Brokers:               cfg.BrokerAddresses,
-			Unmarshaler:           wm_kafka.DefaultMarshaler{},
+			Unmarshaler:           wmkafka.DefaultMarshaler{},
 			OverwriteSaramaConfig: saramaSubscriberConfig,
 			ConsumerGroup:         cfg.GroupID,
 		},
@@ -45,15 +49,22 @@ func NewConsumer(cfg *Config) (*Consumer, error) {
 	return &Consumer{
 		subscriber: subscriber,
 		topic:      cfg.Topic,
+		Processor:  cfg.Processor,
 	}, nil
 }
 
-func (c *Consumer) Start(ctx context.Context, process func(ctx context.Context, messages <-chan *message.Message)) error {
+func (c *Consumer) Start(ctx context.Context) error {
 	messages, err := c.subscriber.Subscribe(ctx, c.topic)
 	if err != nil {
 		return fmt.Errorf("could not subscribe to topic: %s", c.topic)
 	}
+	if c.Processor == nil {
+		return fmt.Errorf("processor function is nil")
+	}
 
-	go process(ctx, messages)
-	return nil
+	return c.Processor(ctx, messages)
+}
+
+func (c *Consumer) Stop(ctx context.Context) error {
+	return c.subscriber.Close()
 }

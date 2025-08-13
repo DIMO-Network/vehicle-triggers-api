@@ -24,12 +24,12 @@ func TestWebhookCRUDOperations(t *testing.T) {
 	tc := GetTestServices(t)
 
 	// Create the main application
-	fiberApp, err := app.CreateServers(t.Context(), &tc.Settings, zerolog.New(os.Stdout))
+	servers, err := app.CreateServers(t.Context(), &tc.Settings, zerolog.New(os.Stdout))
 	require.NoError(t, err)
 
 	// Create a webhook receiver
 	webhookReceiver := NewWebhookReceiver()
-	defer webhookReceiver.Close()
+	t.Cleanup(webhookReceiver.Close)
 
 	// Create a developer address for testing
 	devAddress := common.HexToAddress("0xde02")
@@ -93,12 +93,13 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+authToken)
 
-		resp, err := fiberApp.Test(req, -1)
+		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		bodyStr := string(body)
 		require.Equal(t, http.StatusCreated, resp.StatusCode, bodyStr)
+		t.Logf("Webhook created: %s", bodyStr)
 
 		// Parse the response to get the webhook ID
 		webhookResponse := map[string]any{}
@@ -125,7 +126,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer "+authToken)
 
-		resp, err := fiberApp.Test(req, -1)
+		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -159,7 +160,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer "+authToken)
 
-		resp, err := fiberApp.Test(req, -1)
+		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -179,7 +180,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer "+authToken)
 
-		resp, err := fiberApp.Test(req, -1)
+		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -208,7 +209,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer "+authToken)
 
-		resp, err := fiberApp.Test(req, -1)
+		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -228,7 +229,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer "+authToken)
 
-		resp, err := fiberApp.Test(req, -1)
+		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -273,7 +274,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+authToken)
 
-		resp, err := fiberApp.Test(req, -1)
+		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -303,7 +304,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer "+authToken)
 
-		resp, err := fiberApp.Test(req, -1)
+		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -323,7 +324,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer "+authToken)
 
-		resp, err := fiberApp.Test(req, -1)
+		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -352,7 +353,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer "+authToken)
 
-		resp, err := fiberApp.Test(req, -1)
+		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -380,7 +381,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer "+authToken)
 
-		resp, err := fiberApp.Test(req, -1)
+		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -407,7 +408,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer "+authToken)
 
-		resp, err := fiberApp.Test(req, -1)
+		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -435,7 +436,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer "+authToken)
 
-		resp, err := fiberApp.Test(req, -1)
+		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 

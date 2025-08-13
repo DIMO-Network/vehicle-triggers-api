@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"strconv"
@@ -17,6 +19,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/app"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/migrations"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -76,17 +79,36 @@ func main() {
 
 	monApp := monserver.NewMonitoringServer(&logger, settings.EnablePprof)
 	logger.Info().Str("port", strconv.Itoa(settings.MonPort)).Msgf("Starting monitoring server")
-	runner.RunHandler(runnerCtx, runnerGroup, monApp, ":"+strconv.Itoa(settings.MonPort))
+	runner.RunHandler(runnerCtx, runnerGroup, monApp, net.JoinHostPort("0.0.0.0", strconv.Itoa(settings.MonPort)))
 
-	app, err := app.CreateServers(runnerCtx, &settings, logger)
+	servers, err := app.CreateServers(runnerCtx, &settings, logger)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to create servers")
 	}
 	logger.Info().Str("port", strconv.Itoa(settings.Port)).Msgf("Starting web server")
-	runner.RunFiber(runnerCtx, runnerGroup, app, ":"+strconv.Itoa(settings.Port))
+	runner.RunFiber(runnerCtx, runnerGroup, servers.Application, net.JoinHostPort("0.0.0.0", strconv.Itoa(settings.Port)))
+	RunConsumer(runnerCtx, runnerGroup, servers.SignalConsumer)
+	RunConsumer(runnerCtx, runnerGroup, servers.EventConsumer)
 
 	if err := runnerGroup.Wait(); err != nil {
 		logger.Fatal().Err(err).Msg("Server failed.")
 	}
 	logger.Info().Msg("Server stopped.")
+}
+
+// RunFiber starts a Fiber application in a new goroutine and shuts it down when the context is cancelled.
+func RunConsumer(ctx context.Context, group *errgroup.Group, consumer *kafka.Consumer) {
+	group.Go(func() error {
+		if err := consumer.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start consumer: %w", err)
+		}
+		return nil
+	})
+	group.Go(func() error {
+		<-ctx.Done()
+		if err := consumer.Stop(ctx); err != nil {
+			return fmt.Errorf("failed to shutdown consumer: %w", err)
+		}
+		return nil
+	})
 }

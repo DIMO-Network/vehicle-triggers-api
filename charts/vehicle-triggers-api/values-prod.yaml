@@ -16,9 +16,8 @@ env:
   JWK_KEY_SET_URL: https://auth.dimo.zone/keys
   IDENTITY_API_URL: https://identity-api.dimo.zone/query
   KAFKA_BROKERS: kafka-prod-dimo-kafka-kafka-brokers:9092
-  DEVICE_SIGNALS_TOPIC: topic.device.signals
   TOKEN_EXCHANGE_GRPC_ADDR: token-exchange-api-prod:8086
-  DIMORegistryChainID: 137
+  DIMO_REGISTRY_CHAIN_ID: 137
   VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
 ingress:
   enabled: true

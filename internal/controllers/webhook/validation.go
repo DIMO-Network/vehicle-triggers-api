@@ -12,6 +12,8 @@ import (
 
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/celcondition"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -56,7 +58,7 @@ func verifyWebhookURL(ctx context.Context, targetURL string, verificationToken s
 
 	responseToken := strings.TrimSpace(string(bodyBytes))
 	if responseToken != verificationToken {
-		err := fmt.Errorf("verification token mismatch. Expected '%s'", verificationToken)
+		err := fmt.Errorf("verification token mismatch. Expected '%s', got '%s'", verificationToken, responseToken)
 		return richerrors.Error{
 			ExternalMsg: err.Error(),
 			Err:         err,
@@ -86,12 +88,19 @@ func validateTargetURL(targetURL string) error {
 	return nil
 }
 
-func (w *WebhookController) validateServiceAndMetricName(serviceName string, metricName string) error {
+func validateServiceAndMetricNameAndCondition(serviceName string, metricName string, condition string) error {
 	switch serviceName {
-	case "telemetry.signals":
-		return w.validateSignalName(metricName)
-	case "telemetry.events":
-		return nil
+	case triggersrepo.ServiceSignal:
+		signalDef, err := signals.GetSignalDefinition(metricName)
+		if err != nil {
+			return richerrors.Error{
+				ExternalMsg: fmt.Sprintf("Unknown signal name: '%s'", metricName),
+				Code:        fiber.StatusBadRequest,
+			}
+		}
+		return validateCondition(serviceName, condition, signalDef.ValueType)
+	case triggersrepo.ServiceEvent:
+		return validateCondition(serviceName, condition, "")
 	default:
 		return richerrors.Error{
 			ExternalMsg: fmt.Sprintf("Invalid service: %s", serviceName),
@@ -100,20 +109,8 @@ func (w *WebhookController) validateServiceAndMetricName(serviceName string, met
 	}
 }
 
-func (w *WebhookController) validateSignalName(signalName string) error {
-	for _, signal := range w.signalDefs {
-		if signal.Name == signalName {
-			return nil
-		}
-	}
-	return richerrors.Error{
-		ExternalMsg: "Invalid signal name",
-		Code:        fiber.StatusBadRequest,
-	}
-}
-
-func validateCondition(condition string) error {
-	_, err := celcondition.PrepareCondition(condition)
+func validateCondition(serviceName, condition, valueType string) error {
+	_, err := celcondition.PrepareCondition(serviceName, condition, valueType)
 	if err != nil {
 		err := fmt.Errorf("invalid CEL condition: %w", err)
 		return richerrors.Error{
@@ -126,9 +123,9 @@ func validateCondition(condition string) error {
 }
 
 func validateCoolDownPeriod(coolDownPeriod int) error {
-	if coolDownPeriod < 1 {
+	if coolDownPeriod < 0 {
 		return richerrors.Error{
-			ExternalMsg: "Cool down period must be greater than 0",
+			ExternalMsg: "Cool down period must be greater than or equal to 0",
 			Code:        fiber.StatusBadRequest,
 		}
 	}

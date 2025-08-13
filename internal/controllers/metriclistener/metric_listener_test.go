@@ -1,4 +1,4 @@
-package vehiclelistener
+package metriclistener
 
 import (
 	"context"
@@ -6,7 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/DIMO-Network/model-garage/pkg/vss"
+	"github.com/DIMO-Network/cloudevent"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 )
 
@@ -17,18 +18,18 @@ func TestSendWebhookNotification_Non200(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	listener := &SignalListener{}
+	listener := &MetricListener{}
 	wh := &models.Trigger{TargetURI: ts.URL, DeveloperLicenseAddress: []byte{}}
-	_, err := listener.sendWebhookNotification(context.Background(), wh, &vss.Signal{})
+	err := listener.sendWebhookNotification(context.Background(), wh, &cloudevent.CloudEvent[webhook.WebhookPayload]{})
 	if err == nil {
 		t.Error("expected error on 500 status, got nil")
 	}
 }
 
 func TestSendWebhookNotification_BadURL(t *testing.T) {
-	listener := &SignalListener{}
+	listener := &MetricListener{}
 	wh := &models.Trigger{TargetURI: "http://invalid.localhost:0", DeveloperLicenseAddress: []byte{}}
-	_, err := listener.sendWebhookNotification(t.Context(), wh, &vss.Signal{})
+	err := listener.sendWebhookNotification(t.Context(), wh, &cloudevent.CloudEvent[webhook.WebhookPayload]{})
 	if err == nil {
 		t.Error("expected error on invalid URL, got nil")
 	}

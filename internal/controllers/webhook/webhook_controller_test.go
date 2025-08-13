@@ -17,6 +17,7 @@ import (
 	"github.com/DIMO-Network/server-garage/pkg/fibercommon"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
@@ -64,7 +65,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 		defer testServer.Close()
 
 		payload := RegisterWebhookRequest{
-			Service:           "telemetry.signals",
+			Service:           triggersrepo.ServiceSignal,
 			MetricName:        "speed",
 			Condition:         "valueNumber > 55",
 			CoolDownPeriod:    30,
@@ -77,7 +78,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 
 		expectedTrigger := &models.Trigger{
 			ID:             "test-trigger-id",
-			Service:        "telemetry.signals",
+			Service:        triggersrepo.ServiceSignal,
 			MetricName:     "speed",
 			Condition:      "valueNumber > 55",
 			TargetURI:      testServer.URL,
@@ -140,7 +141,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 		app.Post("/webhooks", controller.RegisterWebhook)
 
 		payload := RegisterWebhookRequest{
-			Service:           "telemetry.signals",
+			Service:           triggersrepo.ServiceSignal,
 			MetricName:        "speed",
 			Condition:         "valueNumber > 55",
 			CoolDownPeriod:    30,
@@ -209,7 +210,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 		defer testServer.Close()
 
 		payload := RegisterWebhookRequest{
-			Service:           "telemetry.signals",
+			Service:           triggersrepo.ServiceSignal,
 			MetricName:        "speed",
 			Condition:         "valueNumber > 55",
 			CoolDownPeriod:    30,
@@ -244,7 +245,7 @@ func TestWebhookController_ListWebhooks(t *testing.T) {
 		triggers := []*models.Trigger{
 			{
 				ID:             "trigger-1",
-				Service:        "telemetry.signals",
+				Service:        triggersrepo.ServiceSignal,
 				MetricName:     "speed",
 				Condition:      "valueNumber > 55",
 				TargetURI:      "https://example.com/webhook",
@@ -318,7 +319,7 @@ func TestWebhookController_UpdateWebhook(t *testing.T) {
 		triggerID := uuid.New().String()
 		existingTrigger := &models.Trigger{
 			ID:             triggerID,
-			Service:        "telemetry.signals",
+			Service:        triggersrepo.ServiceSignal,
 			MetricName:     "speed",
 			Condition:      "valueNumber > 55",
 			TargetURI:      "https://example.com/webhook",
@@ -358,7 +359,11 @@ func TestWebhookController_UpdateWebhook(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
-		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
+		if !assert.Equal(t, fiber.StatusOK, resp.StatusCode) {
+			body, _ := io.ReadAll(resp.Body)
+			t.Log(string(body))
+			return
+		}
 
 		var response UpdateWebhookResponse
 		err = json.NewDecoder(resp.Body).Decode(&response)

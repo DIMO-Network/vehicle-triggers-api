@@ -1,7 +1,6 @@
 package e2e_test
 
 import (
-	"crypto/tls"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -75,18 +74,6 @@ func NewWebhookReceiver() *WebhookReceiver {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status": "success"}`))
 	}))
-
-	// Ensure the application's HTTP client (which uses the default transport)
-	// accepts the self-signed certificate used by the TLS test server.
-	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
-		// Clone or initialize TLS config and skip verification for tests.
-		tlsCfg := transport.TLSClientConfig
-		if tlsCfg == nil {
-			tlsCfg = &tls.Config{}
-		}
-		tlsCfg.InsecureSkipVerify = true //nolint:gosec // test-only: allow self-signed cert from httptest server
-		transport.TLSClientConfig = tlsCfg
-	}
 
 	wr.server = server
 	return wr
