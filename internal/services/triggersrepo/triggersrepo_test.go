@@ -1,6 +1,7 @@
 package triggersrepo
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -9,6 +10,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/tests"
@@ -737,14 +739,18 @@ func TestCreateVehicleSubscription(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, trigger)
 
-		vehicleTokenID := big.NewInt(12345)
+		assetDid := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
 
 		// Create vehicle subscription
-		subscription, err := repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger.ID)
+		subscription, err := repo.CreateVehicleSubscription(ctx, assetDid, trigger.ID)
 		require.NoError(t, err)
 		require.NotNil(t, subscription)
 
-		assert.Equal(t, vehicleTokenID.String(), subscription.VehicleTokenID.String())
+		assert.Equal(t, assetDid.String(), subscription.AssetDid)
 		assert.Equal(t, trigger.ID, subscription.TriggerID)
 		assert.NotZero(t, subscription.CreatedAt)
 		assert.NotZero(t, subscription.UpdatedAt)
@@ -763,20 +769,31 @@ func TestCreateVehicleSubscription(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, trigger)
 
-		vehicleTokenID1 := big.NewInt(11111)
-		vehicleTokenID2 := big.NewInt(12345)
-		vehicleTokenID3 := big.NewInt(67890)
-
+		assetDid1 := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(11111),
+		}
+		assetDid2 := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
+		assetDid3 := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(67890),
+		}
 		// Create multiple subscriptions for the same trigger
-		subscription1, err := repo.CreateVehicleSubscription(ctx, vehicleTokenID1, trigger.ID)
+		subscription1, err := repo.CreateVehicleSubscription(ctx, assetDid1, trigger.ID)
 		require.NoError(t, err)
 		require.NotNil(t, subscription1)
 
-		subscription2, err := repo.CreateVehicleSubscription(ctx, vehicleTokenID2, trigger.ID)
+		subscription2, err := repo.CreateVehicleSubscription(ctx, assetDid2, trigger.ID)
 		require.NoError(t, err)
 		require.NotNil(t, subscription2)
 
-		subscription3, err := repo.CreateVehicleSubscription(ctx, vehicleTokenID3, trigger.ID)
+		subscription3, err := repo.CreateVehicleSubscription(ctx, assetDid3, trigger.ID)
 		require.NoError(t, err)
 		require.NotNil(t, subscription3)
 
@@ -786,12 +803,12 @@ func TestCreateVehicleSubscription(t *testing.T) {
 		require.Len(t, subscriptions, 3)
 
 		slices.SortFunc(subscriptions, func(a, b *models.VehicleSubscription) int {
-			return a.VehicleTokenID.Cmp(b.VehicleTokenID.Big)
+			return cmp.Compare(a.AssetDid, b.AssetDid)
 		})
 
-		assert.Equal(t, vehicleTokenID1.Int64(), subscriptions[0].VehicleTokenID.Int(nil).Int64())
-		assert.Equal(t, vehicleTokenID2.Int64(), subscriptions[1].VehicleTokenID.Int(nil).Int64())
-		assert.Equal(t, vehicleTokenID3.Int64(), subscriptions[2].VehicleTokenID.Int(nil).Int64())
+		assert.Equal(t, assetDid1.String(), subscriptions[0].AssetDid)
+		assert.Equal(t, assetDid2.String(), subscriptions[1].AssetDid)
+		assert.Equal(t, assetDid3.String(), subscriptions[2].AssetDid)
 		assert.Equal(t, trigger.ID, subscriptions[0].TriggerID)
 		assert.Equal(t, trigger.ID, subscriptions[1].TriggerID)
 		assert.Equal(t, trigger.ID, subscriptions[2].TriggerID)
@@ -804,11 +821,15 @@ func TestCreateVehicleSubscription(t *testing.T) {
 	})
 
 	t.Run("create subscription for non-existent trigger", func(t *testing.T) {
-		vehicleTokenID := big.NewInt(12345)
+		assetDid := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
 		nonExistentTriggerID := uuid.New().String()
 
 		// Try to create subscription for non-existent trigger
-		_, err := repo.CreateVehicleSubscription(ctx, vehicleTokenID, nonExistentTriggerID)
+		_, err := repo.CreateVehicleSubscription(ctx, assetDid, nonExistentTriggerID)
 		require.Error(t, err)
 		var richErr richerrors.Error
 		require.ErrorAs(t, err, &richErr)
@@ -824,20 +845,24 @@ func TestCreateVehicleSubscription(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, trigger)
 
-		zeroVehicleTokenID := big.NewInt(0)
+		var zeroAssetDID cloudevent.ERC721DID
 
 		// Try to create subscription with zero vehicle token ID
-		_, err = repo.CreateVehicleSubscription(ctx, zeroVehicleTokenID, trigger.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, zeroAssetDID, trigger.ID)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ValidationError)
 	})
 
 	t.Run("create subscription with empty trigger ID", func(t *testing.T) {
-		vehicleTokenID := big.NewInt(12345)
+		assetDid := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
 		emptyTriggerID := ""
 
 		// Try to create subscription with empty trigger ID
-		_, err := repo.CreateVehicleSubscription(ctx, vehicleTokenID, emptyTriggerID)
+		_, err := repo.CreateVehicleSubscription(ctx, assetDid, emptyTriggerID)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ValidationError)
 	})
@@ -855,15 +880,19 @@ func TestCreateVehicleSubscription(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, trigger)
 
-		vehicleTokenID := big.NewInt(12345)
+		assetDid := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
 
 		// Create first subscription
-		subscription1, err := repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger.ID)
+		subscription1, err := repo.CreateVehicleSubscription(ctx, assetDid, trigger.ID)
 		require.NoError(t, err)
 		require.NotNil(t, subscription1)
 
 		// Try to create duplicate subscription
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid, trigger.ID)
 		require.Error(t, err)
 		assert.True(t, IsDuplicateKeyError(err))
 
@@ -871,7 +900,7 @@ func TestCreateVehicleSubscription(t *testing.T) {
 		subscriptions, err := repo.GetVehicleSubscriptionsByTriggerID(ctx, trigger.ID)
 		require.NoError(t, err)
 		require.Len(t, subscriptions, 1)
-		assert.Equal(t, vehicleTokenID.String(), subscriptions[0].VehicleTokenID.String())
+		assert.Equal(t, assetDid.String(), subscriptions[0].AssetDid)
 		assert.Equal(t, trigger.ID, subscriptions[0].TriggerID)
 	})
 }
@@ -922,16 +951,16 @@ func TestGetVehicleSubscriptionsByTriggerID(t *testing.T) {
 		require.NotNil(t, trigger2)
 
 		// Create vehicle subscriptions
-		vehicleTokenID1 := big.NewInt(12345)
-		vehicleTokenID2 := big.NewInt(67890)
+		assetDid1 := randAssetDID(t)
+		assetDid2 := randAssetDID(t)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID1, trigger1.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid1, trigger1.ID)
 		require.NoError(t, err)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID2, trigger1.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid2, trigger1.ID)
 		require.NoError(t, err)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID1, trigger2.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid1, trigger2.ID)
 		require.NoError(t, err)
 
 		// Test getting subscriptions by trigger IDs
@@ -1010,28 +1039,28 @@ func TestGetVehicleSubscriptionsByVehicleAndDeveloperLicense(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, trigger2)
 
-		vehicleTokenID := big.NewInt(12345)
+		assetDid := randAssetDID(t)
 
 		// Create vehicle subscriptions
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger1.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid, trigger1.ID)
 		require.NoError(t, err)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger2.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid, trigger2.ID)
 		require.NoError(t, err)
 
 		// Test getting subscriptions for devAddress1
-		subscriptions, err := repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, vehicleTokenID, devAddress1)
+		subscriptions, err := repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, assetDid, devAddress1)
 		require.NoError(t, err)
 		require.Len(t, subscriptions, 1)
 		assert.Equal(t, trigger1.ID, subscriptions[0].TriggerID)
-		assert.Equal(t, vehicleTokenID.String(), subscriptions[0].VehicleTokenID.String())
+		assert.Equal(t, assetDid.String(), subscriptions[0].AssetDid)
 
 		// Test getting subscriptions for devAddress2
-		subscriptions, err = repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, vehicleTokenID, devAddress2)
+		subscriptions, err = repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, assetDid, devAddress2)
 		require.NoError(t, err)
 		require.Len(t, subscriptions, 1)
 		assert.Equal(t, trigger2.ID, subscriptions[0].TriggerID)
-		assert.Equal(t, vehicleTokenID.String(), subscriptions[0].VehicleTokenID.String())
+		assert.Equal(t, assetDid.String(), subscriptions[0].AssetDid)
 	})
 
 	t.Run("empty result for non-existent vehicle", func(t *testing.T) {
@@ -1043,13 +1072,13 @@ func TestGetVehicleSubscriptionsByVehicleAndDeveloperLicense(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, trigger)
 
-		vehicleTokenID := big.NewInt(12345)
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger.ID)
+		assetDid := randAssetDID(t)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid, trigger.ID)
 		require.NoError(t, err)
 
 		// Test getting subscriptions for non-existent vehicle
-		nonExistentVehicle := big.NewInt(99999)
-		subscriptions, err := repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, nonExistentVehicle, devAddress)
+		nonExistentAssetDid := randAssetDID(t)
+		subscriptions, err := repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, nonExistentAssetDid, devAddress)
 		require.NoError(t, err)
 		require.Len(t, subscriptions, 0)
 	})
@@ -1064,12 +1093,12 @@ func TestGetVehicleSubscriptionsByVehicleAndDeveloperLicense(t *testing.T) {
 		trigger, err := repo.CreateTrigger(ctx, req)
 		require.NoError(t, err)
 		require.NotNil(t, trigger)
-		vehicleTokenID := randTokenID(t)
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger.ID)
+		assetDid := randAssetDID(t)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid, trigger.ID)
 		require.NoError(t, err)
 
 		// Test getting subscriptions for non-existent developer license
-		subscriptions, err := repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, vehicleTokenID, devAddress2)
+		subscriptions, err := repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, assetDid, devAddress2)
 		require.NoError(t, err)
 		require.Len(t, subscriptions, 0)
 	})
@@ -1111,20 +1140,20 @@ func TestGetVehicleSubscriptionsByVehicleAndDeveloperLicense(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, trigger3)
 
-		vehicleTokenID := randTokenID(t)
+		assetDid := randAssetDID(t)
 
 		// Create subscriptions for all triggers
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger1.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid, trigger1.ID)
 		require.NoError(t, err)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger2.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid, trigger2.ID)
 		require.NoError(t, err)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger3.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid, trigger3.ID)
 		require.NoError(t, err)
 
 		// Test getting all subscriptions for the vehicle and developer
-		subscriptions, err := repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, vehicleTokenID, devAddress)
+		subscriptions, err := repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, assetDid, devAddress)
 		require.NoError(t, err)
 		require.Len(t, subscriptions, 3)
 
@@ -1135,9 +1164,9 @@ func TestGetVehicleSubscriptionsByVehicleAndDeveloperLicense(t *testing.T) {
 
 		// Verify all subscriptions belong to the correct vehicle and developer
 		require.Len(t, subscriptions, 3)
-		assert.Equal(t, vehicleTokenID.String(), subscriptions[0].VehicleTokenID.String())
-		assert.Equal(t, vehicleTokenID.String(), subscriptions[1].VehicleTokenID.String())
-		assert.Equal(t, vehicleTokenID.String(), subscriptions[2].VehicleTokenID.String())
+		assert.Equal(t, assetDid.String(), subscriptions[0].AssetDid)
+		assert.Equal(t, assetDid.String(), subscriptions[1].AssetDid)
+		assert.Equal(t, assetDid.String(), subscriptions[2].AssetDid)
 		assert.Equal(t, trigger1.ID, subscriptions[0].TriggerID)
 		assert.Equal(t, trigger2.ID, subscriptions[1].TriggerID)
 		assert.Equal(t, trigger3.ID, subscriptions[2].TriggerID)
@@ -1170,28 +1199,28 @@ func TestGetVehicleSubscriptionsByVehicleAndDeveloperLicense(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, trigger2)
 
-		vehicleTokenID := randTokenID(t)
+		assetDid := randAssetDID(t)
 
 		// Create subscriptions for both triggers
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger1.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid, trigger1.ID)
 		require.NoError(t, err)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger2.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid, trigger2.ID)
 		require.NoError(t, err)
 
 		// Test getting subscriptions for devAddress1
-		subscriptions1, err := repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, vehicleTokenID, devAddress1)
+		subscriptions1, err := repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, assetDid, devAddress1)
 		require.NoError(t, err)
 		require.Len(t, subscriptions1, 1)
 		assert.Equal(t, trigger1.ID, subscriptions1[0].TriggerID)
-		assert.Equal(t, vehicleTokenID.String(), subscriptions1[0].VehicleTokenID.String())
+		assert.Equal(t, assetDid.String(), subscriptions1[0].AssetDid)
 
 		// Test getting subscriptions for devAddress2
-		subscriptions2, err := repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, vehicleTokenID, devAddress2)
+		subscriptions2, err := repo.GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, assetDid, devAddress2)
 		require.NoError(t, err)
 		require.Len(t, subscriptions2, 1)
 		assert.Equal(t, trigger2.ID, subscriptions2[0].TriggerID)
-		assert.Equal(t, vehicleTokenID.String(), subscriptions2[0].VehicleTokenID.String())
+		assert.Equal(t, assetDid.String(), subscriptions2[0].AssetDid)
 
 		// Verify no cross-contamination
 		assert.NotEqual(t, subscriptions1[0].TriggerID, subscriptions2[0].TriggerID)
@@ -1225,10 +1254,10 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, trigger)
 
-		vehicleTokenID := randTokenID(t)
+		assetDid := randAssetDID(t)
 
 		// Create vehicle subscription
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid, trigger.ID)
 		require.NoError(t, err)
 
 		// Verify subscription exists
@@ -1237,7 +1266,7 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 		require.Len(t, subscriptions, 1)
 
 		// Delete the subscription
-		deleted, err := repo.DeleteVehicleSubscription(ctx, trigger.ID, vehicleTokenID)
+		deleted, err := repo.DeleteVehicleSubscription(ctx, trigger.ID, assetDid)
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), deleted)
 
@@ -1256,20 +1285,20 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, trigger)
 
-		nonExistentVehicleTokenID := randTokenID(t)
+		nonExistentAssetDid := randAssetDID(t)
 
 		// Test deleting non-existent subscription
-		deleted, err := repo.DeleteVehicleSubscription(ctx, trigger.ID, nonExistentVehicleTokenID)
+		deleted, err := repo.DeleteVehicleSubscription(ctx, trigger.ID, nonExistentAssetDid)
 		require.NoError(t, err)
 		assert.Equal(t, int64(0), deleted)
 	})
 
 	t.Run("delete from non-existent trigger", func(t *testing.T) {
-		vehicleTokenID := randTokenID(t)
+		assetDid := randAssetDID(t)
 		nonExistentTriggerID := uuid.New().String()
 
 		// Test deleting from non-existent trigger
-		deleted, err := repo.DeleteVehicleSubscription(ctx, nonExistentTriggerID, vehicleTokenID)
+		deleted, err := repo.DeleteVehicleSubscription(ctx, nonExistentTriggerID, assetDid)
 		require.NoError(t, err)
 		assert.Equal(t, int64(0), deleted)
 	})
@@ -1288,17 +1317,17 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 		require.NotNil(t, trigger)
 
 		// Create multiple vehicle subscriptions
-		vehicleTokenID1 := randTokenID(t)
-		vehicleTokenID2 := randTokenID(t)
-		vehicleTokenID3 := randTokenID(t)
+		assetDid1 := randAssetDID(t)
+		assetDid2 := randAssetDID(t)
+		assetDid3 := randAssetDID(t)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID1, trigger.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid1, trigger.ID)
 		require.NoError(t, err)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID2, trigger.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid2, trigger.ID)
 		require.NoError(t, err)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID3, trigger.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid3, trigger.ID)
 		require.NoError(t, err)
 
 		// Verify all subscriptions exist
@@ -1307,7 +1336,7 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 		require.Len(t, subscriptions, 3)
 
 		// Delete only one subscription
-		deleted, err := repo.DeleteVehicleSubscription(ctx, trigger.ID, vehicleTokenID2)
+		deleted, err := repo.DeleteVehicleSubscription(ctx, trigger.ID, assetDid2)
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), deleted)
 
@@ -1317,14 +1346,14 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 		require.Len(t, remainingSubscriptions, 2)
 
 		// Verify the remaining subscriptions are correct
-		remainingTokenIDs := make(map[string]bool)
+		remainingAssetDids := make(map[string]bool)
 		for _, sub := range remainingSubscriptions {
-			remainingTokenIDs[sub.VehicleTokenID.String()] = true
+			remainingAssetDids[sub.AssetDid] = true
 		}
 
-		assert.True(t, remainingTokenIDs[vehicleTokenID1.String()])
-		assert.True(t, remainingTokenIDs[vehicleTokenID3.String()])
-		assert.False(t, remainingTokenIDs[vehicleTokenID2.String()])
+		assert.True(t, remainingAssetDids[assetDid1.String()])
+		assert.True(t, remainingAssetDids[assetDid3.String()])
+		assert.False(t, remainingAssetDids[assetDid2.String()])
 	})
 
 	t.Run("isolation between different triggers", func(t *testing.T) {
@@ -1353,13 +1382,13 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, trigger2)
 
-		vehicleTokenID := randTokenID(t)
+		assetDid := randAssetDID(t)
 
 		// Create subscriptions for both triggers
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger1.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid, trigger1.ID)
 		require.NoError(t, err)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID, trigger2.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid, trigger2.ID)
 		require.NoError(t, err)
 
 		// Verify both subscriptions exist
@@ -1372,7 +1401,7 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 		require.Len(t, subscriptions2, 1)
 
 		// Delete subscription from trigger1 only
-		deleted, err := repo.DeleteVehicleSubscription(ctx, trigger1.ID, vehicleTokenID)
+		deleted, err := repo.DeleteVehicleSubscription(ctx, trigger1.ID, assetDid)
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), deleted)
 
@@ -1385,7 +1414,7 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 		remainingSubscriptions2, err := repo.GetVehicleSubscriptionsByTriggerID(ctx, trigger2.ID)
 		require.NoError(t, err)
 		require.Len(t, remainingSubscriptions2, 1)
-		assert.Equal(t, vehicleTokenID.String(), remainingSubscriptions2[0].VehicleTokenID.String())
+		assert.Equal(t, assetDid.String(), remainingSubscriptions2[0].AssetDid)
 	})
 }
 
@@ -1417,17 +1446,17 @@ func TestDeleteAllVehicleSubscriptionsForTrigger(t *testing.T) {
 		require.NotNil(t, trigger)
 
 		// Create multiple vehicle subscriptions
-		vehicleTokenID1 := randTokenID(t)
-		vehicleTokenID2 := randTokenID(t)
-		vehicleTokenID3 := randTokenID(t)
+		assetDid1 := randAssetDID(t)
+		assetDid2 := randAssetDID(t)
+		assetDid3 := randAssetDID(t)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID1, trigger.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid1, trigger.ID)
 		require.NoError(t, err)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID2, trigger.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid2, trigger.ID)
 		require.NoError(t, err)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID3, trigger.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid3, trigger.ID)
 		require.NoError(t, err)
 
 		// Verify subscriptions exist
@@ -1506,17 +1535,17 @@ func TestDeleteAllVehicleSubscriptionsForTrigger(t *testing.T) {
 		require.NotNil(t, trigger2)
 
 		// Create subscriptions for both triggers
-		vehicleTokenID1 := randTokenID(t)
-		vehicleTokenID2 := randTokenID(t)
-		vehicleTokenID3 := randTokenID(t)
+		assetDid1 := randAssetDID(t)
+		assetDid2 := randAssetDID(t)
+		assetDid3 := randAssetDID(t)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID1, trigger1.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid1, trigger1.ID)
 		require.NoError(t, err)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID2, trigger1.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid2, trigger1.ID)
 		require.NoError(t, err)
 
-		_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenID3, trigger2.ID)
+		_, err = repo.CreateVehicleSubscription(ctx, assetDid3, trigger2.ID)
 		require.NoError(t, err)
 
 		// Verify subscriptions exist for both triggers
@@ -1542,7 +1571,7 @@ func TestDeleteAllVehicleSubscriptionsForTrigger(t *testing.T) {
 		remainingSubscriptions2, err := repo.GetVehicleSubscriptionsByTriggerID(ctx, trigger2.ID)
 		require.NoError(t, err)
 		require.Len(t, remainingSubscriptions2, 1)
-		assert.Equal(t, vehicleTokenID3.String(), remainingSubscriptions2[0].VehicleTokenID.String())
+		assert.Equal(t, assetDid3.String(), remainingSubscriptions2[0].AssetDid)
 	})
 
 	t.Run("delete large number of subscriptions", func(t *testing.T) {
@@ -1560,10 +1589,10 @@ func TestDeleteAllVehicleSubscriptionsForTrigger(t *testing.T) {
 
 		// Create many vehicle subscriptions
 		subscriptionCount := 10
-		vehicleTokenIDs := make([]*big.Int, subscriptionCount)
+		assetDids := make([]cloudevent.ERC721DID, subscriptionCount)
 		for i := 0; i < subscriptionCount; i++ {
-			vehicleTokenIDs[i] = randTokenID(t)
-			_, err = repo.CreateVehicleSubscription(ctx, vehicleTokenIDs[i], trigger.ID)
+			assetDids[i] = randAssetDID(t)
+			_, err = repo.CreateVehicleSubscription(ctx, assetDids[i], trigger.ID)
 			require.NoError(t, err)
 		}
 
@@ -1618,38 +1647,7 @@ func TestGetWebhookOwner(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestBigIntToDecimal(t *testing.T) {
-	t.Parallel()
-	// Test the helper function
-	testCases := []struct {
-		name     string
-		input    *big.Int
-		expected string
-	}{
-		{
-			name:     "Zero",
-			input:    big.NewInt(0),
-			expected: "0",
-		},
-		{
-			name:     "Positive number",
-			input:    big.NewInt(12345),
-			expected: "12345",
-		},
-		{
-			name:     "Large number",
-			input:    big.NewInt(999999999),
-			expected: "999999999",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := bigIntToDecimal(tc.input)
-			assert.Equal(t, tc.expected, result.String())
-		})
-	}
-}
+// Removed TestBigIntToDecimal as bigIntToDecimal function is no longer needed after migration to asset_did
 func randomAddr(t *testing.T) common.Address {
 	addr := make([]byte, common.AddressLength)
 	_, err := rand.Read(addr)
@@ -1659,11 +1657,15 @@ func randomAddr(t *testing.T) common.Address {
 	return common.Address(addr)
 }
 
-func randTokenID(t *testing.T) *big.Int {
+func randAssetDID(t *testing.T) cloudevent.ERC721DID {
 	tokenID := make([]byte, 32)
 	_, err := rand.Read(tokenID)
 	if err != nil {
 		t.Fatalf("couldn't create a test token ID: %v", err)
 	}
-	return new(big.Int).SetBytes(tokenID)
+	return cloudevent.ERC721DID{
+		ChainID:         137,
+		ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+		TokenID:         new(big.Int).SetBytes(tokenID),
+	}
 }

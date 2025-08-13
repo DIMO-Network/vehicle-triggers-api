@@ -103,11 +103,11 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 	// Vehicle subscriptions
 	devJWTAuth.Post("/v1/webhooks/:webhookId/subscribe/list", vehicleSubscriptionController.SubscribeVehiclesFromList)
 	devJWTAuth.Post("/v1/webhooks/:webhookId/subscribe/all", vehicleSubscriptionController.SubscribeAllVehiclesToWebhook)
-	devJWTAuth.Post("/v1/webhooks/:webhookId/subscribe/:vehicleTokenId", vehicleSubscriptionController.AssignVehicleToWebhook)
+	devJWTAuth.Post("/v1/webhooks/:webhookId/subscribe/:assetDID", vehicleSubscriptionController.AssignVehicleToWebhook)
 	devJWTAuth.Delete("/v1/webhooks/:webhookId/unsubscribe/list", vehicleSubscriptionController.UnsubscribeVehiclesFromList)
 	devJWTAuth.Delete("/v1/webhooks/:webhookId/unsubscribe/all", vehicleSubscriptionController.UnsubscribeAllVehiclesFromWebhook)
-	devJWTAuth.Delete("/v1/webhooks/:webhookId/unsubscribe/:vehicleTokenId", vehicleSubscriptionController.RemoveVehicleFromWebhook)
-	devJWTAuth.Get("/v1/webhooks/vehicles/:vehicleTokenId", vehicleSubscriptionController.ListSubscriptions)
+	devJWTAuth.Delete("/v1/webhooks/:webhookId/unsubscribe/:assetDID", vehicleSubscriptionController.RemoveVehicleFromWebhook)
+	devJWTAuth.Get("/v1/webhooks/vehicles/:assetDID", vehicleSubscriptionController.ListSubscriptions)
 
 	return app, nil
 }

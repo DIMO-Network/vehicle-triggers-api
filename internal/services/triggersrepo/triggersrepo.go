@@ -5,21 +5,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"math/big"
 	"net/http"
 	"time"
 
+	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/migrations"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
-	"github.com/ericlagergren/decimal"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
-	"github.com/volatiletech/sqlboiler/v4/types"
 )
 
 const (
@@ -286,10 +284,10 @@ func (r *Repository) DeleteTrigger(ctx context.Context, triggerID string, develo
 // Vehicle Subscription operations
 
 // CreateVehicleSubscription creates a new vehicle subscription
-func (r *Repository) CreateVehicleSubscription(ctx context.Context, vehicleTokenID *big.Int, triggerID string) (*models.VehicleSubscription, error) {
-	if vehicleTokenID.Cmp(big.NewInt(0)) == 0 {
+func (r *Repository) CreateVehicleSubscription(ctx context.Context, assetDid cloudevent.ERC721DID, triggerID string) (*models.VehicleSubscription, error) {
+	if assetDid == (cloudevent.ERC721DID{}) {
 		return nil, richerrors.Error{
-			ExternalMsg: "Vehicle token ID is required",
+			ExternalMsg: "Asset DID is required",
 			Err:         ValidationError,
 			Code:        http.StatusBadRequest,
 		}
@@ -303,10 +301,10 @@ func (r *Repository) CreateVehicleSubscription(ctx context.Context, vehicleToken
 	}
 
 	subscription := &models.VehicleSubscription{
-		VehicleTokenID: bigIntToDecimal(vehicleTokenID),
-		TriggerID:      triggerID,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		AssetDid:  assetDid.String(),
+		TriggerID: triggerID,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	if err := subscription.Insert(ctx, r.db, boil.Infer()); err != nil {
@@ -348,7 +346,7 @@ func (r *Repository) GetVehicleSubscriptionsByTriggerID(ctx context.Context, tri
 }
 
 // GetVehicleSubscriptionsByVehicleAndDeveloperLicense retrieves all subscriptions for webhook IDs that the device_license created.
-func (r *Repository) GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx context.Context, vehicleTokenID *big.Int, developerLicenseAddress common.Address) ([]*models.VehicleSubscription, error) {
+func (r *Repository) GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx context.Context, assetDid cloudevent.ERC721DID, developerLicenseAddress common.Address) ([]*models.VehicleSubscription, error) {
 	if developerLicenseAddress == (common.Address{}) {
 		return nil, richerrors.Error{
 			ExternalMsg: "Developer license address is required",
@@ -356,16 +354,15 @@ func (r *Repository) GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx con
 			Code:        http.StatusBadRequest,
 		}
 	}
-	if vehicleTokenID == nil || vehicleTokenID.Cmp(big.NewInt(0)) == 0 {
+	if assetDid == (cloudevent.ERC721DID{}) {
 		return nil, richerrors.Error{
-			ExternalMsg: "Vehicle token ID is required",
+			ExternalMsg: "Asset DID is required",
 			Err:         ValidationError,
 			Code:        http.StatusBadRequest,
 		}
 	}
-	dec := bigIntToDecimal(vehicleTokenID)
 	subscriptions, err := models.VehicleSubscriptions(
-		models.VehicleSubscriptionWhere.VehicleTokenID.EQ(dec),
+		models.VehicleSubscriptionWhere.AssetDid.EQ(assetDid.String()),
 		qm.InnerJoin(fmt.Sprintf("%s.%s on %s = %s",
 			migrations.SchemaName,
 			models.TableNames.Triggers,
@@ -390,7 +387,7 @@ func (r *Repository) GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx con
 }
 
 // DeleteVehicleSubscription deletes a specific vehicle subscription.
-func (r *Repository) DeleteVehicleSubscription(ctx context.Context, triggerID string, vehicleTokenID *big.Int) (int64, error) {
+func (r *Repository) DeleteVehicleSubscription(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (int64, error) {
 	if triggerID == "" {
 		return 0, richerrors.Error{
 			ExternalMsg: "Trigger id is required",
@@ -398,16 +395,16 @@ func (r *Repository) DeleteVehicleSubscription(ctx context.Context, triggerID st
 			Code:        http.StatusBadRequest,
 		}
 	}
-	if vehicleTokenID == nil || vehicleTokenID.Cmp(big.NewInt(0)) == 0 {
+	if assetDid == (cloudevent.ERC721DID{}) {
 		return 0, richerrors.Error{
-			ExternalMsg: "Vehicle token ID is required",
+			ExternalMsg: "Asset DID is required",
 			Err:         ValidationError,
 			Code:        http.StatusBadRequest,
 		}
 	}
 	deleteCount, err := models.VehicleSubscriptions(
 		models.VehicleSubscriptionWhere.TriggerID.EQ(triggerID),
-		models.VehicleSubscriptionWhere.VehicleTokenID.EQ(bigIntToDecimal(vehicleTokenID)),
+		models.VehicleSubscriptionWhere.AssetDid.EQ(assetDid.String()),
 	).DeleteAll(ctx, r.db)
 	if err != nil {
 		return 0, richerrors.Error{
@@ -516,10 +513,10 @@ func (r *Repository) InternalGetTriggerByID(ctx context.Context, triggerID strin
 }
 
 // GetLastTriggeredAt returns the last triggered at timestamp for a trigger and vehicle token ID.
-func (r *Repository) GetLastTriggeredAt(ctx context.Context, triggerID string, vehicleTokenID *big.Int) (time.Time, error) {
+func (r *Repository) GetLastTriggeredAt(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (time.Time, error) {
 	logs, err := models.TriggerLogs(
 		models.TriggerLogWhere.TriggerID.EQ(triggerID),
-		models.TriggerLogWhere.VehicleTokenID.EQ(bigIntToDecimal(vehicleTokenID)),
+		models.TriggerLogWhere.AssetDid.EQ(assetDid.String()),
 		qm.OrderBy("last_triggered_at DESC"),
 	).One(ctx, r.db)
 
@@ -546,9 +543,4 @@ func (r *Repository) CreateTriggerLog(ctx context.Context, log *models.TriggerLo
 		}
 	}
 	return nil
-}
-func bigIntToDecimal(vehicleTokenID *big.Int) types.Decimal {
-	dec := types.NewDecimal(new(decimal.Big))
-	dec.SetBigMantScale(vehicleTokenID, 0)
-	return dec
 }

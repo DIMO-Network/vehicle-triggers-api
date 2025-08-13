@@ -123,7 +123,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/webhooks/vehicles/{vehicleTokenId}": {
+        "/v1/webhooks/vehicles/{assetDID}": {
             "get": {
                 "security": [
                     {
@@ -141,8 +141,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Vehicle Token ID",
-                        "name": "vehicleTokenId",
+                        "description": "Asset DID",
+                        "name": "assetDID",
                         "in": "path",
                         "required": true
                     }
@@ -185,7 +185,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns every vehicleTokenId currently subscribed.",
+                "description": "Returns every vehicle currently subscribed.",
                 "produces": [
                     "application/json"
                 ],
@@ -392,7 +392,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Subscribes each vehicleTokenId to the webhook.",
+                "description": "Subscribes each assetDID to the webhook.",
                 "consumes": [
                     "application/json"
                 ],
@@ -449,7 +449,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/webhooks/{webhookId}/subscribe/{vehicleTokenId}": {
+        "/v1/webhooks/{webhookId}/subscribe/{assetDID}": {
             "post": {
                 "security": [
                     {
@@ -477,8 +477,8 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Vehicle Token ID",
-                        "name": "vehicleTokenId",
+                        "description": "Asset DID",
+                        "name": "assetDID",
                         "in": "path",
                         "required": true
                     }
@@ -588,7 +588,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Unsubscribes each vehicleTokenId from the webhook.",
+                "description": "Unsubscribes each assetDID from the webhook.",
                 "consumes": [
                     "application/json"
                 ],
@@ -645,7 +645,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/webhooks/{webhookId}/unsubscribe/{vehicleTokenId}": {
+        "/v1/webhooks/{webhookId}/unsubscribe/{assetDID}": {
             "delete": {
                 "security": [
                     {
@@ -670,8 +670,8 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Vehicle Token ID",
-                        "name": "vehicleTokenId",
+                        "description": "Asset DID",
+                        "name": "assetDID",
                         "in": "path",
                         "required": true
                     }
@@ -715,6 +715,26 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "big.Int": {
+            "type": "object"
+        },
+        "cloudevent.ERC721DID": {
+            "type": "object",
+            "properties": {
+                "chainId": {
+                    "type": "integer"
+                },
+                "contract": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "tokenId": {
+                    "$ref": "#/definitions/big.Int"
+                }
+            }
+        },
         "github_com_DIMO-Network_vehicle-triggers-api_internal_signals.SignalDefinition": {
             "type": "object",
             "properties": {
@@ -819,16 +839,20 @@ const docTemplate = `{
         "internal_controllers_webhook.SubscriptionView": {
             "type": "object",
             "properties": {
+                "assetDid": {
+                    "description": "AssetDid is the DID of the asset tied to the subscription.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/cloudevent.ERC721DID"
+                        }
+                    ]
+                },
                 "createdAt": {
                     "description": "CreatedAt is when the subscription was created.",
                     "type": "string"
                 },
                 "description": {
                     "description": "Description is the optional description from the webhook trigger.",
-                    "type": "string"
-                },
-                "vehicleTokenId": {
-                    "description": "VehicleTokenID is the on-chain token ID of the vehicle.",
                     "type": "string"
                 },
                 "webhookId": {

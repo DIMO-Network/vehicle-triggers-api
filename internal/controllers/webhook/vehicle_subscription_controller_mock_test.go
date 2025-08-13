@@ -11,9 +11,9 @@ package webhook
 
 import (
 	context "context"
-	big "math/big"
 	reflect "reflect"
 
+	cloudevent "github.com/DIMO-Network/cloudevent"
 	common "github.com/ethereum/go-ethereum/common"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -43,10 +43,10 @@ func (m *MockIdentityClient) EXPECT() *MockIdentityClientMockRecorder {
 }
 
 // GetSharedVehicles mocks base method.
-func (m *MockIdentityClient) GetSharedVehicles(ctx context.Context, developerLicense []byte) ([]*big.Int, error) {
+func (m *MockIdentityClient) GetSharedVehicles(ctx context.Context, developerLicense []byte) ([]cloudevent.ERC721DID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSharedVehicles", ctx, developerLicense)
-	ret0, _ := ret[0].([]*big.Int)
+	ret0, _ := ret[0].([]cloudevent.ERC721DID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -82,16 +82,16 @@ func (m *MockTokenExchangeClient) EXPECT() *MockTokenExchangeClientMockRecorder 
 }
 
 // HasVehiclePermissions mocks base method.
-func (m *MockTokenExchangeClient) HasVehiclePermissions(ctx context.Context, tokenID *big.Int, developerLicense common.Address, permissions []string) (bool, error) {
+func (m *MockTokenExchangeClient) HasVehiclePermissions(ctx context.Context, assetDid cloudevent.ERC721DID, developerLicense common.Address, permissions []string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HasVehiclePermissions", ctx, tokenID, developerLicense, permissions)
+	ret := m.ctrl.Call(m, "HasVehiclePermissions", ctx, assetDid, developerLicense, permissions)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // HasVehiclePermissions indicates an expected call of HasVehiclePermissions.
-func (mr *MockTokenExchangeClientMockRecorder) HasVehiclePermissions(ctx, tokenID, developerLicense, permissions any) *gomock.Call {
+func (mr *MockTokenExchangeClientMockRecorder) HasVehiclePermissions(ctx, assetDid, developerLicense, permissions any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasVehiclePermissions", reflect.TypeOf((*MockTokenExchangeClient)(nil).HasVehiclePermissions), ctx, tokenID, developerLicense, permissions)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasVehiclePermissions", reflect.TypeOf((*MockTokenExchangeClient)(nil).HasVehiclePermissions), ctx, assetDid, developerLicense, permissions)
 }

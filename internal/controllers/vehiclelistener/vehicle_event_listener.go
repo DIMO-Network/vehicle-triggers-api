@@ -22,11 +22,9 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/ericlagergren/decimal"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/volatiletech/sqlboiler/v4/types"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -68,8 +66,13 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 	if err := json.Unmarshal(msg.Payload, &signal); err != nil {
 		return fmt.Errorf("failed to parse vehicle signal JSON: %w", err)
 	}
+	did := cloudevent.ERC721DID{
+		ChainID:         l.dimoRegistryChainID,
+		ContractAddress: l.vehicleNFTAddress,
+		TokenID:         big.NewInt(int64(signal.TokenID)),
+	}
 
-	webhooks := l.webhookCache.GetWebhooks(signal.TokenID, signal.Name)
+	webhooks := l.webhookCache.GetWebhooks(did.String(), signal.Name)
 
 	if len(webhooks) == 0 {
 		// no webhooks found for this signal, skip
@@ -90,8 +93,12 @@ func (l *SignalListener) processMessage(msg *message.Message) error {
 }
 
 func (l *SignalListener) processWebhook(ctx context.Context, wh *webhookcache.Webhook, signal *vss.Signal) error {
-	bigTokenID := big.NewInt(int64(signal.TokenID))
-	hasPerm, err := l.tokenExchangeClient.HasVehiclePermissions(ctx, bigTokenID, common.BytesToAddress(wh.Trigger.DeveloperLicenseAddress), []string{
+	did := cloudevent.ERC721DID{
+		ChainID:         l.dimoRegistryChainID,
+		ContractAddress: l.vehicleNFTAddress,
+		TokenID:         big.NewInt(int64(signal.TokenID)),
+	}
+	hasPerm, err := l.tokenExchangeClient.HasVehiclePermissions(ctx, did, common.BytesToAddress(wh.Trigger.DeveloperLicenseAddress), []string{
 		"privilege:GetNonLocationHistory",
 		"privilege:GetLocationHistory",
 	})
@@ -101,8 +108,12 @@ func (l *SignalListener) processWebhook(ctx context.Context, wh *webhookcache.We
 	if !hasPerm {
 		// If we don't have permission, unsubscribe from the trigger and refresh the cache
 		zerolog.Ctx(ctx).Info().Msgf("permissions revoked for license %x on vehicle %d", wh.Trigger.DeveloperLicenseAddress, signal.TokenID)
-		tokenId := new(big.Int).SetUint64(uint64(signal.TokenID))
-		_, err := l.repo.DeleteVehicleSubscription(context.Background(), wh.Trigger.ID, tokenId)
+		did := cloudevent.ERC721DID{
+			ChainID:         l.dimoRegistryChainID,
+			ContractAddress: l.vehicleNFTAddress,
+			TokenID:         big.NewInt(int64(signal.TokenID)),
+		}
+		_, err := l.repo.DeleteVehicleSubscription(context.Background(), wh.Trigger.ID, did)
 		if err != nil {
 			return fmt.Errorf("failed to delete vehicle subscription: %w", err)
 		}
@@ -148,8 +159,12 @@ func (l *SignalListener) processWebhook(ctx context.Context, wh *webhookcache.We
 
 func (l *SignalListener) checkCooldown(webhook *models.Trigger, tokenID uint32) (bool, error) {
 	cooldown := webhook.CooldownPeriod
-	tokenIDBigInt := new(big.Int).SetUint64(uint64(tokenID))
-	lastTriggered, err := l.repo.GetLastTriggeredAt(context.Background(), webhook.ID, tokenIDBigInt)
+	did := cloudevent.ERC721DID{
+		ChainID:         l.dimoRegistryChainID,
+		ContractAddress: l.vehicleNFTAddress,
+		TokenID:         big.NewInt(int64(tokenID)),
+	}
+	lastTriggered, err := l.repo.GetLastTriggeredAt(context.Background(), webhook.ID, did)
 	if err != nil {
 		return false, fmt.Errorf("failed to retrieve event logs: %w", err)
 	}
@@ -160,13 +175,11 @@ func (l *SignalListener) checkCooldown(webhook *models.Trigger, tokenID uint32) 
 }
 
 func (l *SignalListener) logWebhookTrigger(ctx context.Context, cloudEvent *cloudevent.CloudEvent[webhook.WebhookPayload]) error {
-	dec := types.NewDecimal(new(decimal.Big))
-	dec.SetBigMantScale(cloudEvent.Data.AssetDID.TokenID, 0)
 	now := time.Now()
 	eventLog := &models.TriggerLog{
 		ID:              cloudEvent.ID,
 		TriggerID:       cloudEvent.Data.WebhookId,
-		VehicleTokenID:  dec,
+		AssetDid:        cloudEvent.Data.AssetDID.String(),
 		SnapshotData:    []byte("{}"),
 		LastTriggeredAt: now,
 		CreatedAt:       now,

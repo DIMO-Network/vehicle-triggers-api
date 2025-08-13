@@ -1,4 +1,17 @@
 definitions:
+  big.Int:
+    type: object
+  cloudevent.ERC721DID:
+    properties:
+      chainId:
+        type: integer
+      contract:
+        items:
+          type: integer
+        type: array
+      tokenId:
+        $ref: '#/definitions/big.Int'
+    type: object
   github_com_DIMO-Network_vehicle-triggers-api_internal_signals.SignalDefinition:
     properties:
       description:
@@ -89,14 +102,15 @@ definitions:
     type: object
   internal_controllers_webhook.SubscriptionView:
     properties:
+      assetDid:
+        allOf:
+        - $ref: '#/definitions/cloudevent.ERC721DID'
+        description: AssetDid is the DID of the asset tied to the subscription.
       createdAt:
         description: CreatedAt is when the subscription was created.
         type: string
       description:
         description: Description is the optional description from the webhook trigger.
-        type: string
-      vehicleTokenId:
-        description: VehicleTokenID is the on-chain token ID of the vehicle.
         type: string
       webhookId:
         description: webhookID is the identifier of the webhook trigger.
@@ -260,7 +274,7 @@ paths:
       tags:
       - Webhooks
     get:
-      description: Returns every vehicleTokenId currently subscribed.
+      description: Returns every vehicle currently subscribed.
       parameters:
       - description: Webhook ID
         in: path
@@ -328,7 +342,7 @@ paths:
       summary: Update a webhook
       tags:
       - Webhooks
-  /v1/webhooks/{webhookId}/subscribe/{vehicleTokenId}:
+  /v1/webhooks/{webhookId}/subscribe/{assetDID}:
     post:
       consumes:
       - application/json
@@ -339,9 +353,9 @@ paths:
         name: webhookId
         required: true
         type: string
-      - description: Vehicle Token ID
+      - description: Asset DID
         in: path
-        name: vehicleTokenId
+        name: assetDID
         required: true
         type: string
       produces:
@@ -417,7 +431,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Subscribes each vehicleTokenId to the webhook.
+      description: Subscribes each assetDID to the webhook.
       parameters:
       - description: Webhook ID
         in: path
@@ -454,7 +468,7 @@ paths:
       summary: Assign multiple vehicles to a webhook from a list
       tags:
       - Webhooks
-  /v1/webhooks/{webhookId}/unsubscribe/{vehicleTokenId}:
+  /v1/webhooks/{webhookId}/unsubscribe/{assetDID}:
     delete:
       description: Removes a vehicle's subscription.
       parameters:
@@ -463,9 +477,9 @@ paths:
         name: webhookId
         required: true
         type: string
-      - description: Vehicle Token ID
+      - description: Asset DID
         in: path
-        name: vehicleTokenId
+        name: assetDID
         required: true
         type: string
       produces:
@@ -541,7 +555,7 @@ paths:
     delete:
       consumes:
       - application/json
-      description: Unsubscribes each vehicleTokenId from the webhook.
+      description: Unsubscribes each assetDID from the webhook.
       parameters:
       - description: Webhook ID
         in: path
@@ -597,13 +611,13 @@ paths:
       summary: Get signal names
       tags:
       - Webhooks
-  /v1/webhooks/vehicles/{vehicleTokenId}:
+  /v1/webhooks/vehicles/{assetDID}:
     get:
       description: Retrieves all webhook subscriptions for a given vehicle.
       parameters:
-      - description: Vehicle Token ID
+      - description: Asset DID
         in: path
-        name: vehicleTokenId
+        name: assetDID
         required: true
         type: string
       produces:

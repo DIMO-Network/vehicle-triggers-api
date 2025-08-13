@@ -14,7 +14,6 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/google/cel-go/cel"
 	"github.com/rs/zerolog"
-	"github.com/volatiletech/sqlboiler/v4/types"
 )
 
 var errNoWebhookConfig = errors.New("no webhook configurations found in the database")
@@ -31,10 +30,10 @@ type Repository interface {
 	InternalGetTriggerByID(ctx context.Context, triggerID string) (*models.Trigger, error)
 }
 
-// WebhookCache is an in-memory map: vehicleTokenID -> signal name -> []*models.Trigger.
+// WebhookCache is an in-memory map: assetDID -> signal name -> []*models.Trigger.
 type WebhookCache struct {
 	mu          sync.RWMutex
-	webhooks    map[uint32]map[string][]*Webhook
+	webhooks    map[string]map[string][]*Webhook
 	repo        Repository
 	lastRefresh time.Time // last time the cache was refreshed
 	schedule    atomic.Bool
@@ -47,7 +46,7 @@ func NewWebhookCache(repo Repository, settings *config.Settings) *WebhookCache {
 		debounce = defaultCacheDebounceTime
 	}
 	return &WebhookCache{
-		webhooks: make(map[uint32]map[string][]*Webhook),
+		webhooks: make(map[string]map[string][]*Webhook),
 		repo:     repo,
 		debounce: debounce,
 	}
@@ -58,7 +57,7 @@ func (wc *WebhookCache) PopulateCache(ctx context.Context) error {
 	webhooks, err := wc.fetchEventVehicleWebhooks(ctx)
 	if err != nil {
 		if errors.Is(err, errNoWebhookConfig) {
-			webhooks = make(map[uint32]map[string][]*Webhook)
+			webhooks = make(map[string]map[string][]*Webhook)
 		} else {
 			return err
 		}
@@ -84,11 +83,11 @@ func (wc *WebhookCache) ScheduleRefresh(ctx context.Context) {
 	}
 }
 
-func (wc *WebhookCache) GetWebhooks(vehicleTokenID uint32, telemetry string) []*Webhook {
+func (wc *WebhookCache) GetWebhooks(assetDID string, telemetry string) []*Webhook {
 	wc.mu.RLock()
 	defer wc.mu.RUnlock()
 
-	byVehicle, exists := wc.webhooks[vehicleTokenID]
+	byVehicle, exists := wc.webhooks[assetDID]
 	if !exists {
 		return nil
 	}
@@ -96,14 +95,14 @@ func (wc *WebhookCache) GetWebhooks(vehicleTokenID uint32, telemetry string) []*
 	return byVehicle[telemetry]
 }
 
-func (wc *WebhookCache) Update(newData map[uint32]map[string][]*Webhook) {
+func (wc *WebhookCache) Update(newData map[string]map[string][]*Webhook) {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
 	wc.webhooks = newData
 	wc.lastRefresh = time.Now()
 }
 
-func (wc *WebhookCache) fetchEventVehicleWebhooks(ctx context.Context) (map[uint32]map[string][]*Webhook, error) {
+func (wc *WebhookCache) fetchEventVehicleWebhooks(ctx context.Context) (map[string]map[string][]*Webhook, error) {
 	subs, err := wc.repo.InternalGetAllVehicleSubscriptions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all vehicle subscriptions: %w", err)
@@ -113,7 +112,7 @@ func (wc *WebhookCache) fetchEventVehicleWebhooks(ctx context.Context) (map[uint
 	// so we can share the same trigger object to reduce memory usage and database calls
 	uniqueTriggers := make(map[string]*Webhook)
 
-	newData := make(map[uint32]map[string][]*Webhook)
+	newData := make(map[string]map[string][]*Webhook)
 	logger := zerolog.Ctx(ctx)
 	for _, sub := range subs {
 		webhook, ok := uniqueTriggers[sub.TriggerID]
@@ -134,28 +133,15 @@ func (wc *WebhookCache) fetchEventVehicleWebhooks(ctx context.Context) (map[uint
 		if webhook.Trigger.Status != triggersrepo.StatusEnabled {
 			continue
 		}
-		vehicleTokenID, err := decimalToUint32(sub.VehicleTokenID)
-		if err != nil {
-			logger.Error().Err(err).Str("trigger_id", webhook.Trigger.ID).Str("vehicle_token_id", sub.VehicleTokenID.String()).Msg("failed to convert token_id")
-			continue
+
+		if newData[sub.AssetDid] == nil {
+			newData[sub.AssetDid] = make(map[string][]*Webhook)
 		}
 
-		if newData[vehicleTokenID] == nil {
-			newData[vehicleTokenID] = make(map[string][]*Webhook)
-		}
-
-		newData[vehicleTokenID][webhook.Trigger.MetricName] = append(newData[vehicleTokenID][webhook.Trigger.MetricName], webhook)
+		newData[sub.AssetDid][webhook.Trigger.MetricName] = append(newData[sub.AssetDid][webhook.Trigger.MetricName], webhook)
 	}
 	if len(newData) == 0 {
 		return nil, errNoWebhookConfig
 	}
 	return newData, nil
-}
-
-func decimalToUint32(d types.Decimal) (uint32, error) {
-	val, ok := d.Uint64()
-	if !ok {
-		return 0, fmt.Errorf("failed to convert decimal to uint64")
-	}
-	return uint32(val), nil
 }

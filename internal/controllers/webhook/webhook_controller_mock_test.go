@@ -11,9 +11,9 @@ package webhook
 
 import (
 	context "context"
-	big "math/big"
 	reflect "reflect"
 
+	cloudevent "github.com/DIMO-Network/cloudevent"
 	models "github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	triggersrepo "github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	common "github.com/ethereum/go-ethereum/common"
@@ -60,18 +60,18 @@ func (mr *MockRepositoryMockRecorder) CreateTrigger(ctx, req any) *gomock.Call {
 }
 
 // CreateVehicleSubscription mocks base method.
-func (m *MockRepository) CreateVehicleSubscription(ctx context.Context, tokenID *big.Int, triggerID string) (*models.VehicleSubscription, error) {
+func (m *MockRepository) CreateVehicleSubscription(ctx context.Context, assetDID cloudevent.ERC721DID, triggerID string) (*models.VehicleSubscription, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateVehicleSubscription", ctx, tokenID, triggerID)
+	ret := m.ctrl.Call(m, "CreateVehicleSubscription", ctx, assetDID, triggerID)
 	ret0, _ := ret[0].(*models.VehicleSubscription)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateVehicleSubscription indicates an expected call of CreateVehicleSubscription.
-func (mr *MockRepositoryMockRecorder) CreateVehicleSubscription(ctx, tokenID, triggerID any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) CreateVehicleSubscription(ctx, assetDID, triggerID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVehicleSubscription", reflect.TypeOf((*MockRepository)(nil).CreateVehicleSubscription), ctx, tokenID, triggerID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVehicleSubscription", reflect.TypeOf((*MockRepository)(nil).CreateVehicleSubscription), ctx, assetDID, triggerID)
 }
 
 // DeleteAllVehicleSubscriptionsForTrigger mocks base method.
@@ -104,18 +104,18 @@ func (mr *MockRepositoryMockRecorder) DeleteTrigger(ctx, triggerID, developerLic
 }
 
 // DeleteVehicleSubscription mocks base method.
-func (m *MockRepository) DeleteVehicleSubscription(ctx context.Context, triggerID string, tokenID *big.Int) (int64, error) {
+func (m *MockRepository) DeleteVehicleSubscription(ctx context.Context, triggerID string, assetDID cloudevent.ERC721DID) (int64, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteVehicleSubscription", ctx, triggerID, tokenID)
+	ret := m.ctrl.Call(m, "DeleteVehicleSubscription", ctx, triggerID, assetDID)
 	ret0, _ := ret[0].(int64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DeleteVehicleSubscription indicates an expected call of DeleteVehicleSubscription.
-func (mr *MockRepositoryMockRecorder) DeleteVehicleSubscription(ctx, triggerID, tokenID any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) DeleteVehicleSubscription(ctx, triggerID, assetDID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVehicleSubscription", reflect.TypeOf((*MockRepository)(nil).DeleteVehicleSubscription), ctx, triggerID, tokenID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVehicleSubscription", reflect.TypeOf((*MockRepository)(nil).DeleteVehicleSubscription), ctx, triggerID, assetDID)
 }
 
 // GetTriggerByIDAndDeveloperLicense mocks base method.
@@ -164,18 +164,18 @@ func (mr *MockRepositoryMockRecorder) GetVehicleSubscriptionsByTriggerID(ctx, tr
 }
 
 // GetVehicleSubscriptionsByVehicleAndDeveloperLicense mocks base method.
-func (m *MockRepository) GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx context.Context, tokenID *big.Int, developerLicense common.Address) ([]*models.VehicleSubscription, error) {
+func (m *MockRepository) GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx context.Context, assetDID cloudevent.ERC721DID, developerLicense common.Address) ([]*models.VehicleSubscription, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVehicleSubscriptionsByVehicleAndDeveloperLicense", ctx, tokenID, developerLicense)
+	ret := m.ctrl.Call(m, "GetVehicleSubscriptionsByVehicleAndDeveloperLicense", ctx, assetDID, developerLicense)
 	ret0, _ := ret[0].([]*models.VehicleSubscription)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetVehicleSubscriptionsByVehicleAndDeveloperLicense indicates an expected call of GetVehicleSubscriptionsByVehicleAndDeveloperLicense.
-func (mr *MockRepositoryMockRecorder) GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, tokenID, developerLicense any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx, assetDID, developerLicense any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVehicleSubscriptionsByVehicleAndDeveloperLicense", reflect.TypeOf((*MockRepository)(nil).GetVehicleSubscriptionsByVehicleAndDeveloperLicense), ctx, tokenID, developerLicense)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVehicleSubscriptionsByVehicleAndDeveloperLicense", reflect.TypeOf((*MockRepository)(nil).GetVehicleSubscriptionsByVehicleAndDeveloperLicense), ctx, assetDID, developerLicense)
 }
 
 // GetWebhookOwner mocks base method.

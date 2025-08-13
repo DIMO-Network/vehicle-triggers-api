@@ -3,26 +3,20 @@ package webhookcache
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"math/big"
 	"testing"
 
+	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
-	"github.com/ericlagergren/decimal"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/volatiletech/sqlboiler/v4/types"
 	"go.uber.org/mock/gomock"
 )
-
-// Helper function to convert big.Int to types.Decimal for tests
-func bigIntToDecimal(vehicleTokenID *big.Int) types.Decimal {
-	dec := types.NewDecimal(new(decimal.Big))
-	dec.SetBigMantScale(vehicleTokenID, 0)
-	return dec
-}
 
 func TestWebhookCache_PopulateCache(t *testing.T) {
 	t.Parallel()
@@ -36,21 +30,21 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		ctx := context.Background()
 
 		// Create test data
-		vehicleTokenID1, _ := new(big.Int).SetString("12345", 10)
-		vehicleTokenID2, _ := new(big.Int).SetString("67890", 10)
+		assetDid1 := randAssetDID(t)
+		assetDid2 := randAssetDID(t)
 
 		subs := []*models.VehicleSubscription{
 			{
-				VehicleTokenID: bigIntToDecimal(vehicleTokenID1),
-				TriggerID:      "trigger-1",
+				AssetDid:  assetDid1.String(),
+				TriggerID: "trigger-1",
 			},
 			{
-				VehicleTokenID: bigIntToDecimal(vehicleTokenID2),
-				TriggerID:      "trigger-1",
+				AssetDid:  assetDid2.String(),
+				TriggerID: "trigger-1",
 			},
 			{
-				VehicleTokenID: bigIntToDecimal(vehicleTokenID1),
-				TriggerID:      "trigger-2",
+				AssetDid:  assetDid1.String(),
+				TriggerID: "trigger-2",
 			},
 		}
 
@@ -91,19 +85,19 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check that cache was populated correctly
-		webhooks := cache.GetWebhooks(12345, "speed")
+		webhooks := cache.GetWebhooks(assetDid1.String(), "speed")
 		require.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-1", webhooks[0].Trigger.ID)
 
-		webhooks = cache.GetWebhooks(67890, "speed")
+		webhooks = cache.GetWebhooks(assetDid2.String(), "speed")
 		require.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-1", webhooks[0].Trigger.ID)
 
-		webhooks = cache.GetWebhooks(12345, "temperature")
+		webhooks = cache.GetWebhooks(assetDid1.String(), "temperature")
 		require.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-2", webhooks[0].Trigger.ID)
 
-		webhooks = cache.GetWebhooks(67890, "temperature")
+		webhooks = cache.GetWebhooks(assetDid2.String(), "temperature")
 		require.Nil(t, webhooks)
 	})
 
@@ -128,7 +122,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		require.NoError(t, err)
 
 		// Cache should be empty
-		webhooks := cache.GetWebhooks(12345, "speed")
+		webhooks := cache.GetWebhooks(randAssetDID(t).String(), "speed")
 		assert.Nil(t, webhooks)
 	})
 
@@ -162,11 +156,11 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		cache := NewWebhookCache(mockRepo, &config.Settings{})
 		ctx := context.Background()
 
-		vehicleTokenID, _ := new(big.Int).SetString("12345", 10)
+		assetDid := randAssetDID(t)
 		subs := []*models.VehicleSubscription{
 			{
-				VehicleTokenID: bigIntToDecimal(vehicleTokenID),
-				TriggerID:      "trigger-1",
+				AssetDid:  assetDid.String(),
+				TriggerID: "trigger-1",
 			},
 		}
 
@@ -188,7 +182,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		require.NoError(t, err)
 
 		// Cache should be empty since trigger couldn't be loaded
-		webhooks := cache.GetWebhooks(12345, "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
 		assert.Nil(t, webhooks)
 	})
 
@@ -200,11 +194,11 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		cache := NewWebhookCache(mockRepo, &config.Settings{})
 		ctx := context.Background()
 
-		vehicleTokenID, _ := new(big.Int).SetString("12345", 10)
+		assetDid := randAssetDID(t)
 		subs := []*models.VehicleSubscription{
 			{
-				VehicleTokenID: bigIntToDecimal(vehicleTokenID),
-				TriggerID:      "trigger-1",
+				AssetDid:  assetDid.String(),
+				TriggerID: "trigger-1",
 			},
 		}
 
@@ -232,7 +226,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		require.NoError(t, err)
 
 		// Cache should be empty since trigger is disabled
-		webhooks := cache.GetWebhooks(12345, "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
 		assert.Nil(t, webhooks)
 	})
 
@@ -244,15 +238,15 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		cache := NewWebhookCache(mockRepo, &config.Settings{})
 		ctx := context.Background()
 
-		vehicleTokenID, _ := new(big.Int).SetString("12345", 10)
+		assetDid := randAssetDID(t)
 		subs := []*models.VehicleSubscription{
 			{
-				VehicleTokenID: bigIntToDecimal(vehicleTokenID),
-				TriggerID:      "trigger-1",
+				AssetDid:  assetDid.String(),
+				TriggerID: "trigger-1",
 			},
 			{
-				VehicleTokenID: bigIntToDecimal(vehicleTokenID),
-				TriggerID:      "trigger-2",
+				AssetDid:  assetDid.String(),
+				TriggerID: "trigger-2",
 			},
 		}
 
@@ -292,7 +286,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should have both triggers for the same metric
-		webhooks := cache.GetWebhooks(12345, "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
 		require.Len(t, webhooks, 2)
 
 		triggerIDs := []string{webhooks[0].Trigger.ID, webhooks[1].Trigger.ID}
@@ -308,18 +302,18 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		cache := NewWebhookCache(mockRepo, &config.Settings{})
 		ctx := context.Background()
 
-		vehicleTokenID1, _ := new(big.Int).SetString("12345", 10)
-		vehicleTokenID2, _ := new(big.Int).SetString("67890", 10)
+		assetDid1 := randAssetDID(t)
+		assetDid2 := randAssetDID(t)
 
 		// Multiple subscriptions for same trigger
 		subs := []*models.VehicleSubscription{
 			{
-				VehicleTokenID: bigIntToDecimal(vehicleTokenID1),
-				TriggerID:      "trigger-1",
+				AssetDid:  assetDid1.String(),
+				TriggerID: "trigger-1",
 			},
 			{
-				VehicleTokenID: bigIntToDecimal(vehicleTokenID2),
-				TriggerID:      "trigger-1",
+				AssetDid:  assetDid2.String(),
+				TriggerID: "trigger-1",
 			},
 		}
 
@@ -347,8 +341,8 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		// Verify
 		require.NoError(t, err)
 
-		webhooks1 := cache.GetWebhooks(12345, "speed")
-		webhooks2 := cache.GetWebhooks(67890, "speed")
+		webhooks1 := cache.GetWebhooks(assetDid1.String(), "speed")
+		webhooks2 := cache.GetWebhooks(assetDid2.String(), "speed")
 
 		require.Len(t, webhooks1, 1)
 		require.Len(t, webhooks2, 1)
@@ -376,8 +370,9 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 			Condition:  "valueNumber > 10",
 		}
 
-		testData := map[uint32]map[string][]*Webhook{
-			12345: {
+		assetDid := randAssetDID(t)
+		testData := map[string]map[string][]*Webhook{
+			assetDid.String(): {
 				"speed": []*Webhook{
 					{
 						Trigger: trigger,
@@ -390,7 +385,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		cache.Update(testData)
 
 		// Test
-		webhooks := cache.GetWebhooks(12345, "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
 
 		// Verify
 		require.Len(t, webhooks, 1)
@@ -405,7 +400,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		cache := NewWebhookCache(mockRepo, &config.Settings{})
 
 		// Test with empty cache
-		webhooks := cache.GetWebhooks(99999, "speed")
+		webhooks := cache.GetWebhooks(randAssetDID(t).String(), "speed")
 
 		// Verify
 		assert.Nil(t, webhooks)
@@ -426,8 +421,9 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 			Condition:  "valueNumber > 10",
 		}
 
-		testData := map[uint32]map[string][]*Webhook{
-			12345: {
+		assetDid := randAssetDID(t)
+		testData := map[string]map[string][]*Webhook{
+			assetDid.String(): {
 				"temperature": []*Webhook{
 					{
 						Trigger: trigger,
@@ -440,7 +436,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		cache.Update(testData)
 
 		// Test with different metric
-		webhooks := cache.GetWebhooks(12345, "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
 
 		// Verify
 		assert.Nil(t, webhooks)
@@ -468,8 +464,9 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 			Condition:  "valueNumber > 10",
 		}
 
-		testData := map[uint32]map[string][]*Webhook{
-			12345: {
+		assetDid := randAssetDID(t)
+		testData := map[string]map[string][]*Webhook{
+			assetDid.String(): {
 				"speed": []*Webhook{
 					{
 						Trigger: trigger1,
@@ -486,7 +483,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		cache.Update(testData)
 
 		// Test
-		webhooks := cache.GetWebhooks(12345, "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
 
 		// Verify
 		require.Len(t, webhooks, 2)
@@ -514,8 +511,9 @@ func TestWebhookCache_Update(t *testing.T) {
 			Condition:  "valueNumber > 10",
 		}
 
-		initialData := map[uint32]map[string][]*Webhook{
-			12345: {
+		assetDid1 := randAssetDID(t)
+		initialData := map[string]map[string][]*Webhook{
+			assetDid1.String(): {
 				"speed": []*Webhook{
 					{
 						Trigger: trigger1,
@@ -528,7 +526,7 @@ func TestWebhookCache_Update(t *testing.T) {
 		cache.Update(initialData)
 
 		// Verify initial state
-		webhooks := cache.GetWebhooks(12345, "speed")
+		webhooks := cache.GetWebhooks(assetDid1.String(), "speed")
 		require.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-1", webhooks[0].Trigger.ID)
 
@@ -540,8 +538,9 @@ func TestWebhookCache_Update(t *testing.T) {
 			Condition:  "valueNumber > 10",
 		}
 
-		newData := map[uint32]map[string][]*Webhook{
-			67890: {
+		assetDid2 := randAssetDID(t)
+		newData := map[string]map[string][]*Webhook{
+			assetDid2.String(): {
 				"temperature": []*Webhook{
 					{
 						Trigger: trigger2,
@@ -554,10 +553,10 @@ func TestWebhookCache_Update(t *testing.T) {
 		cache.Update(newData)
 
 		// Verify old data is gone and new data is present
-		webhooks = cache.GetWebhooks(12345, "speed")
+		webhooks = cache.GetWebhooks(assetDid1.String(), "speed")
 		assert.Nil(t, webhooks)
 
-		webhooks = cache.GetWebhooks(67890, "temperature")
+		webhooks = cache.GetWebhooks(assetDid2.String(), "temperature")
 		require.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-2", webhooks[0].Trigger.ID)
 	})
@@ -577,8 +576,9 @@ func TestWebhookCache_Update(t *testing.T) {
 			Condition:  "valueNumber > 10",
 		}
 
-		initialData := map[uint32]map[string][]*Webhook{
-			12345: {
+		assetDid := randAssetDID(t)
+		initialData := map[string]map[string][]*Webhook{
+			assetDid.String(): {
 				"speed": []*Webhook{
 					{
 						Trigger: trigger,
@@ -591,10 +591,23 @@ func TestWebhookCache_Update(t *testing.T) {
 		cache.Update(initialData)
 
 		// Update with empty data
-		cache.Update(map[uint32]map[string][]*Webhook{})
+		cache.Update(map[string]map[string][]*Webhook{})
 
 		// Verify cache is now empty
-		webhooks := cache.GetWebhooks(12345, "speed")
+		webhooks := cache.GetWebhooks(assetDid.String(), "speed")
 		assert.Nil(t, webhooks)
 	})
+}
+
+func randAssetDID(t *testing.T) cloudevent.ERC721DID {
+	tokenID := make([]byte, 32)
+	_, err := rand.Read(tokenID)
+	if err != nil {
+		t.Fatalf("couldn't create a test token ID: %v", err)
+	}
+	return cloudevent.ERC721DID{
+		ChainID:         137,
+		ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+		TokenID:         new(big.Int).SetBytes(tokenID),
+	}
 }

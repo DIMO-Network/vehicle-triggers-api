@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"os"
 	"testing"
 
+	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/app"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
@@ -52,8 +54,16 @@ func TestWebhookCRUDOperations(t *testing.T) {
 	tc.TokenExchange.SetAccessCheckReturn(devAddress.String(), true)
 
 	// Test vehicle token IDs
-	vehicleTokenID1 := "12345"
-	vehicleTokenID2 := "67890"
+	assetDid1 := cloudevent.ERC721DID{
+		ChainID:         137,
+		ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+		TokenID:         big.NewInt(12345),
+	}
+	assetDid2 := cloudevent.ERC721DID{
+		ChainID:         137,
+		ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+		TokenID:         big.NewInt(67890),
+	}
 	var webhookID string
 	t.Run("Step 1: Create Webhook", func(t *testing.T) {
 		t.Log("Creating initial webhook")
@@ -133,7 +143,12 @@ func TestWebhookCRUDOperations(t *testing.T) {
 	t.Run("Step 3: Assign Vehicle to Webhook", func(t *testing.T) {
 		t.Log("Assigning vehicle to webhook")
 
-		subscribeURL := fmt.Sprintf("/v1/webhooks/%s/subscribe/%s", webhookID, vehicleTokenID1)
+		assetDid := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
+		subscribeURL := fmt.Sprintf("/v1/webhooks/%s/subscribe/%s", webhookID, assetDid.String())
 		req, err := http.NewRequestWithContext(
 			t.Context(),
 			"POST",
@@ -148,7 +163,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-		t.Logf("Assigned vehicle %s to webhook %s", vehicleTokenID1, webhookID)
+		t.Logf("Assigned vehicle %s to webhook %s", assetDid1.String(), webhookID)
 	})
 
 	t.Run("Step 4: List Vehicles for Webhook", func(t *testing.T) {
@@ -175,14 +190,14 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		err = json.Unmarshal(body, &vehicleIDs)
 		require.NoError(t, err)
 		require.Len(t, vehicleIDs, 1, "Should have exactly one vehicle subscribed")
-		require.Equal(t, vehicleTokenID1, vehicleIDs[0])
+		require.Equal(t, assetDid1.String(), vehicleIDs[0])
 		t.Logf("Found %d vehicles subscribed to webhook", len(vehicleIDs))
 	})
 
 	t.Run("Step 5: Assign Second Vehicle to Webhook", func(t *testing.T) {
 		t.Log("Assigning second vehicle to webhook")
 
-		subscribeURL := fmt.Sprintf("/v1/webhooks/%s/subscribe/%s", webhookID, vehicleTokenID2)
+		subscribeURL := fmt.Sprintf("/v1/webhooks/%s/subscribe/%s", webhookID, assetDid2.String())
 		req, err := http.NewRequestWithContext(
 			t.Context(),
 			"POST",
@@ -197,7 +212,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-		t.Logf("Assigned vehicle %s to webhook %s", vehicleTokenID2, webhookID)
+		t.Logf("Assigned vehicle %s to webhook %s", assetDid2.String(), webhookID)
 	})
 
 	t.Run("Step 6: Verify Both Vehicles are Subscribed", func(t *testing.T) {
@@ -230,8 +245,8 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		for _, id := range vehicleIDs {
 			vehicleMap[id] = true
 		}
-		require.True(t, vehicleMap[vehicleTokenID1], "First vehicle should be subscribed")
-		require.True(t, vehicleMap[vehicleTokenID2], "Second vehicle should be subscribed")
+		require.True(t, vehicleMap[assetDid1.String()], "First vehicle should be subscribed")
+		require.True(t, vehicleMap[assetDid2.String()], "Second vehicle should be subscribed")
 		t.Logf("Verified %d vehicles are subscribed to webhook", len(vehicleIDs))
 	})
 
@@ -277,7 +292,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 	t.Run("Step 8: Unassign First Vehicle from Webhook", func(t *testing.T) {
 		t.Log("Unassigning first vehicle from webhook")
 
-		unsubscribeURL := fmt.Sprintf("/v1/webhooks/%s/unsubscribe/%s", webhookID, vehicleTokenID1)
+		unsubscribeURL := fmt.Sprintf("/v1/webhooks/%s/unsubscribe/%s", webhookID, assetDid1.String())
 		req, err := http.NewRequestWithContext(
 			t.Context(),
 			"DELETE",
@@ -292,7 +307,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		t.Logf("Unassigned vehicle %s from webhook %s", vehicleTokenID1, webhookID)
+		t.Logf("Unassigned vehicle %s from webhook %s", assetDid1.String(), webhookID)
 	})
 
 	t.Run("Step 9: Verify Only Second Vehicle is Subscribed", func(t *testing.T) {
@@ -319,8 +334,8 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		err = json.Unmarshal(body, &vehicleIDs)
 		require.NoError(t, err)
 		require.Len(t, vehicleIDs, 1, "Should have exactly one vehicle subscribed")
-		require.Equal(t, vehicleTokenID2, vehicleIDs[0])
-		t.Logf("Verified only vehicle %s is subscribed to webhook", vehicleTokenID2)
+		require.Equal(t, assetDid2.String(), vehicleIDs[0])
+		t.Logf("Verified only vehicle %s is subscribed to webhook", assetDid2.String())
 	})
 
 	t.Run("Step 10: Unassign All Vehicles from Webhook", func(t *testing.T) {
