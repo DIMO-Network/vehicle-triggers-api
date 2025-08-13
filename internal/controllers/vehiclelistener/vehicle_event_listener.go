@@ -10,13 +10,19 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/model-garage/pkg/vss"
+	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/celcondition"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ericlagergren/decimal"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -24,17 +30,25 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const (
+	webhookFailureCode = -1
+)
+
 type SignalListener struct {
 	webhookCache        *webhookcache.WebhookCache
 	repo                *triggersrepo.Repository
 	tokenExchangeClient *tokenexchange.Client
+	vehicleNFTAddress   common.Address
+	dimoRegistryChainID uint64
 }
 
-func NewSignalListener(wc *webhookcache.WebhookCache, repo *triggersrepo.Repository, tokenExchangeAPI *tokenexchange.Client) *SignalListener {
+func NewSignalListener(wc *webhookcache.WebhookCache, repo *triggersrepo.Repository, tokenExchangeAPI *tokenexchange.Client, settings *config.Settings) *SignalListener {
 	return &SignalListener{
 		webhookCache:        wc,
 		repo:                repo,
 		tokenExchangeClient: tokenExchangeAPI,
+		vehicleNFTAddress:   settings.VehicleNFTAddress,
+		dimoRegistryChainID: settings.DIMORegistryChainID,
 	}
 }
 
@@ -112,11 +126,21 @@ func (l *SignalListener) processWebhook(ctx context.Context, wh *webhookcache.We
 		return nil
 	}
 
-	if err := l.sendWebhookNotification(ctx, wh.Trigger, signal); err != nil {
+	payload, err := l.sendWebhookNotification(ctx, wh.Trigger, signal)
+	if err != nil {
+		if richError, ok := richerrors.AsRichError(err); ok && richError.Code == webhookFailureCode {
+			if err := l.handleWebhookFailure(ctx, wh.Trigger); err != nil {
+				zerolog.Ctx(ctx).Error().Err(err).Msg("failed to handle webhook failure")
+			}
+		}
 		return fmt.Errorf("failed to send webhook: %w", err)
 	}
-	if err := l.logWebhookTrigger(ctx, wh.Trigger.ID, signal.TokenID); err != nil {
+	if err := l.logWebhookTrigger(ctx, payload); err != nil {
 		return fmt.Errorf("failed to log webhook trigger: %w", err)
+	}
+
+	if err := l.resetWebhookFailure(ctx, wh.Trigger); err != nil {
+		return fmt.Errorf("failed to reset webhook failure: %w", err)
 	}
 
 	return nil
@@ -135,15 +159,13 @@ func (l *SignalListener) checkCooldown(webhook *models.Trigger, tokenID uint32) 
 	return false, nil
 }
 
-func (l *SignalListener) logWebhookTrigger(ctx context.Context, eventID string, tokenID uint32) error {
-	var dec types.Decimal
-	if err := dec.Scan(fmt.Sprint(tokenID)); err != nil {
-		return err
-	}
+func (l *SignalListener) logWebhookTrigger(ctx context.Context, cloudEvent *cloudevent.CloudEvent[webhook.WebhookPayload]) error {
+	dec := types.NewDecimal(new(decimal.Big))
+	dec.SetBigMantScale(cloudEvent.Data.AssetDID.TokenID, 0)
 	now := time.Now()
 	eventLog := &models.TriggerLog{
-		ID:              uuid.New().String(),
-		TriggerID:       eventID,
+		ID:              cloudEvent.ID,
+		TriggerID:       cloudEvent.Data.WebhookId,
 		VehicleTokenID:  dec,
 		SnapshotData:    []byte("{}"),
 		LastTriggeredAt: now,
@@ -155,34 +177,91 @@ func (l *SignalListener) logWebhookTrigger(ctx context.Context, eventID string, 
 	return nil
 }
 
-func (l *SignalListener) sendWebhookNotification(ctx context.Context, wh *models.Trigger, signal *vss.Signal) error {
-	body, err := json.Marshal(signal)
+func (l *SignalListener) sendWebhookNotification(ctx context.Context, wh *models.Trigger, signal *vss.Signal) (*cloudevent.CloudEvent[webhook.WebhookPayload], error) {
+	// Create the standardized webhook payload
+	payload, err := l.createWebhookPayload(wh, signal)
 	if err != nil {
-		return fmt.Errorf("failed to marshal signal for webhook: %w", err)
+		return nil, fmt.Errorf("failed to create webhook payload: %w", err)
 	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal webhook payload: %w", err)
+	}
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Post(wh.TargetURI, "application/json", bytes.NewBuffer(body))
 	if err != nil {
-		if err := l.handleWebhookFailure(ctx, wh); err != nil {
-			zerolog.Ctx(ctx).Error().Err(err).Msg("failed to handle webhook failure")
+		return nil, richerrors.Error{
+			Code: webhookFailureCode,
+			Err:  fmt.Errorf("failed to POST to webhook: %w", err),
 		}
-		return fmt.Errorf("failed to POST to webhook: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
-		if err := l.handleWebhookFailure(ctx, wh); err != nil {
-			zerolog.Ctx(ctx).Error().Err(err).Msg("failed to handle webhook failure")
+		return nil, richerrors.Error{
+			Code: webhookFailureCode,
+			Err:  fmt.Errorf("webhook returned status code %d: %s", resp.StatusCode, string(respBody)),
 		}
-
-		return fmt.Errorf("webhook returned status code %d: %s", resp.StatusCode, string(respBody))
 	}
-	if err := l.resetWebhookFailure(ctx, wh); err != nil {
-		return fmt.Errorf("failed to reset webhook failure: %w", err)
+	return payload, nil
+}
+
+// createWebhookPayload creates a standardized webhook payload following industry best practices
+func (l *SignalListener) createWebhookPayload(trigger *models.Trigger, signal *vss.Signal) (*cloudevent.CloudEvent[webhook.WebhookPayload], error) {
+	// Determine the signal value based on type
+	var signalValue any
+	signalDef, err := signals.GetSignalDefinition(signal.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get signal definition: %w", err)
+	}
+	switch signalDef.Type {
+	case signals.NumberType:
+		signalValue = signal.ValueNumber
+	case signals.StringType:
+		signalValue = signal.ValueString
+	default:
+		return nil, fmt.Errorf("unsupported signal type: %s", signalDef.Type)
 	}
 
-	return nil
+	vehicleDID := cloudevent.ERC721DID{
+		TokenID:         big.NewInt(int64(signal.TokenID)),
+		ContractAddress: l.vehicleNFTAddress,
+		ChainID:         l.dimoRegistryChainID,
+	}
+
+	return &cloudevent.CloudEvent[webhook.WebhookPayload]{
+		CloudEventHeader: cloudevent.CloudEventHeader{
+			ID:              uuid.New().String(),
+			Source:          "vehicle-triggers-api", //TODO(kevin): Should be 0x of the storageNode
+			Subject:         vehicleDID.String(),
+			Time:            time.Now(),
+			DataContentType: "application/json",
+			DataVersion:     "telemetry.signals/v1.0",
+			Type:            "dimo.trigger",
+			SpecVersion:     "1.0",
+			Producer:        trigger.ID,
+		},
+		Data: webhook.WebhookPayload{
+			Service:     trigger.Service,
+			MetricName:  trigger.MetricName,
+			WebhookId:   trigger.ID,
+			WebhookName: trigger.DisplayName,
+			AssetDID:    vehicleDID,
+			Condition:   trigger.Condition,
+			Signal: &webhook.SignalData{
+				Name:      signal.Name,
+				Units:     signalDef.Unit,
+				ValueType: signalDef.Type,
+				Value:     signalValue,
+				Timestamp: signal.Timestamp,
+				Source:    signal.Source,
+				Producer:  signal.Producer,
+			},
+		},
+	}, nil
 }
 
 func (l *SignalListener) handleWebhookFailure(ctx context.Context, webhook *models.Trigger) error {

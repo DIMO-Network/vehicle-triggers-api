@@ -4,13 +4,12 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"strings"
 
-	"github.com/DIMO-Network/model-garage/pkg/schema"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/volatiletech/null/v8"
@@ -40,19 +39,15 @@ type WebhookCache interface {
 // WebhookController is the controller for creating and managing webhooks.
 type WebhookController struct {
 	repo       Repository
-	signalDefs []SignalDefinition
+	signalDefs []signals.SignalDefinition
 	cache      WebhookCache
 }
 
 // NewWebhookController creates a new WebhookController.
 func NewWebhookController(repo Repository, cache WebhookCache) (*WebhookController, error) {
-	signalDefs, err := loadSignalDefs()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load signal definitions: %w", err)
-	}
 	return &WebhookController{
 		repo:       repo,
-		signalDefs: signalDefs,
+		signalDefs: signals.GetAllSignalDefinitions(),
 		cache:      cache,
 	}, nil
 }
@@ -293,31 +288,10 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 // @Description  Fetches the list of signal names available for the data field.
 // @Tags         Webhooks
 // @Produce      json
-// @Success      200  {array}  SignalDefinition  "List of signal names"
+// @Success      200  {array}  signals.SignalDefinition  "List of signal names"
 // @Failure      500  "Internal server error"
 // @Security     BearerAuth
 // @Router       /v1/webhooks/signals [get]
 func (w *WebhookController) GetSignalNames(c *fiber.Ctx) error {
 	return c.JSON(w.signalDefs)
-}
-
-func loadSignalDefs() ([]SignalDefinition, error) {
-	defs, err := schema.LoadDefinitionFile(strings.NewReader(schema.DefaultDefinitionsYAML()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to load default schema definitions: %w", err)
-	}
-	signalInfo, err := schema.LoadSignalsCSV(strings.NewReader(schema.VssRel42DIMO()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to load default signal info: %w", err)
-	}
-	definedSignals := defs.DefinedSignal(signalInfo)
-	signalDefs := make([]SignalDefinition, 0, len(definedSignals))
-	for _, signal := range definedSignals {
-		signalDefs = append(signalDefs, SignalDefinition{
-			Name:        signal.JSONName,
-			Unit:        signal.Unit,
-			Description: signal.Desc,
-		})
-	}
-	return signalDefs, nil
 }

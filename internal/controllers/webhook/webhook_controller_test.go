@@ -17,6 +17,7 @@ import (
 	"github.com/DIMO-Network/server-garage/pkg/fibercommon"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
@@ -427,7 +428,7 @@ func TestWebhookController_GetSignalNames(t *testing.T) {
 
 		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
 
-		var signals []SignalDefinition
+		var signals []signals.SignalDefinition
 		err = json.NewDecoder(resp.Body).Decode(&signals)
 		require.NoError(t, err)
 		assert.NotEmpty(t, signals)

@@ -3,14 +3,18 @@ package webhook
 import (
 	"math/big"
 	"time"
+
+	"github.com/DIMO-Network/cloudevent"
 )
 
 // RegisterWebhookRequest represents the payload to create a webhook trigger.
 // It defines what to monitor, how often to notify, and where to send callbacks.
 type RegisterWebhookRequest struct {
-	// Service is the subsystem producing the metric (e.g. "vehicles").
+	// Service is the subsystem producing the metric (e.g. "telemetry.signals or telemetry.events").
+	// This field can not be updated after the webhook is created.
 	Service string `json:"service" validate:"required" example:"telemetry.signals"`
-	// MetricName is the fully qualified signal/metric to monitor.
+	// MetricName is the fully qualified event/signal to monitor.
+	// This field can not be updated after the webhook is created.
 	MetricName string `json:"metricName" validate:"required" example:"speed"`
 	// Condition is a CEL expression evaluated against the metric to decide when to fire.
 	Condition string `json:"condition" validate:"required" example:"valueNumber > 55"`
@@ -19,6 +23,7 @@ type RegisterWebhookRequest struct {
 	// Description is an optional human-friendly explanation of the webhook.
 	Description string `json:"description" example:"This webhook is used to notify when the speed of the vehicle exceeds 55 mph."`
 	// DisplayName is a user-friendly unique name per developer license.
+	// if not provided, it will be set the to the Id of the webhook.
 	DisplayName string `json:"displayName" example:"Speed Alert"`
 	// TargetURL is the HTTPS endpoint that will receive webhook callbacks.
 	TargetURL string `json:"targetURL" validate:"required" example:"https://example.com/webhook"`
@@ -97,14 +102,65 @@ type WebhookView struct {
 	DisplayName string `json:"displayName"`
 }
 
-// SignalDefinition describes a telemetry signal available for use with webhooks.
-type SignalDefinition struct {
-	// Name is the JSON-safe name of the signal.
+// WebhookPayload represents the standardized payload sent to webhook endpoints.
+// This structure follows industry best practices and includes only essential information
+// while providing proper context and metadata for the triggered event.
+type WebhookPayload struct {
+	// Service identifies the subsystem that produced the signal (e.g., "telemetry.signals")
+	Service string `json:"service"`
+
+	// MetricName is the fully qualified signal/metric monitored by the webhook.
+	MetricName string `json:"metricName"`
+
+	// WebhookId is the ID of the webhook trigger that fired
+	WebhookId string `json:"webhookId"`
+
+	// WebhookName is the user-friendly display name of the trigger
+	WebhookName string `json:"webhookName"`
+
+	// Asset contains information about the asset that generated the signal
+	AssetDID cloudevent.ERC721DID `json:"assetDID"`
+
+	// Condition is the CEL expression that was evaluated to trigger this webhook
+	Condition string `json:"condition"`
+
+	// Signal contains the specific signal data that triggered the webhook
+	Signal *SignalData `json:"signal,omitempty"`
+
+	// Event contains the event data that triggered the webhook
+	Event *EventData `json:"event,omitempty"`
+}
+
+// SignalData contains the signal information that triggered the webhook
+type SignalData struct {
+	// Name is the signal name (e.g., "speed", "engineTemperature")
 	Name string `json:"name"`
-	// Description briefly explains what the signal represents.
-	Description string `json:"description"`
-	// Unit is the unit of measurement for the signal value (if any).
-	Unit string `json:"unit"`
+	// Units is the unit of measurement for the signal value (if any).
+	Units string `json:"unit,omitempty"`
+	// Timestamp is when the signal was originally captured
+	Timestamp time.Time `json:"timestamp"`
+	// Source identifies which oracle the signal originated from.
+	Source string `json:"source,omitempty"`
+	// Producer is DID of device that produced the signal.
+	Producer string `json:"producer,omitempty"`
+	// ValueType is the data type for the value field e.g. "float64" or "string"
+	ValueType string `json:"valueType"`
+	// Value contains the signal value (either number or string, depending on signal type)
+	Value any `json:"value"`
+}
+
+// EventData contains the event information that triggered the webhook
+type EventData struct {
+	// Name is the event name (e.g., "speed", "engineTemperature")
+	Name string `json:"name"`
+	// Timestamp is when the event was originally captured
+	Timestamp time.Time `json:"timestamp"`
+	// Source identifies which oracle the event originated from.
+	Source string `json:"source,omitempty"`
+	// Producer is DID of device that produced the event.
+	Producer string `json:"producer,omitempty"`
+	// DurationNanos is the duration of the event in nanoseconds
+	DurationNs int64 `json:"durationNs"`
 }
 
 // SubscriptionView describes a vehicle's subscription to a webhook.

@@ -1,4 +1,19 @@
 definitions:
+  github_com_DIMO-Network_vehicle-triggers-api_internal_signals.SignalDefinition:
+    properties:
+      description:
+        description: Description briefly explains what the signal represents.
+        type: string
+      name:
+        description: Name is the JSON-safe name of the signal.
+        type: string
+      type:
+        description: Type is the type of the signal.
+        type: string
+      unit:
+        description: Unit is the unit of measurement for the signal value (if any).
+        type: string
+    type: object
   internal_controllers_webhook.GenericResponse:
     properties:
       message:
@@ -24,15 +39,21 @@ definitions:
           55 mph.
         type: string
       displayName:
-        description: DisplayName is a user-friendly unique name per developer license.
+        description: |-
+          DisplayName is a user-friendly unique name per developer license.
+          if not provided, it will be set the to the Id of the webhook.
         example: Speed Alert
         type: string
       metricName:
-        description: MetricName is the fully qualified signal/metric to monitor.
+        description: |-
+          MetricName is the fully qualified event/signal to monitor.
+          This field can not be updated after the webhook is created.
         example: speed
         type: string
       service:
-        description: Service is the subsystem producing the metric (e.g. "vehicles").
+        description: |-
+          Service is the subsystem producing the metric (e.g. "telemetry.signals or telemetry.events").
+          This field can not be updated after the webhook is created.
         example: telemetry.signals
         type: string
       status:
@@ -64,18 +85,6 @@ definitions:
         type: string
       message:
         description: Message provides a brief status message for the operation.
-        type: string
-    type: object
-  internal_controllers_webhook.SignalDefinition:
-    properties:
-      description:
-        description: Description briefly explains what the signal represents.
-        type: string
-      name:
-        description: Name is the JSON-safe name of the signal.
-        type: string
-      unit:
-        description: Unit is the unit of measurement for the signal value (if any).
         type: string
     type: object
   internal_controllers_webhook.SubscriptionView:
@@ -579,7 +588,7 @@ paths:
           description: List of signal names
           schema:
             items:
-              $ref: '#/definitions/internal_controllers_webhook.SignalDefinition'
+              $ref: '#/definitions/github_com_DIMO-Network_vehicle-triggers-api_internal_signals.SignalDefinition'
             type: array
         "500":
           description: Internal server error
