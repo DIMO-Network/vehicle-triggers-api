@@ -113,7 +113,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/internal_controllers_webhook.SignalDefinition"
+                                "$ref": "#/definitions/github_com_DIMO-Network_vehicle-triggers-api_internal_signals.SignalDefinition"
                             }
                         }
                     },
@@ -715,6 +715,27 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "github_com_DIMO-Network_vehicle-triggers-api_internal_signals.SignalDefinition": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "description": "Description briefly explains what the signal represents.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is the JSON-safe name of the signal.",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "Type is the type of the signal.",
+                    "type": "string"
+                },
+                "unit": {
+                    "description": "Unit is the unit of measurement for the signal value (if any).",
+                    "type": "string"
+                }
+            }
+        },
         "internal_controllers_webhook.GenericResponse": {
             "type": "object",
             "properties": {
@@ -751,17 +772,17 @@ const docTemplate = `{
                     "example": "This webhook is used to notify when the speed of the vehicle exceeds 55 mph."
                 },
                 "displayName": {
-                    "description": "DisplayName is a user-friendly unique name per developer license.",
+                    "description": "DisplayName is a user-friendly unique name per developer license.\nif not provided, it will be set the to the Id of the webhook.",
                     "type": "string",
                     "example": "Speed Alert"
                 },
                 "metricName": {
-                    "description": "MetricName is the fully qualified signal/metric to monitor.",
+                    "description": "MetricName is the fully qualified event/signal to monitor.\nThis field can not be updated after the webhook is created.",
                     "type": "string",
                     "example": "speed"
                 },
                 "service": {
-                    "description": "Service is the subsystem producing the metric (e.g. \"vehicles\").",
+                    "description": "Service is the subsystem producing the metric (e.g. \"telemetry.signals or telemetry.events\").\nThis field can not be updated after the webhook is created.",
                     "type": "string",
                     "example": "telemetry.signals"
                 },
@@ -791,23 +812,6 @@ const docTemplate = `{
                 },
                 "message": {
                     "description": "Message provides a brief status message for the operation.",
-                    "type": "string"
-                }
-            }
-        },
-        "internal_controllers_webhook.SignalDefinition": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "description": "Description briefly explains what the signal represents.",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "Name is the JSON-safe name of the signal.",
-                    "type": "string"
-                },
-                "unit": {
-                    "description": "Unit is the unit of measurement for the signal value (if any).",
                     "type": "string"
                 }
             }
