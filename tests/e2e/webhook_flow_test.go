@@ -168,9 +168,12 @@ func TestWebhookFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the webhook contains the expected signal data
-	require.Contains(t, webhookBodyData, "tokenId")
-	require.Contains(t, webhookBodyData, "name")
-	require.Equal(t, float64(12345), webhookBodyData["tokenId"])
-	require.Equal(t, "speed", webhookBodyData["name"])
+	require.Contains(t, webhookBodyData, "data")
+	data := webhookBodyData["data"].(map[string]any)
+	require.Contains(t, data, "signal")
+	signal := data["signal"].(map[string]any)
+	require.Equal(t, float64(25), signal["value"].(float64))
+	require.Equal(t, "speed", signal["name"].(string))
 
+	fmt.Printf("cloudEvent: \n%s", call.Body)
 }
