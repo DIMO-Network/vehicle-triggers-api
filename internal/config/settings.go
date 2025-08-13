@@ -18,6 +18,7 @@ type Settings struct {
 	IdentityAPIURL        string         `env:"IDENTITY_API_URL"`
 	KafkaBrokers          string         `env:"KAFKA_BROKERS"`
 	DeviceSignalsTopic    string         `env:"DEVICE_SIGNALS_TOPIC"`
+	DeviceEventsTopic     string         `env:"DEVICE_EVENTS_TOPIC"`
 	TokenExchangeGRPCAddr string         `env:"TOKEN_EXCHANGE_GRPC_ADDR"`
 	VehicleNFTAddress     common.Address `env:"VEHICLE_NFT_ADDRESS"`
 	DIMORegistryChainID   uint64         `env:"DIMO_REGISTRY_CHAIN_ID"`

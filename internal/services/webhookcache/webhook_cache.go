@@ -12,6 +12,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/google/cel-go/cel"
 	"github.com/rs/zerolog"
 )
@@ -126,7 +127,17 @@ func (wc *WebhookCache) fetchEventVehicleWebhooks(ctx context.Context) (map[stri
 				logger.Error().Err(err).Msg("failed to get trigger by id for webhook cache")
 				continue
 			}
-			webhook.Program, err = celcondition.PrepareCondition(webhook.Trigger.Condition)
+			valueType := ""
+			if webhook.Trigger.Service == triggersrepo.ServiceSignal {
+				// only signals have dynamic value types
+				signalDef, err := signals.GetSignalDefinition(webhook.Trigger.MetricName)
+				if err != nil {
+					logger.Error().Err(err).Str("trigger_id", webhook.Trigger.ID).Msg("failed to get signal definition")
+					continue
+				}
+				valueType = signalDef.ValueType
+			}
+			webhook.Program, err = celcondition.PrepareCondition(webhook.Trigger.Service, webhook.Trigger.Condition, valueType)
 			if err != nil {
 				logger.Error().Err(err).Str("trigger_id", webhook.Trigger.ID).Msg("failed to prepare condition")
 				continue

@@ -359,7 +359,11 @@ func TestWebhookController_UpdateWebhook(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close() //nolint:errcheck // fine for tests
 
-		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
+		if !assert.Equal(t, fiber.StatusOK, resp.StatusCode) {
+			body, _ := io.ReadAll(resp.Body)
+			t.Log(string(body))
+			return
+		}
 
 		var response UpdateWebhookResponse
 		err = json.NewDecoder(resp.Body).Decode(&response)

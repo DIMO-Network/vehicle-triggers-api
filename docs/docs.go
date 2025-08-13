@@ -746,12 +746,12 @@ const docTemplate = `{
                     "description": "Name is the JSON-safe name of the signal.",
                     "type": "string"
                 },
-                "type": {
-                    "description": "Type is the type of the signal.",
-                    "type": "string"
-                },
                 "unit": {
                     "description": "Unit is the unit of measurement for the signal value (if any).",
+                    "type": "string"
+                },
+                "valueType": {
+                    "description": "ValueType is the data type for the value field e.g. \"float64\" or \"string\"",
                     "type": "string"
                 }
             }

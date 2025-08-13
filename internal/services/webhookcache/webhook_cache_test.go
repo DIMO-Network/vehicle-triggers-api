@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/DIMO-Network/cloudevent"
+	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
@@ -59,7 +60,7 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		trigger2 := &models.Trigger{
 			ID:         "trigger-2",
 			Service:    triggersrepo.ServiceSignal,
-			MetricName: "temperature",
+			MetricName: vss.FieldPowertrainTransmissionTravelledDistance,
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
 		}
@@ -95,11 +96,11 @@ func TestWebhookCache_PopulateCache(t *testing.T) {
 		require.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-1", webhooks[0].Trigger.ID)
 
-		webhooks = cache.GetWebhooks(assetDid1.String(), triggersrepo.ServiceSignal, "temperature")
+		webhooks = cache.GetWebhooks(assetDid1.String(), triggersrepo.ServiceSignal, vss.FieldPowertrainTransmissionTravelledDistance)
 		require.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-2", webhooks[0].Trigger.ID)
 
-		webhooks = cache.GetWebhooks(assetDid2.String(), triggersrepo.ServiceSignal, "temperature")
+		webhooks = cache.GetWebhooks(assetDid2.String(), triggersrepo.ServiceSignal, vss.FieldPowertrainTransmissionTravelledDistance)
 		require.Nil(t, webhooks)
 	})
 
@@ -424,7 +425,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		trigger := &models.Trigger{
 			ID:         "trigger-1",
 			Service:    triggersrepo.ServiceSignal,
-			MetricName: "temperature",
+			MetricName: vss.FieldPowertrainTransmissionTravelledDistance,
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
 		}
@@ -432,7 +433,7 @@ func TestWebhookCache_GetWebhooks(t *testing.T) {
 		assetDid := randAssetDID(t)
 		testData := map[string]map[string][]*Webhook{
 			assetDid.String(): {
-				"temperature": []*Webhook{
+				vss.FieldPowertrainTransmissionTravelledDistance: []*Webhook{
 					{
 						Trigger: trigger,
 						Program: nil,
@@ -545,7 +546,7 @@ func TestWebhookCache_Update(t *testing.T) {
 		trigger2 := &models.Trigger{
 			ID:         "trigger-2",
 			Service:    triggersrepo.ServiceSignal,
-			MetricName: "temperature",
+			MetricName: vss.FieldPowertrainTransmissionTravelledDistance,
 			Status:     triggersrepo.StatusEnabled,
 			Condition:  "valueNumber > 10",
 		}
@@ -553,7 +554,7 @@ func TestWebhookCache_Update(t *testing.T) {
 		assetDid2 := randAssetDID(t)
 		newData := map[string]map[string][]*Webhook{
 			assetDid2.String(): {
-				webhookKey(triggersrepo.ServiceSignal, "temperature"): []*Webhook{
+				webhookKey(triggersrepo.ServiceSignal, vss.FieldPowertrainTransmissionTravelledDistance): []*Webhook{
 					{
 						Trigger: trigger2,
 						Program: nil,
@@ -568,7 +569,7 @@ func TestWebhookCache_Update(t *testing.T) {
 		webhooks = cache.GetWebhooks(assetDid1.String(), triggersrepo.ServiceSignal, "speed")
 		assert.Nil(t, webhooks)
 
-		webhooks = cache.GetWebhooks(assetDid2.String(), triggersrepo.ServiceSignal, "temperature")
+		webhooks = cache.GetWebhooks(assetDid2.String(), triggersrepo.ServiceSignal, vss.FieldPowertrainTransmissionTravelledDistance)
 		require.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-2", webhooks[0].Trigger.ID)
 	})

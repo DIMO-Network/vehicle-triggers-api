@@ -41,8 +41,8 @@ type SignalDefinition struct {
 	Description string `json:"description"`
 	// Unit is the unit of measurement for the signal value (if any).
 	Unit string `json:"unit"`
-	// Type is the type of the signal.
-	Type string `json:"type"`
+	// ValueType is the data type for the value field e.g. "float64" or "string"
+	ValueType string `json:"valueType"`
 }
 
 // GetSignalDefinition returns the signal definition for the given name.
@@ -84,7 +84,7 @@ func loadSignalDefs() error {
 	for _, signal := range definedSignals {
 		def := SignalDefinition{
 			Name:        signal.JSONName,
-			Type:        signal.GOType(),
+			ValueType:   signal.GOType(),
 			Unit:        signal.Unit,
 			Description: signal.Desc,
 		}

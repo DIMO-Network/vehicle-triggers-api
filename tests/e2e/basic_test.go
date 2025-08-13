@@ -13,7 +13,7 @@ import (
 func TestBasic(t *testing.T) {
 	t.Parallel()
 	tc := GetTestServices(t)
-	fiberApp, err := app.CreateServers(t.Context(), &tc.Settings, zerolog.New(os.Stdout))
+	servers, err := app.CreateServers(t.Context(), &tc.Settings, zerolog.New(os.Stdout))
 	if err != nil {
 		require.NoError(t, err)
 	}
@@ -22,7 +22,7 @@ func TestBasic(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	resp, err := fiberApp.Test(req)
+	resp, err := servers.Application.Test(req)
 	if err != nil {
 		require.NoError(t, err)
 	}

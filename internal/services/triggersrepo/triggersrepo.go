@@ -519,8 +519,8 @@ func (r *Repository) InternalGetTriggerByID(ctx context.Context, triggerID strin
 	return trigger, nil
 }
 
-// GetLastTriggeredAt returns the last triggered at timestamp for a trigger and vehicle token ID.
-func (r *Repository) GetLastTriggeredAt(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (time.Time, error) {
+// GetLastLogValue returns the last triggered at timestamp for a trigger and vehicle token ID.
+func (r *Repository) GetLastLogValue(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (*models.TriggerLog, error) {
 	logs, err := models.TriggerLogs(
 		models.TriggerLogWhere.TriggerID.EQ(triggerID),
 		models.TriggerLogWhere.AssetDid.EQ(assetDid.String()),
@@ -528,16 +528,13 @@ func (r *Repository) GetLastTriggeredAt(ctx context.Context, triggerID string, a
 	).One(ctx, r.db)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return time.Time{}, nil
-		}
-		return time.Time{}, richerrors.Error{
-			ExternalMsg: "Failed to get last triggered at",
+		return nil, richerrors.Error{
+			ExternalMsg: "Failed to get last log value",
 			Err:         err,
 			Code:        http.StatusInternalServerError,
 		}
 	}
-	return logs.LastTriggeredAt, nil
+	return logs, nil
 }
 
 // CreateTriggerLog creates a new trigger log.

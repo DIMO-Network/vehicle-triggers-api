@@ -1,6 +1,8 @@
 package e2e_test
 
 import (
+	"crypto/tls"
+	"net/http"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -26,6 +28,21 @@ type TestServices struct {
 	TokenExchange *mockTokenExchangeServer
 	refs          atomic.Int64
 	Settings      config.Settings
+}
+
+func TestMain(m *testing.M) {
+	// Ensure the application's HTTP client (which uses the default transport)
+	// accepts the self-signed certificate used by the TLS test server.
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+		// Clone or initialize TLS config and skip verification for tests.
+		tlsCfg := transport.TLSClientConfig
+		if tlsCfg == nil {
+			tlsCfg = &tls.Config{}
+		}
+		tlsCfg.InsecureSkipVerify = true //nolint:gosec // test-only: allow self-signed cert from httptest server
+		transport.TLSClientConfig = tlsCfg
+	}
+	os.Exit(m.Run())
 }
 
 func GetTestServices(t *testing.T) *TestServices {
@@ -63,6 +80,7 @@ func GetTestServices(t *testing.T) *TestServices {
 			testServices.Kafka = kafka
 			testServices.Settings.KafkaBrokers = kafka.GetBrokerAddress(t)
 			testServices.Settings.DeviceSignalsTopic = "test.default.signals.topic"
+			testServices.Settings.DeviceEventsTopic = "test.default.events.topic"
 		})
 		waitForSetup(t, &wg, func(t *testing.T) {
 			db := tests.SetupTestContainer(t)

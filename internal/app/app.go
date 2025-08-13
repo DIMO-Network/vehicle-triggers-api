@@ -13,7 +13,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/vehiclelistener"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/metriclistener"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
@@ -24,7 +24,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func CreateServers(ctx context.Context, settings *config.Settings, logger zerolog.Logger) (*fiber.App, error) {
+type Servers struct {
+	Application    *fiber.App
+	SignalConsumer *kafka.Consumer
+	EventConsumer  *kafka.Consumer
+}
+
+func CreateServers(ctx context.Context, settings *config.Settings, logger zerolog.Logger) (*Servers, error) {
 	store := db.NewDbConnectionFromSettings(ctx, &settings.DB, true)
 	store.WaitForDB(logger)
 
@@ -35,9 +41,19 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 
 	repo := triggersrepo.NewRepository(store.DBS().Writer.DB)
 
-	webhookCache, err := startDeviceSignalsConsumer(ctx, settings, tokenExchangeAPI, repo)
+	webhookCache, err := startWebhookCache(ctx, settings, tokenExchangeAPI, repo)
 	if err != nil {
-		return nil, fmt.Errorf("failed to start device signals consumer: %w", err)
+		return nil, fmt.Errorf("failed to start webhook cache: %w", err)
+	}
+
+	signalConsumer, err := createSignalConsumer(ctx, settings, tokenExchangeAPI, repo, webhookCache)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create signal consumer: %w", err)
+	}
+
+	eventConsumer, err := createEventConsumer(ctx, settings, tokenExchangeAPI, repo, webhookCache)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create event consumer: %w", err)
 	}
 
 	identityClient, err := identity.New(settings, logger)
@@ -49,7 +65,11 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 	if err != nil {
 		return nil, fmt.Errorf("failed to create fiber app: %w", err)
 	}
-	return app, nil
+	return &Servers{
+		Application:    app,
+		SignalConsumer: signalConsumer,
+		EventConsumer:  eventConsumer,
+	}, nil
 }
 
 // Run sets up the API routes and starts the HTTP server.
@@ -112,25 +132,8 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 	return app, nil
 }
 
-// startDeviceSignalsConsumer sets up and starts the Kafka consumer for topic.device.signals
-func startDeviceSignalsConsumer(ctx context.Context, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, repo *triggersrepo.Repository) (*webhookcache.WebhookCache, error) {
-	clusterConfig := sarama.NewConfig()
-	clusterConfig.Version = sarama.V2_8_1_0
-	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-
-	consumerConfig := &kafka.Config{
-		ClusterConfig:   clusterConfig,
-		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
-		Topic:           settings.DeviceSignalsTopic,
-		GroupID:         "vehicle-triggers",
-		MaxInFlight:     1,
-	}
-
-	consumer, err := kafka.NewConsumer(consumerConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create device signals consumer: %w", err)
-	}
-
+// startWebhookCache sets up and starts the Kafka consumer for topic.device.signals
+func startWebhookCache(ctx context.Context, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, repo *triggersrepo.Repository) (*webhookcache.WebhookCache, error) {
 	// Initialize the in-memory webhook cache.
 	webhookCache := webhookcache.NewWebhookCache(repo, settings)
 
@@ -149,12 +152,51 @@ func startDeviceSignalsConsumer(ctx context.Context, settings *config.Settings, 
 		}
 	}()
 
-	signalListener := vehiclelistener.NewSignalListener(webhookCache, repo, tokenExchangeAPI, settings)
-	if err := consumer.Start(ctx, signalListener.ProcessSignals); err != nil {
-		return nil, fmt.Errorf("failed to start device signals consumer: %w", err)
-	}
-
 	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)
 
 	return webhookCache, nil
+}
+
+func createSignalConsumer(ctx context.Context, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache) (*kafka.Consumer, error) {
+	clusterConfig := sarama.NewConfig()
+	clusterConfig.Version = sarama.V2_8_1_0
+	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+	vehicleProcessor := metriclistener.NewMetricsListener(webhookCache, repo, tokenExchangeAPI, settings)
+	consumerConfig := &kafka.Config{
+		ClusterConfig:   clusterConfig,
+		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
+		Topic:           settings.DeviceSignalsTopic,
+		GroupID:         "vehicle-triggers",
+		MaxInFlight:     1,
+		Processor:       vehicleProcessor.ProcessSignalMessages,
+	}
+
+	consumer, err := kafka.NewConsumer(consumerConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create device signals consumer: %w", err)
+	}
+
+	return consumer, nil
+}
+
+func createEventConsumer(ctx context.Context, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache) (*kafka.Consumer, error) {
+	clusterConfig := sarama.NewConfig()
+	clusterConfig.Version = sarama.V2_8_1_0
+	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+	vehicleProcessor := metriclistener.NewMetricsListener(webhookCache, repo, tokenExchangeAPI, settings)
+	consumerConfig := &kafka.Config{
+		ClusterConfig:   clusterConfig,
+		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
+		Topic:           settings.DeviceEventsTopic,
+		GroupID:         "vehicle-triggers",
+		MaxInFlight:     1,
+		Processor:       vehicleProcessor.ProcessEventMessages,
+	}
+
+	consumer, err := kafka.NewConsumer(consumerConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create device events consumer: %w", err)
+	}
+
+	return consumer, nil
 }

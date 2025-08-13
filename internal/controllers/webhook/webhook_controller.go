@@ -78,11 +78,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		return err
 	}
 
-	if err := w.validateServiceAndMetricName(payload.Service, payload.MetricName); err != nil {
-		return err
-	}
-
-	if err := validateCondition(payload.Condition); err != nil {
+	if err := validateServiceAndMetricNameAndCondition(payload.Service, payload.MetricName, payload.Condition); err != nil {
 		return err
 	}
 
@@ -220,7 +216,7 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		event.Status = *payload.Status
 	}
 	if payload.Condition != nil {
-		if err := validateCondition(*payload.Condition); err != nil {
+		if err := validateServiceAndMetricNameAndCondition(event.Service, event.MetricName, *payload.Condition); err != nil {
 			return err
 		}
 		event.Condition = *payload.Condition
