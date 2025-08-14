@@ -386,8 +386,11 @@ func TestWebhookController_DeleteWebhook(t *testing.T) {
 		app.Delete("/webhooks/:webhookId", controller.DeleteWebhook)
 
 		mockRepo.EXPECT().
-			GetWebhookOwner(gomock.Any(), triggerID).
-			Return(common.HexToAddress("0x1234567890abcdef"), nil).
+			GetTriggerByIDAndDeveloperLicense(gomock.Any(), triggerID, gomock.Any()).
+			Return(&models.Trigger{
+				ID:                      triggerID,
+				DeveloperLicenseAddress: devLicense.Bytes(),
+			}, nil).
 			Times(1)
 
 		mockRepo.EXPECT().

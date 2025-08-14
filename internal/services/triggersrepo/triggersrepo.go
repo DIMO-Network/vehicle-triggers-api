@@ -460,31 +460,6 @@ func (r *Repository) DeleteAllVehicleSubscriptionsForTrigger(ctx context.Context
 	return deleteCount, nil
 }
 
-// GetWebhookOwner returns the developer license address of the webhook owner
-func (r *Repository) GetWebhookOwner(ctx context.Context, triggerID string) (common.Address, error) {
-	trigger, err := models.Triggers(
-		models.TriggerWhere.ID.EQ(triggerID),
-		models.TriggerWhere.Status.NEQ(StatusDeleted),
-	).One(ctx, r.db)
-
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return common.Address{}, richerrors.Error{
-				ExternalMsg: "Webhook not found",
-				Err:         err,
-				Code:        http.StatusNotFound,
-			}
-		}
-		return common.Address{}, richerrors.Error{
-			ExternalMsg: "Failed to get webhook owner",
-			Err:         err,
-			Code:        http.StatusInternalServerError,
-		}
-	}
-
-	return common.BytesToAddress(trigger.DeveloperLicenseAddress), nil
-}
-
 // InternalGetAllVehicleSubscriptions returns all vehicle subscriptions.
 // This should not be used with handler calls. Instead use GetVehicleSubscriptionsByVehicleAndDeveloperLicense.
 func (r *Repository) InternalGetAllVehicleSubscriptions(ctx context.Context) ([]*models.VehicleSubscription, error) {

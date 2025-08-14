@@ -28,8 +28,6 @@ type Repository interface {
 	GetVehicleSubscriptionsByVehicleAndDeveloperLicense(ctx context.Context, assetDID cloudevent.ERC721DID, developerLicense common.Address) ([]*models.VehicleSubscription, error)
 	DeleteVehicleSubscription(ctx context.Context, triggerID string, assetDID cloudevent.ERC721DID) (int64, error)
 	DeleteAllVehicleSubscriptionsForTrigger(ctx context.Context, triggerID string) (int64, error)
-
-	GetWebhookOwner(ctx context.Context, webhookID string) (common.Address, error)
 }
 
 type WebhookCache interface {
@@ -266,7 +264,7 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 		return err
 	}
 
-	err = ownerCheck(c.Context(), w.repo, webhookID, devLicense)
+	_, err = ownerCheck(c.Context(), w.repo, webhookID, devLicense)
 	if err != nil {
 		return err
 	}
