@@ -32,7 +32,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 	t.Cleanup(webhookReceiver.Close)
 
 	// Create a developer address for testing
-	devAddress := common.HexToAddress("0xde02")
+	devAddress := common.HexToAddress("0x99d6606ee2968095d0c569dfc2c94874fb45b85f")
 
 	// Create auth token for the request
 	authToken, err := tc.Auth.CreateToken(t, devAddress)

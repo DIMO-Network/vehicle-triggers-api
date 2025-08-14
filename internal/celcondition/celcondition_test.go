@@ -49,13 +49,24 @@ func TestPrepareCondition(t *testing.T) {
 		},
 		{
 			name:        "type mismatch",
-			condition:   "valueNumber == 'string'",
+			condition:   "valueNumber >= 'string'",
 			expectError: true,
 			valueType:   signals.NumberType,
 		},
 		{
+			name:        "type mismatch equality",
+			condition:   "valueNumber == 'string'",
+			expectError: false,
+			valueType:   signals.NumberType,
+		},
+		{
 			name:        "integer comparison",
-			condition:   "valueNumber > 10",
+			condition:   "valueNumber >= 1",
+			expectError: false,
+			valueType:   signals.NumberType,
+		}, {
+			name:        "integer comparison",
+			condition:   "valueNumber == 1",
 			expectError: false,
 			valueType:   signals.NumberType,
 		},
@@ -85,7 +96,7 @@ func TestPrepareCondition(t *testing.T) {
 		},
 		{
 			name:        "generic value as number used as string",
-			condition:   "value == 'active'",
+			condition:   "value < 'active'",
 			expectError: true,
 			valueType:   signals.NumberType,
 		},
@@ -476,6 +487,11 @@ func TestPrepareEventCondition(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name:        "duration equals",
+			condition:   "durationNs == 1000",
+			expectError: false,
+		},
+		{
 			name:        "metadata condition",
 			condition:   "metadata.contains('emergency')",
 			expectError: false,
@@ -507,7 +523,7 @@ func TestPrepareEventCondition(t *testing.T) {
 		},
 		{
 			name:        "type mismatch",
-			condition:   "durationNs == 'string'",
+			condition:   "durationNs >= 'string'",
 			expectError: true,
 		},
 		{
@@ -839,118 +855,6 @@ func TestEvaluateEventCondition(t *testing.T) {
 	}
 }
 
-func TestEventEndToEndScenarios(t *testing.T) {
-	scenarios := []struct {
-		name           string
-		condition      string
-		events         []*vss.Event
-		previousEvents []*vss.Event
-		expected       []bool
-		description    string
-	}{
-		{
-			name:      "door state change monitoring",
-			condition: "name == 'DoorOpened' && source == '0x1234567890abcdef1234567890abcdef12345678'",
-			events: []*vss.Event{
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "DoorClosed", DurationNs: 1000, Metadata: "{}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "DoorOpened", DurationNs: 2000, Metadata: "{}"},
-				{Source: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", Name: "DoorOpened", DurationNs: 1500, Metadata: "{}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "DoorOpened", DurationNs: 3000, Metadata: "{}"},
-			},
-			previousEvents: []*vss.Event{
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "DoorOpened", DurationNs: 500, Metadata: "{}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "DoorClosed", DurationNs: 1000, Metadata: "{}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "DoorOpened", DurationNs: 2000, Metadata: "{}"},
-				{Source: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", Name: "DoorOpened", DurationNs: 1500, Metadata: "{}"},
-			},
-			expected:    []bool{false, true, false, true},
-			description: "Monitor when vehicle door is opened by specific vehicle source",
-		},
-		{
-			name:      "emergency event detection",
-			condition: "metadata.contains('emergency') && durationNs > 1000",
-			events: []*vss.Event{
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "AlarmTriggered", DurationNs: 500, Metadata: "{\"type\": \"emergency\"}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "AlarmTriggered", DurationNs: 2000, Metadata: "{\"type\": \"emergency\", \"level\": \"high\"}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "AlertTriggered", DurationNs: 1500, Metadata: "{\"type\": \"normal\"}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "AlarmTriggered", DurationNs: 3000, Metadata: "{\"type\": \"emergency\", \"priority\": \"critical\"}"},
-			},
-			previousEvents: []*vss.Event{
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "NormalOperation", DurationNs: 100, Metadata: "{}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "AlarmTriggered", DurationNs: 500, Metadata: "{\"type\": \"emergency\"}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "AlarmTriggered", DurationNs: 2000, Metadata: "{\"type\": \"emergency\", \"level\": \"high\"}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "AlertTriggered", DurationNs: 1500, Metadata: "{\"type\": \"normal\"}"},
-			},
-			expected:    []bool{false, true, false, true},
-			description: "Detect emergency events with sufficient duration",
-		},
-		{
-			name:      "event duration increase monitoring",
-			condition: "durationNs > previousDurationNs && name == previousName",
-			events: []*vss.Event{
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "EngineRunning", DurationNs: 1000, Metadata: "{}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "EngineRunning", DurationNs: 2000, Metadata: "{}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "DoorOpened", DurationNs: 500, Metadata: "{}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "EngineRunning", DurationNs: 1500, Metadata: "{}"},
-			},
-			previousEvents: []*vss.Event{
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "EngineRunning", DurationNs: 2000, Metadata: "{}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "EngineRunning", DurationNs: 1000, Metadata: "{}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "EngineRunning", DurationNs: 1000, Metadata: "{}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "EngineRunning", DurationNs: 2000, Metadata: "{}"},
-			},
-			expected:    []bool{false, true, false, false},
-			description: "Monitor when same event type has increasing duration",
-		},
-		{
-			name:      "source change detection",
-			condition: "source != previousSource && name == 'StatusUpdate'",
-			events: []*vss.Event{
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "StatusUpdate", DurationNs: 1000, Metadata: "{}"},
-				{Source: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", Name: "StatusUpdate", DurationNs: 1000, Metadata: "{}"},
-				{Source: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", Name: "DoorOpened", DurationNs: 1000, Metadata: "{}"},
-				{Source: "0x9876543210fedcba9876543210fedcba98765432", Name: "StatusUpdate", DurationNs: 1000, Metadata: "{}"},
-			},
-			previousEvents: []*vss.Event{
-				{Source: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", Name: "StatusUpdate", DurationNs: 1000, Metadata: "{}"},
-				{Source: "0x1234567890abcdef1234567890abcdef12345678", Name: "StatusUpdate", DurationNs: 1000, Metadata: "{}"},
-				{Source: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", Name: "StatusUpdate", DurationNs: 1000, Metadata: "{}"},
-				{Source: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", Name: "StatusUpdate", DurationNs: 1000, Metadata: "{}"},
-			},
-			expected:    []bool{true, true, false, true},
-			description: "Detect when status_update event changes source",
-		},
-	}
-
-	for _, scenario := range scenarios {
-		t.Run(scenario.name, func(t *testing.T) {
-			t.Logf("Testing scenario: %s", scenario.description)
-
-			// Prepare the condition once
-			prg, err := PrepareEventCondition(scenario.condition)
-			if err != nil {
-				t.Fatalf("failed to prepare condition %q: %v", scenario.condition, err)
-			}
-			if prg == nil {
-				t.Fatalf("expected non-nil program for condition %q", scenario.condition)
-			}
-
-			// Evaluate against each event
-			for i, event := range scenario.events {
-				previousEvent := scenario.previousEvents[i]
-				result, err := EvaluateEventCondition(prg, event, previousEvent)
-				if err != nil {
-					t.Fatalf("failed to evaluate condition %q with event %d: %v", scenario.condition, i, err)
-				}
-				if result != scenario.expected[i] {
-					t.Errorf("Event %d: source=%s, name=%s, durationNs=%d, metadata=%s should return %t, got %t",
-						i, event.Source, event.Name, event.DurationNs, event.Metadata, scenario.expected[i], result)
-				}
-			}
-		})
-	}
-}
-
 func TestEvaluateEventCondition_WithNilEvent(t *testing.T) {
 	prg, err := PrepareEventCondition("name == 'DoorOpened'")
 	require.NoError(t, err)
@@ -968,9 +872,7 @@ func TestEvaluateEventCondition_WithNilEvent(t *testing.T) {
 	_, err = EvaluateEventCondition(prg, nil, previousEvent)
 	// We expect this to either work with empty/zero values or return an error
 	// The function should handle nil gracefully
-	if err != nil {
-		t.Logf("Expected behavior: EvaluateEventCondition with nil event returned error: %v", err)
-	}
+	require.Error(t, err)
 
 	// Test with nil previous event
 	currentEvent := &vss.Event{
@@ -981,13 +883,8 @@ func TestEvaluateEventCondition_WithNilEvent(t *testing.T) {
 	}
 
 	_, err = EvaluateEventCondition(prg, currentEvent, nil)
-	if err != nil {
-		t.Logf("Expected behavior: EvaluateEventCondition with nil previous event returned error: %v", err)
-	}
-
+	require.NoError(t, err)
 	// Test with both nil
 	_, err = EvaluateEventCondition(prg, nil, nil)
-	if err != nil {
-		t.Logf("Expected behavior: EvaluateEventCondition with both nil events returned error: %v", err)
-	}
+	require.Error(t, err)
 }

@@ -26,11 +26,11 @@ func PrepareEventCondition(celCondition string) (cel.Program, error) {
 	opts := []cel.EnvOption{
 		cel.Variable("source", cel.StringType),
 		cel.Variable("name", cel.StringType),
-		cel.Variable("durationNs", cel.UintType),
+		cel.Variable("durationNs", cel.DynType),
 		cel.Variable("metadata", cel.StringType),
 		cel.Variable("previousSource", cel.StringType),
 		cel.Variable("previousName", cel.StringType),
-		cel.Variable("previousDurationNs", cel.UintType),
+		cel.Variable("previousDurationNs", cel.DynType),
 		cel.Variable("previousMetadata", cel.StringType),
 		cel.CrossTypeNumericComparisons(true),
 	}
@@ -94,24 +94,15 @@ func EvaluateEventCondition(prg cel.Program, event *vss.Event, previousEvent *vs
 }
 
 func PrepareSignalCondition(celCondition string, valueType string) (cel.Program, error) {
-	var celType *cel.Type
-	switch valueType {
-	case signals.NumberType:
-		celType = cel.DoubleType
-	case signals.StringType:
-		celType = cel.StringType
-	default:
-		return nil, fmt.Errorf("unknown value type: %s", valueType)
-	}
 
 	opts := []cel.EnvOption{
-		cel.Variable("valueNumber", cel.DoubleType),
+		cel.Variable("valueNumber", cel.DynType),
 		cel.Variable("valueString", cel.StringType),
-		cel.Variable("value", celType),
+		cel.Variable("value", cel.DynType),
 		cel.Variable("source", cel.DoubleType),
 		cel.Variable("previousValueNumber", cel.DoubleType),
 		cel.Variable("previousValueString", cel.StringType),
-		cel.Variable("previousValue", celType),
+		cel.Variable("previousValue", cel.DynType),
 		cel.Variable("previousSource", cel.StringType),
 		cel.CrossTypeNumericComparisons(true),
 	}

@@ -165,7 +165,7 @@ func (r *Repository) GetTriggersByDeveloperLicense(ctx context.Context, develope
 func (r *Repository) GetTriggerByIDAndDeveloperLicense(ctx context.Context, triggerID string, developerLicenseAddress common.Address) (*models.Trigger, error) {
 	if triggerID == "" {
 		return nil, richerrors.Error{
-			ExternalMsg: "Trigger id is required",
+			ExternalMsg: "Webhook id is required",
 			Err:         ValidationError,
 			Code:        http.StatusBadRequest,
 		}
@@ -185,6 +185,13 @@ func (r *Repository) GetTriggerByIDAndDeveloperLicense(ctx context.Context, trig
 	).One(ctx, r.db)
 
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, richerrors.Error{
+				ExternalMsg: "Webhook not found",
+				Err:         err,
+				Code:        http.StatusNotFound,
+			}
+		}
 		return nil, richerrors.Error{
 			ExternalMsg: "Error getting trigger",
 			Err:         err,
@@ -220,7 +227,7 @@ func (r *Repository) UpdateTrigger(ctx context.Context, trigger *models.Trigger)
 	}
 	if ret == 0 {
 		return richerrors.Error{
-			ExternalMsg: "Trigger not found",
+			ExternalMsg: "Webhook not found",
 			Err:         sql.ErrNoRows,
 			Code:        http.StatusNotFound,
 		}
@@ -301,7 +308,7 @@ func (r *Repository) CreateVehicleSubscription(ctx context.Context, assetDid clo
 	}
 	if triggerID == "" {
 		return nil, richerrors.Error{
-			ExternalMsg: "Trigger id is required",
+			ExternalMsg: "Webhook id is required",
 			Err:         ValidationError,
 			Code:        http.StatusBadRequest,
 		}
@@ -318,10 +325,18 @@ func (r *Repository) CreateVehicleSubscription(ctx context.Context, assetDid clo
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) {
 			if pqErr.Code == ForeignKeyViolation {
+				// This  means the trigger does not exist
 				return nil, richerrors.Error{
-					ExternalMsg: "Trigger not found",
+					ExternalMsg: "Webhook not found",
 					Err:         err,
 					Code:        http.StatusNotFound,
+				}
+			}
+			if pqErr.Code == DuplicateKeyError {
+				return nil, richerrors.Error{
+					ExternalMsg: "Already subscribed",
+					Err:         err,
+					Code:        http.StatusBadRequest,
 				}
 			}
 		}
@@ -497,7 +512,7 @@ func (r *Repository) InternalGetAllVehicleSubscriptions(ctx context.Context) ([]
 func (r *Repository) InternalGetTriggerByID(ctx context.Context, triggerID string) (*models.Trigger, error) {
 	if triggerID == "" {
 		return nil, richerrors.Error{
-			ExternalMsg: "Trigger id is required",
+			ExternalMsg: "Webhook id is required",
 			Err:         ValidationError,
 			Code:        http.StatusBadRequest,
 		}

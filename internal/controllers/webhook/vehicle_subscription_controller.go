@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
@@ -386,82 +387,6 @@ func (v *VehicleSubscriptionController) ListVehiclesForWebhook(c *fiber.Ctx) err
 	return c.JSON(assetDIDs)
 }
 
-func ownerCheck(ctx context.Context, repo Repository, webhookID string, developerLicense common.Address) error {
-	if uuid.Validate(webhookID) != nil {
-		return richerrors.Error{
-			ExternalMsg: "Invalid webhook id",
-			Err:         fmt.Errorf("invalid webhook Id is not a valid uuid '%s'", webhookID),
-			Code:        http.StatusBadRequest,
-		}
-	}
-	owner, err := repo.GetWebhookOwner(ctx, webhookID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return richerrors.Error{
-				ExternalMsg: "Webhook not found",
-				Code:        fiber.StatusNotFound,
-			}
-		}
-		return richerrors.Error{
-			ExternalMsg: "Failed to fetch webhook",
-			Err:         err,
-			Code:        fiber.StatusInternalServerError,
-		}
-	}
-	if owner != developerLicense {
-		return richerrors.Error{
-			ExternalMsg: "Webhook not found",
-			Err:         fmt.Errorf("developer license %s is not the owner of webhook %s", developerLicense.Hex(), webhookID),
-			Code:        fiber.StatusNotFound,
-		}
-	}
-	return nil
-}
-
-func getAssetDID(c *fiber.Ctx) (cloudevent.ERC721DID, error) {
-	assetDidStr := c.Params("assetDID")
-	if assetDidStr == "" {
-		return cloudevent.ERC721DID{}, richerrors.Error{
-			ExternalMsg: "Asset DID path parameter can not be empty",
-			Code:        http.StatusBadRequest,
-		}
-	}
-	assetDid, err := cloudevent.DecodeERC721DID(assetDidStr)
-	if err != nil {
-		return cloudevent.ERC721DID{}, richerrors.Error{
-			ExternalMsg: fmt.Sprintf("Invalid asset DID format: %s", err),
-			Err:         fmt.Errorf("invalid asset DID: %w", err),
-			Code:        http.StatusBadRequest}
-	}
-	return assetDid, nil
-}
-
-func getDevLicense(c *fiber.Ctx) (common.Address, error) {
-	token, err := auth.GetDexJWT(c)
-	if err != nil {
-		return common.Address{}, err
-	}
-	return token.EthereumAddress, nil
-}
-
-func getWebhookID(c *fiber.Ctx) (string, error) {
-	webhookID := c.Params("webhookId")
-	if webhookID == "" {
-		return "", richerrors.Error{
-			ExternalMsg: "Webhook ID path parameter can not be empty",
-			Code:        http.StatusBadRequest,
-		}
-	}
-	if uuid.Validate(webhookID) != nil {
-		return "", richerrors.Error{
-			ExternalMsg: "Invalid webhook id",
-			Err:         fmt.Errorf("invalid webhook Id is not a valid uuid '%s'", webhookID),
-			Code:        http.StatusBadRequest,
-		}
-	}
-	return webhookID, nil
-}
-
 func (v *VehicleSubscriptionController) subscribeMultipleVehiclesToWebhook(c *fiber.Ctx, webhookID string, developerLicense common.Address, assetDIDs []cloudevent.ERC721DID) error {
 	for _, assetDid := range assetDIDs {
 		hasPerm, err := v.tokenExchangeClient.HasVehiclePermissions(c.Context(), assetDid, developerLicense, []string{
@@ -504,4 +429,88 @@ func (v *VehicleSubscriptionController) subscribeMultipleVehiclesToWebhook(c *fi
 	}
 	v.cache.ScheduleRefresh(c.Context())
 	return c.JSON(GenericResponse{Message: fmt.Sprintf("Subscribed %d assets", len(assetDIDs)-len(failedSubscriptions))})
+}
+
+func ownerCheck(ctx context.Context, repo Repository, webhookID string, developerLicense common.Address) error {
+	if uuid.Validate(webhookID) != nil {
+		return richerrors.Error{
+			ExternalMsg: "Invalid webhook id",
+			Err:         fmt.Errorf("invalid webhook Id is not a valid uuid '%s'", webhookID),
+			Code:        http.StatusBadRequest,
+		}
+	}
+	owner, err := repo.GetWebhookOwner(ctx, webhookID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return richerrors.Error{
+				ExternalMsg: "Webhook not found",
+				Code:        fiber.StatusNotFound,
+			}
+		}
+		return richerrors.Error{
+			ExternalMsg: "Failed to fetch webhook",
+			Err:         err,
+			Code:        fiber.StatusInternalServerError,
+		}
+	}
+	if owner != developerLicense {
+		return richerrors.Error{
+			ExternalMsg: "Webhook not found",
+			Err:         fmt.Errorf("developer license %s is not the owner of webhook %s", developerLicense.Hex(), webhookID),
+			Code:        fiber.StatusNotFound,
+		}
+	}
+	return nil
+}
+
+func getAssetDID(c *fiber.Ctx) (cloudevent.ERC721DID, error) {
+	assetDidStr := c.Params("assetDID")
+	if assetDidStr == "" {
+		return cloudevent.ERC721DID{}, richerrors.Error{
+			ExternalMsg: "Asset DID path parameter can not be empty",
+			Code:        http.StatusBadRequest,
+		}
+	}
+
+	assetDidStr, err := url.PathUnescape(assetDidStr)
+	if err != nil {
+		return cloudevent.ERC721DID{}, richerrors.Error{
+			ExternalMsg: fmt.Sprintf("Invalid asset DID format: %s", err),
+			Err:         fmt.Errorf("invalid asset DID: %w", err),
+			Code:        http.StatusBadRequest}
+	}
+	assetDid, err := cloudevent.DecodeERC721DID(assetDidStr)
+	if err != nil {
+		return cloudevent.ERC721DID{}, richerrors.Error{
+			ExternalMsg: fmt.Sprintf("Invalid asset DID format: %s", err),
+			Err:         fmt.Errorf("invalid asset DID: %w", err),
+			Code:        http.StatusBadRequest}
+	}
+	return assetDid, nil
+}
+
+func getDevLicense(c *fiber.Ctx) (common.Address, error) {
+	token, err := auth.GetDexJWT(c)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return token.EthereumAddress, nil
+}
+
+func getWebhookID(c *fiber.Ctx) (string, error) {
+	webhookID := c.Params("webhookId")
+	if webhookID == "" {
+		return "", richerrors.Error{
+			ExternalMsg: "Webhook ID path parameter can not be empty",
+			Code:        http.StatusBadRequest,
+		}
+	}
+	if uuid.Validate(webhookID) != nil {
+		return "", richerrors.Error{
+			ExternalMsg: "Invalid webhook id",
+			Err:         fmt.Errorf("invalid webhook Id is not a valid uuid '%s'", webhookID),
+			Code:        http.StatusBadRequest,
+		}
+	}
+	return webhookID, nil
 }

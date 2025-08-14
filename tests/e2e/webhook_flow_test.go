@@ -17,6 +17,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
@@ -25,8 +26,14 @@ func TestSignalWebhookFlow(t *testing.T) {
 	t.Parallel()
 	tc := GetTestServices(t)
 
+	// Create a developer address for testing
+	devAddress := randomAddr(t)
+	settingsCopy := tc.Settings
+	settingsCopy.DeviceEventsTopic = "test-event-topic" + devAddress.String()
+	settingsCopy.DeviceSignalsTopic = "test-signal-topic" + devAddress.String()
+
 	// Create the main application
-	servers, err := app.CreateServers(t.Context(), &tc.Settings, zerolog.New(os.Stdout))
+	servers, err := app.CreateServers(t.Context(), &settingsCopy, zerolog.New(os.Stdout))
 	go func() {
 		if err := servers.SignalConsumer.Start(t.Context()); err != nil {
 			t.Errorf("failed to start signal consumer: %v", err)
@@ -46,9 +53,6 @@ func TestSignalWebhookFlow(t *testing.T) {
 	// Create a webhook receiver
 	webhookReceiver := NewWebhookReceiver()
 	t.Cleanup(webhookReceiver.Close)
-
-	// Create a developer address for testing
-	devAddress := common.HexToAddress("0x1234567890123456789012345678901234567890")
 
 	// Step 1: Create a webhook
 	t.Log("Step 1: Creating webhook")
@@ -72,7 +76,7 @@ func TestSignalWebhookFlow(t *testing.T) {
 
 	// add dev license to identity api
 	err = tc.Identity.SetRequestResponse(
-		`{"query":"\n\tquery($clientId: Address){\n\t\tdeveloperLicense(by: { clientId: $clientId }) {\n\t\t\tclientId\n\t\t}\n\t}","variables":{"clientId":"0x1234567890123456789012345678901234567890"}}`,
+		fmt.Sprintf(`{"query":"\n\tquery($clientId: Address){\n\t\tdeveloperLicense(by: { clientId: $clientId }) {\n\t\t\tclientId\n\t\t}\n\t}","variables":{"clientId":"%s"}}`, devAddress.String()),
 		map[string]any{
 			"data": map[string]any{
 				"developerLicense": map[string]any{
@@ -157,7 +161,7 @@ func TestSignalWebhookFlow(t *testing.T) {
 		CloudEventID: "test-event-id",
 	}
 
-	err = tc.Kafka.PushJSONToTopic(tc.Settings.DeviceSignalsTopic, signalPayload)
+	err = tc.Kafka.PushJSONToTopic(settingsCopy.DeviceSignalsTopic, signalPayload)
 	require.NoError(t, err)
 
 	t.Log("Signal sent to Kafka")
@@ -207,7 +211,7 @@ func TestSignalWebhookFlow(t *testing.T) {
 		Producer:     "test-producer",
 		CloudEventID: "test-event-id",
 	}
-	if err := tc.Kafka.PushJSONToTopic(tc.Settings.DeviceSignalsTopic, signalPayload); err != nil {
+	if err := tc.Kafka.PushJSONToTopic(settingsCopy.DeviceSignalsTopic, signalPayload); err != nil {
 		t.Errorf("failed to push signal to Kafka: %v", err)
 	}
 
@@ -231,7 +235,7 @@ func TestSignalWebhookFlow(t *testing.T) {
 		Producer:     "test-producer",
 		CloudEventID: "test-event-id",
 	}
-	if err := tc.Kafka.PushJSONToTopic(tc.Settings.DeviceSignalsTopic, signalPayload); err != nil {
+	if err := tc.Kafka.PushJSONToTopic(settingsCopy.DeviceSignalsTopic, signalPayload); err != nil {
 		t.Errorf("failed to push signal to Kafka: %v", err)
 	}
 
@@ -272,8 +276,14 @@ func TestEventWebhookFlow(t *testing.T) {
 	t.Parallel()
 	tc := GetTestServices(t)
 
+	// Create a developer address for testing
+	devAddress := randomAddr(t)
+	settingsCopy := tc.Settings
+	settingsCopy.DeviceEventsTopic = "test-event-topic" + devAddress.String()
+	settingsCopy.DeviceSignalsTopic = "test-signal-topic" + devAddress.String()
+
 	// Create the main application
-	servers, err := app.CreateServers(t.Context(), &tc.Settings, zerolog.New(os.Stdout))
+	servers, err := app.CreateServers(t.Context(), &settingsCopy, zerolog.New(os.Stdout))
 	go func() {
 		if err := servers.SignalConsumer.Start(t.Context()); err != nil {
 			t.Errorf("failed to start signal consumer: %v", err)
@@ -293,9 +303,6 @@ func TestEventWebhookFlow(t *testing.T) {
 	// Create a webhook receiver
 	webhookReceiver := NewWebhookReceiver()
 	t.Cleanup(webhookReceiver.Close)
-
-	// Create a developer address for testing
-	devAddress := common.HexToAddress("0x1234567890123456789012345678901234567890")
 
 	// Step 1: Create a webhook
 	t.Log("Step 1: Creating webhook")
@@ -319,7 +326,7 @@ func TestEventWebhookFlow(t *testing.T) {
 
 	// add dev license to identity api
 	err = tc.Identity.SetRequestResponse(
-		`{"query":"\n\tquery($clientId: Address){\n\t\tdeveloperLicense(by: { clientId: $clientId }) {\n\t\t\tclientId\n\t\t}\n\t}","variables":{"clientId":"0x1234567890123456789012345678901234567890"}}`,
+		fmt.Sprintf(`{"query":"\n\tquery($clientId: Address){\n\t\tdeveloperLicense(by: { clientId: $clientId }) {\n\t\t\tclientId\n\t\t}\n\t}","variables":{"clientId":"%s"}}`, devAddress.String()),
 		map[string]any{
 			"data": map[string]any{
 				"developerLicense": map[string]any{
@@ -406,7 +413,7 @@ func TestEventWebhookFlow(t *testing.T) {
 		},
 	}
 
-	err = tc.Kafka.PushJSONToTopic(tc.Settings.DeviceEventsTopic, eventPayload)
+	err = tc.Kafka.PushJSONToTopic(settingsCopy.DeviceEventsTopic, eventPayload)
 	require.NoError(t, err)
 
 	t.Log("Event sent to Kafka")
@@ -447,4 +454,10 @@ func TestEventWebhookFlow(t *testing.T) {
 	require.Equal(t, `{"counter": 1}`, event["metadata"].(string))
 
 	t.Log("Webhook flow test completed successfully")
+}
+
+func randomAddr(t *testing.T) common.Address {
+	walletPrivateKey, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	return crypto.PubkeyToAddress(walletPrivateKey.PublicKey)
 }
