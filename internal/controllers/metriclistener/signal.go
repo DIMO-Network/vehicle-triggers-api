@@ -123,7 +123,10 @@ func (m *MetricListener) createSignalPayload(trigger *models.Trigger, signalAndR
 	payload := m.createWebhookPayload(trigger, signalAndRaw.VehicleDID)
 	payload.Data.Signal = &webhook.SignalData{
 		Name:      signalAndRaw.Signal.Name,
+		Source:    signalAndRaw.Signal.Source,
 		Units:     signalAndRaw.Def.Unit,
+		Timestamp: signalAndRaw.Signal.Timestamp,
+		Producer:  signalAndRaw.Signal.Producer,
 		ValueType: signalAndRaw.Def.ValueType,
 		Value:     signalValue,
 	}
