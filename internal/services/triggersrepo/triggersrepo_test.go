@@ -15,6 +15,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/tests"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1620,7 +1621,7 @@ func TestGetWebhookOwner(t *testing.T) {
 	repo := NewRepository(tc.DB)
 	ctx := context.Background()
 
-	devAddress := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	devAddress := randomAddr(t)
 
 	// Create a trigger
 	req := CreateTriggerRequest{
@@ -1647,14 +1648,10 @@ func TestGetWebhookOwner(t *testing.T) {
 	require.Error(t, err)
 }
 
-// Removed TestBigIntToDecimal as bigIntToDecimal function is no longer needed after migration to asset_did
 func randomAddr(t *testing.T) common.Address {
-	addr := make([]byte, common.AddressLength)
-	_, err := rand.Read(addr)
-	if err != nil {
-		t.Fatalf("couldn't create a test address: %v", err)
-	}
-	return common.Address(addr)
+	walletPrivateKey, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	return crypto.PubkeyToAddress(walletPrivateKey.PublicKey)
 }
 
 func randAssetDID(t *testing.T) cloudevent.ERC721DID {

@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/DIMO-Network/cloudevent"
@@ -94,8 +95,9 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 		testCtrl.mockCache.EXPECT().
 			ScheduleRefresh(gomock.Any()).
 			Times(1)
-
-		req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID+"/subscribe/"+assetDid.String(), nil)
+		path, err := url.JoinPath("/webhooks", webhookID, "subscribe", assetDid.String())
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, path, nil)
 
 		resp, err := app.Test(req)
 		require.NoError(t, err)
@@ -109,6 +111,63 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 		assert.Equal(t, "Vehicle assigned successfully", response.Message)
 	})
 
+	t.Run("successful assignment with encoded assetDID", func(t *testing.T) {
+		testCtrl := NewVehicleSubscriptionControllerAndMocks(t)
+		app := newApp()
+		devLicense := common.HexToAddress("0x1234567890abcdef")
+		app.Use(tokenInjector(devLicense))
+		app.Post("/webhooks/:webhookId/subscribe/:assetDID", testCtrl.controller.AssignVehicleToWebhook)
+
+		webhookID := "550e8400-e29b-41d4-a716-446655440000"
+		assetDid := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
+
+		// Mock owner check
+		testCtrl.mockRepo.EXPECT().
+			GetWebhookOwner(gomock.Any(), webhookID).
+			Return(devLicense, nil).
+			Times(1)
+
+		// Mock permission check
+		testCtrl.mockTokenExchange.EXPECT().
+			HasVehiclePermissions(gomock.Any(), assetDid, devLicense, []string{
+				"privilege:GetNonLocationHistory",
+				"privilege:GetLocationHistory",
+			}).
+			Return(true, nil).
+			Times(1)
+
+		// Mock subscription creation
+		expectedSubscription := &models.VehicleSubscription{
+			TriggerID: webhookID,
+			AssetDid:  assetDid.String(),
+		}
+		testCtrl.mockRepo.EXPECT().
+			CreateVehicleSubscription(gomock.Any(), assetDid, webhookID).
+			Return(expectedSubscription, nil).
+			Times(1)
+
+		testCtrl.mockCache.EXPECT().
+			ScheduleRefresh(gomock.Any()).
+			Times(1)
+		path, err := url.JoinPath("/webhooks", webhookID, "subscribe", url.PathEscape(assetDid.String()))
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
+
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+		var response GenericResponse
+		err = json.NewDecoder(resp.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Equal(t, "Vehicle assigned successfully", response.Message)
+	})
 	t.Run("invalid webhook ID", func(t *testing.T) {
 		testCtrl := NewVehicleSubscriptionControllerAndMocks(t)
 		app := newApp()

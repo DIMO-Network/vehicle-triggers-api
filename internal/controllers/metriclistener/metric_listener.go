@@ -191,16 +191,16 @@ func (m *MetricListener) createWebhookPayload(trigger *models.Trigger, assetDid 
 	return payload
 }
 
-func (m *MetricListener) handleWebhookFailure(ctx context.Context, webhook *models.Trigger) error {
-	event, err := m.repo.GetTriggerByIDAndDeveloperLicense(ctx, webhook.ID, common.BytesToAddress(webhook.DeveloperLicenseAddress))
+func (m *MetricListener) handleWebhookFailure(ctx context.Context, trigger *models.Trigger) error {
+	event, err := m.repo.GetTriggerByIDAndDeveloperLicense(ctx, trigger.ID, common.BytesToAddress(trigger.DeveloperLicenseAddress))
 	if err != nil {
-		return fmt.Errorf("could not fetch event: %w", err)
+		return fmt.Errorf("could not fetch trigger: %w", err)
 	}
 	event.FailureCount += 1
 
 	if event.FailureCount >= 5 {
 		event.Status = triggersrepo.StatusFailed
-		zerolog.Ctx(ctx).Info().Msgf("Webhook %s disabled due to excessive failures", webhook.ID)
+		zerolog.Ctx(ctx).Info().Msgf("Webhook %s disabled due to excessive failures", trigger.ID)
 	}
 	if err := m.repo.UpdateTrigger(ctx, event); err != nil {
 		return fmt.Errorf("failed to update event failure count: %w", err)

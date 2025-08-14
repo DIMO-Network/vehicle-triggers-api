@@ -50,7 +50,7 @@ func (c *Client) IsDevLicense(ctx context.Context, clientID common.Address) (boo
 	}`
 
 	bodyBytes, err := c.SendRequest(ctx, query, map[string]any{
-		"clientId": clientID,
+		"clientId": clientID.String(),
 	})
 	if err != nil {
 		return false, richerrors.Error{

@@ -43,6 +43,7 @@ func setupIdentityServer(*testing.T) *mockIdentityServer {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
 		// Get response for this exact request payload
 		m.mu.RLock()
 		response, exists := m.responses[string(reqBytes)]
