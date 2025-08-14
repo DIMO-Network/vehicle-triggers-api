@@ -4,23 +4,18 @@ package signals
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 
 	"github.com/DIMO-Network/model-garage/pkg/schema"
+	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 )
-
-type constErr string
 
 const (
-	ErrSignalDefinitionNotFound constErr = "signal definition not found"
-	NumberType                  string   = "float64"
-	StringType                  string   = "string"
+	NumberType string = "float64"
+	StringType string = "string"
 )
-
-func (e constErr) Error() string {
-	return string(e)
-}
 
 func init() {
 	err := loadSignalDefs()
@@ -32,6 +27,11 @@ func init() {
 var loadLock sync.RWMutex
 var signalDefs []SignalDefinition
 var signalMap map[string]SignalDefinition
+var privilegeMap = map[string]string{
+	"VEHICLE_NON_LOCATION_DATA":    "privilege:GetNonLocationHistory",
+	"VEHICLE_ALL_TIME_LOCATION":    "privilege:GetLocationHistory",
+	"VEHICLE_APPROXIMATE_LOCATION": "privilege:GetApproximateLocation",
+}
 
 // SignalDefinition describes a telemetry signal available for use with webhooks.
 type SignalDefinition struct {
@@ -43,6 +43,8 @@ type SignalDefinition struct {
 	Unit string `json:"unit"`
 	// ValueType is the data type for the value field e.g. "float64" or "string"
 	ValueType string `json:"valueType"`
+	// Permissions is the permission required to access the signal.
+	Permissions []string `json:"permissions"`
 }
 
 // GetSignalDefinition returns the signal definition for the given name.
@@ -52,7 +54,10 @@ func GetSignalDefinition(name string) (SignalDefinition, error) {
 
 	signal, ok := signalMap[name]
 	if !ok {
-		return SignalDefinition{}, ErrSignalDefinitionNotFound
+		return SignalDefinition{}, richerrors.Error{
+			ExternalMsg: "signal definition not found",
+			Code:        http.StatusNotFound,
+		}
 	}
 	return signal, nil
 }
@@ -87,6 +92,9 @@ func loadSignalDefs() error {
 			ValueType:   signal.GOType(),
 			Unit:        signal.Unit,
 			Description: signal.Desc,
+		}
+		for _, privilege := range signal.Privileges {
+			def.Permissions = append(def.Permissions, privilegeMap[privilege])
 		}
 		signalDefs = append(signalDefs, def)
 		signalMap[signal.JSONName] = def

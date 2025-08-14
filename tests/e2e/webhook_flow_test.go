@@ -16,8 +16,8 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/app"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
+	"github.com/DIMO-Network/vehicle-triggers-api/tests"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +27,7 @@ func TestSignalWebhookFlow(t *testing.T) {
 	tc := GetTestServices(t)
 
 	// Create a developer address for testing
-	devAddress := randomAddr(t)
+	devAddress := tests.RandomAddr(t)
 	settingsCopy := tc.Settings
 	settingsCopy.DeviceEventsTopic = "test-event-topic" + devAddress.String()
 	settingsCopy.DeviceSignalsTopic = "test-signal-topic" + devAddress.String()
@@ -277,7 +277,7 @@ func TestEventWebhookFlow(t *testing.T) {
 	tc := GetTestServices(t)
 
 	// Create a developer address for testing
-	devAddress := randomAddr(t)
+	devAddress := tests.RandomAddr(t)
 	settingsCopy := tc.Settings
 	settingsCopy.DeviceEventsTopic = "test-event-topic" + devAddress.String()
 	settingsCopy.DeviceSignalsTopic = "test-signal-topic" + devAddress.String()
@@ -454,10 +454,4 @@ func TestEventWebhookFlow(t *testing.T) {
 	require.Equal(t, `{"counter": 1}`, event["metadata"].(string))
 
 	t.Log("Webhook flow test completed successfully")
-}
-
-func randomAddr(t *testing.T) common.Address {
-	walletPrivateKey, err := crypto.GenerateKey()
-	require.NoError(t, err)
-	return crypto.PubkeyToAddress(walletPrivateKey.PublicKey)
 }

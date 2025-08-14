@@ -11,9 +11,19 @@ import (
 	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+)
+
+var (
+	defaultPermissions = []string{
+		"privilege:GetNonLocationHistory",
+		"privilege:GetLocationHistory",
+	}
 )
 
 type IdentityClient interface {
@@ -69,14 +79,20 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 	if err != nil {
 		return err
 	}
-	if err := ownerCheck(c.Context(), v.repo, webhookID, dl); err != nil {
+	trigger, err := ownerCheck(c.Context(), v.repo, webhookID, dl)
+	if err != nil {
 		return err
 	}
+	permissions := defaultPermissions
+	if trigger.Service == triggersrepo.ServiceSignal {
+		signalDef, err := signals.GetSignalDefinition(trigger.MetricName)
+		if err != nil {
+			return fmt.Errorf("failed to get signal definition: %w", err)
+		}
+		permissions = signalDef.Permissions
+	}
 
-	hasPerm, err := v.tokenExchangeClient.HasVehiclePermissions(c.Context(), assetDid, dl, []string{
-		"privilege:GetNonLocationHistory",
-		"privilege:GetLocationHistory",
-	})
+	hasPerm, err := v.tokenExchangeClient.HasVehiclePermissions(c.Context(), assetDid, dl, permissions)
 	if err != nil {
 		return richerrors.Error{
 			ExternalMsg: "Failed to validate permissions",
@@ -123,11 +139,6 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromList(c *fiber.Ctx) 
 		return err
 	}
 
-	err = ownerCheck(c.Context(), v.repo, webhookID, dl)
-	if err != nil {
-		return err
-	}
-
 	var req VehicleListRequest
 	if err := c.BodyParser(&req); err != nil {
 		return richerrors.Error{
@@ -137,7 +148,20 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromList(c *fiber.Ctx) 
 		}
 	}
 
-	return v.subscribeMultipleVehiclesToWebhook(c, webhookID, dl, req.AssetDIDs)
+	trigger, err := ownerCheck(c.Context(), v.repo, webhookID, dl)
+	if err != nil {
+		return err
+	}
+	permissions := defaultPermissions
+	if trigger.Service == triggersrepo.ServiceSignal {
+		signalDef, err := signals.GetSignalDefinition(trigger.MetricName)
+		if err != nil {
+			return err
+		}
+		permissions = signalDef.Permissions
+	}
+
+	return v.subscribeMultipleVehiclesToWebhook(c, webhookID, dl, req.AssetDIDs, permissions)
 }
 
 // UnsubscribeVehiclesFromList godoc
@@ -162,7 +186,7 @@ func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromList(c *fiber.Ctx
 	if err != nil {
 		return err
 	}
-	err = ownerCheck(c.Context(), v.repo, webhookID, dl)
+	_, err = ownerCheck(c.Context(), v.repo, webhookID, dl)
 	if err != nil {
 		return err
 	}
@@ -226,7 +250,7 @@ func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) e
 	if err != nil {
 		return err
 	}
-	err = ownerCheck(c.Context(), v.repo, webhookID, dl)
+	_, err = ownerCheck(c.Context(), v.repo, webhookID, dl)
 	if err != nil {
 		return err
 	}
@@ -260,9 +284,17 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 	if err != nil {
 		return err
 	}
-	err = ownerCheck(c.Context(), v.repo, webhookID, dl)
+	trigger, err := ownerCheck(c.Context(), v.repo, webhookID, dl)
 	if err != nil {
 		return err
+	}
+	permissions := defaultPermissions
+	if trigger.Service == triggersrepo.ServiceSignal {
+		signalDef, err := signals.GetSignalDefinition(trigger.MetricName)
+		if err != nil {
+			return err
+		}
+		permissions = signalDef.Permissions
 	}
 
 	vehicles, err := v.identityClient.GetSharedVehicles(c.Context(), dl.Bytes())
@@ -270,7 +302,7 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 		return fmt.Errorf("failed to fetch shared vehicles: %w", err)
 	}
 
-	return v.subscribeMultipleVehiclesToWebhook(c, webhookID, dl, vehicles)
+	return v.subscribeMultipleVehiclesToWebhook(c, webhookID, dl, vehicles, permissions)
 }
 
 // UnsubscribeAllVehiclesFromWebhook godoc
@@ -294,7 +326,8 @@ func (v *VehicleSubscriptionController) UnsubscribeAllVehiclesFromWebhook(c *fib
 	if err != nil {
 		return err
 	}
-	if err := ownerCheck(c.Context(), v.repo, webhookID, dl); err != nil {
+	_, err = ownerCheck(c.Context(), v.repo, webhookID, dl)
+	if err != nil {
 		return err
 	}
 
@@ -370,7 +403,7 @@ func (v *VehicleSubscriptionController) ListVehiclesForWebhook(c *fiber.Ctx) err
 		return err
 	}
 
-	err = ownerCheck(c.Context(), v.repo, webhookID, dl)
+	_, err = ownerCheck(c.Context(), v.repo, webhookID, dl)
 	if err != nil {
 		return err
 	}
@@ -387,12 +420,9 @@ func (v *VehicleSubscriptionController) ListVehiclesForWebhook(c *fiber.Ctx) err
 	return c.JSON(assetDIDs)
 }
 
-func (v *VehicleSubscriptionController) subscribeMultipleVehiclesToWebhook(c *fiber.Ctx, webhookID string, developerLicense common.Address, assetDIDs []cloudevent.ERC721DID) error {
+func (v *VehicleSubscriptionController) subscribeMultipleVehiclesToWebhook(c *fiber.Ctx, webhookID string, developerLicense common.Address, assetDIDs []cloudevent.ERC721DID, permissions []string) error {
 	for _, assetDid := range assetDIDs {
-		hasPerm, err := v.tokenExchangeClient.HasVehiclePermissions(c.Context(), assetDid, developerLicense, []string{
-			"privilege:GetNonLocationHistory",
-			"privilege:GetLocationHistory",
-		})
+		hasPerm, err := v.tokenExchangeClient.HasVehiclePermissions(c.Context(), assetDid, developerLicense, permissions)
 		if err != nil {
 			return richerrors.Error{
 				ExternalMsg: "Failed to validate permissions for asset " + assetDid.String(),
@@ -431,36 +461,36 @@ func (v *VehicleSubscriptionController) subscribeMultipleVehiclesToWebhook(c *fi
 	return c.JSON(GenericResponse{Message: fmt.Sprintf("Subscribed %d assets", len(assetDIDs)-len(failedSubscriptions))})
 }
 
-func ownerCheck(ctx context.Context, repo Repository, webhookID string, developerLicense common.Address) error {
+func ownerCheck(ctx context.Context, repo Repository, webhookID string, developerLicense common.Address) (*models.Trigger, error) {
 	if uuid.Validate(webhookID) != nil {
-		return richerrors.Error{
+		return nil, richerrors.Error{
 			ExternalMsg: "Invalid webhook id",
 			Err:         fmt.Errorf("invalid webhook Id is not a valid uuid '%s'", webhookID),
 			Code:        http.StatusBadRequest,
 		}
 	}
-	owner, err := repo.GetWebhookOwner(ctx, webhookID)
+	trigger, err := repo.GetTriggerByIDAndDeveloperLicense(ctx, webhookID, developerLicense)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return richerrors.Error{
+			return nil, richerrors.Error{
 				ExternalMsg: "Webhook not found",
 				Code:        fiber.StatusNotFound,
 			}
 		}
-		return richerrors.Error{
+		return nil, richerrors.Error{
 			ExternalMsg: "Failed to fetch webhook",
 			Err:         err,
 			Code:        fiber.StatusInternalServerError,
 		}
 	}
-	if owner != developerLicense {
-		return richerrors.Error{
+	if common.BytesToAddress(trigger.DeveloperLicenseAddress) != developerLicense {
+		return nil, richerrors.Error{
 			ExternalMsg: "Webhook not found",
 			Err:         fmt.Errorf("developer license %s is not the owner of webhook %s", developerLicense.Hex(), webhookID),
 			Code:        fiber.StatusNotFound,
 		}
 	}
-	return nil
+	return trigger, nil
 }
 
 func getAssetDID(c *fiber.Ctx) (cloudevent.ERC721DID, error) {

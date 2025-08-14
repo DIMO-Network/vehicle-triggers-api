@@ -746,6 +746,13 @@ const docTemplate = `{
                     "description": "Name is the JSON-safe name of the signal.",
                     "type": "string"
                 },
+                "permissions": {
+                    "description": "Permissions is the permission required to access the signal.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "unit": {
                     "description": "Unit is the unit of measurement for the signal value (if any).",
                     "type": "string"

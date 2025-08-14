@@ -67,10 +67,7 @@ func (m *MetricListener) processSignalMessage(msg *message.Message) error {
 }
 
 func (m *MetricListener) processSignalWebhook(ctx context.Context, wh *webhookcache.Webhook, sigAndRaw *SignalWithRawData) error {
-	hasPerm, err := m.tokenExchangeClient.HasVehiclePermissions(ctx, sigAndRaw.VehicleDID, common.BytesToAddress(wh.Trigger.DeveloperLicenseAddress), []string{
-		"privilege:GetNonLocationHistory",
-		"privilege:GetLocationHistory",
-	})
+	hasPerm, err := m.tokenExchangeClient.HasVehiclePermissions(ctx, sigAndRaw.VehicleDID, common.BytesToAddress(wh.Trigger.DeveloperLicenseAddress), sigAndRaw.Def.Permissions)
 	if err != nil {
 		return fmt.Errorf("permission check failed: %w", err)
 	}

@@ -178,21 +178,6 @@ func (mr *MockRepositoryMockRecorder) GetVehicleSubscriptionsByVehicleAndDevelop
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVehicleSubscriptionsByVehicleAndDeveloperLicense", reflect.TypeOf((*MockRepository)(nil).GetVehicleSubscriptionsByVehicleAndDeveloperLicense), ctx, assetDID, developerLicense)
 }
 
-// GetWebhookOwner mocks base method.
-func (m *MockRepository) GetWebhookOwner(ctx context.Context, webhookID string) (common.Address, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetWebhookOwner", ctx, webhookID)
-	ret0, _ := ret[0].(common.Address)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetWebhookOwner indicates an expected call of GetWebhookOwner.
-func (mr *MockRepositoryMockRecorder) GetWebhookOwner(ctx, webhookID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWebhookOwner", reflect.TypeOf((*MockRepository)(nil).GetWebhookOwner), ctx, webhookID)
-}
-
 // UpdateTrigger mocks base method.
 func (m *MockRepository) UpdateTrigger(ctx context.Context, trigger *models.Trigger) error {
 	m.ctrl.T.Helper()

@@ -13,8 +13,11 @@ import (
 	"testing"
 
 	"github.com/DIMO-Network/cloudevent"
+	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
+	"github.com/DIMO-Network/vehicle-triggers-api/tests"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,7 +59,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 	t.Run("successful assignment", func(t *testing.T) {
 		testCtrl := NewVehicleSubscriptionControllerAndMocks(t)
 		app := newApp()
-		devLicense := common.HexToAddress("0x1234567890abcdef")
+		devLicense := tests.RandomAddr(t)
 		app.Use(tokenInjector(devLicense))
 		app.Post("/webhooks/:webhookId/subscribe/:assetDID", testCtrl.controller.AssignVehicleToWebhook)
 
@@ -69,15 +72,19 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 
 		// Mock owner check
 		testCtrl.mockRepo.EXPECT().
-			GetWebhookOwner(gomock.Any(), webhookID).
-			Return(devLicense, nil).
+			GetTriggerByIDAndDeveloperLicense(gomock.Any(), webhookID, devLicense).
+			Return(&models.Trigger{
+				ID:                      webhookID,
+				DeveloperLicenseAddress: devLicense.Bytes(),
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              "speed",
+			}, nil).
 			Times(1)
 
 		// Mock permission check
 		testCtrl.mockTokenExchange.EXPECT().
 			HasVehiclePermissions(gomock.Any(), assetDid, devLicense, []string{
 				"privilege:GetNonLocationHistory",
-				"privilege:GetLocationHistory",
 			}).
 			Return(true, nil).
 			Times(1)
@@ -114,7 +121,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 	t.Run("successful assignment with encoded assetDID", func(t *testing.T) {
 		testCtrl := NewVehicleSubscriptionControllerAndMocks(t)
 		app := newApp()
-		devLicense := common.HexToAddress("0x1234567890abcdef")
+		devLicense := tests.RandomAddr(t)
 		app.Use(tokenInjector(devLicense))
 		app.Post("/webhooks/:webhookId/subscribe/:assetDID", testCtrl.controller.AssignVehicleToWebhook)
 
@@ -127,14 +134,18 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 
 		// Mock owner check
 		testCtrl.mockRepo.EXPECT().
-			GetWebhookOwner(gomock.Any(), webhookID).
-			Return(devLicense, nil).
+			GetTriggerByIDAndDeveloperLicense(gomock.Any(), webhookID, devLicense).
+			Return(&models.Trigger{
+				ID:                      webhookID,
+				DeveloperLicenseAddress: devLicense.Bytes(),
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              vss.FieldCurrentLocationLatitude,
+			}, nil).
 			Times(1)
 
 		// Mock permission check
 		testCtrl.mockTokenExchange.EXPECT().
 			HasVehiclePermissions(gomock.Any(), assetDid, devLicense, []string{
-				"privilege:GetNonLocationHistory",
 				"privilege:GetLocationHistory",
 			}).
 			Return(true, nil).
@@ -171,7 +182,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 	t.Run("invalid webhook ID", func(t *testing.T) {
 		testCtrl := NewVehicleSubscriptionControllerAndMocks(t)
 		app := newApp()
-		devLicense := common.HexToAddress("0x1234567890abcdef")
+		devLicense := tests.RandomAddr(t)
 		app.Use(tokenInjector(devLicense))
 		app.Post("/webhooks/:webhookId/subscribe/:assetDID", testCtrl.controller.AssignVehicleToWebhook)
 		req := httptest.NewRequest(http.MethodPost, "/webhooks/invalid-uuid/subscribe/did:erc721:0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF:12345", nil)
@@ -199,7 +210,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 		)
 
 		app := newApp()
-		devLicense := common.HexToAddress("0x1234567890abcdef")
+		devLicense := tests.RandomAddr(t)
 		app.Use(tokenInjector(devLicense))
 		app.Post("/webhooks/:webhookId/subscribe/:assetDID", controller.AssignVehicleToWebhook)
 
@@ -242,8 +253,8 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 		}
 
 		mockRepo.EXPECT().
-			GetWebhookOwner(gomock.Any(), webhookID).
-			Return(common.Address{}, sql.ErrNoRows).
+			GetTriggerByIDAndDeveloperLicense(gomock.Any(), webhookID, devLicense).
+			Return(nil, sql.ErrNoRows).
 			Times(1)
 
 		req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID+"/subscribe/"+assetDid.String(), nil)
@@ -271,7 +282,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 		)
 
 		app := newApp()
-		devLicense := common.HexToAddress("0x1234567890abcdef")
+		devLicense := tests.RandomAddr(t)
 		app.Use(tokenInjector(devLicense))
 		app.Post("/webhooks/:webhookId/subscribe/:assetDID", controller.AssignVehicleToWebhook)
 
@@ -284,8 +295,13 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 
 		// Mock owner check
 		mockRepo.EXPECT().
-			GetWebhookOwner(gomock.Any(), webhookID).
-			Return(devLicense, nil).
+			GetTriggerByIDAndDeveloperLicense(gomock.Any(), webhookID, devLicense).
+			Return(&models.Trigger{
+				ID:                      webhookID,
+				DeveloperLicenseAddress: devLicense.Bytes(),
+				Service:                 triggersrepo.ServiceEvent,
+				MetricName:              "HarshBraking",
+			}, nil).
 			Times(1)
 
 		// Mock permission check - return false for insufficient permissions
@@ -314,7 +330,7 @@ func TestVehicleSubscriptionController_SubscribeVehiclesFromList(t *testing.T) {
 		testCtrl := NewVehicleSubscriptionControllerAndMocks(t)
 
 		app := newApp()
-		devLicense := common.HexToAddress("0x1234567890abcdef")
+		devLicense := tests.RandomAddr(t)
 		app.Use(tokenInjector(devLicense))
 		app.Post("/webhooks/:webhookId/subscribe/list", testCtrl.controller.SubscribeVehiclesFromList)
 
@@ -338,8 +354,13 @@ func TestVehicleSubscriptionController_SubscribeVehiclesFromList(t *testing.T) {
 
 		// Mock owner check
 		testCtrl.mockRepo.EXPECT().
-			GetWebhookOwner(gomock.Any(), webhookID).
-			Return(devLicense, nil).
+			GetTriggerByIDAndDeveloperLicense(gomock.Any(), webhookID, devLicense).
+			Return(&models.Trigger{
+				ID:                      webhookID,
+				DeveloperLicenseAddress: devLicense.Bytes(),
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              "speed",
+			}, nil).
 			Times(1)
 
 		// Mock permission checks for both vehicles
@@ -347,7 +368,6 @@ func TestVehicleSubscriptionController_SubscribeVehiclesFromList(t *testing.T) {
 			testCtrl.mockTokenExchange.EXPECT().
 				HasVehiclePermissions(gomock.Any(), assetDid, devLicense, []string{
 					"privilege:GetNonLocationHistory",
-					"privilege:GetLocationHistory",
 				}).
 				Return(true, nil).
 				Times(1)
@@ -389,17 +409,11 @@ func TestVehicleSubscriptionController_SubscribeVehiclesFromList(t *testing.T) {
 		testCtrl := NewVehicleSubscriptionControllerAndMocks(t)
 
 		app := newApp()
-		devLicense := common.HexToAddress("0x1234567890abcdef")
+		devLicense := tests.RandomAddr(t)
 		app.Use(tokenInjector(devLicense))
 		app.Post("/webhooks/:webhookId/subscribe/list", testCtrl.controller.SubscribeVehiclesFromList)
 
 		webhookID := "550e8400-e29b-41d4-a716-446655440000"
-
-		// Mock owner check
-		testCtrl.mockRepo.EXPECT().
-			GetWebhookOwner(gomock.Any(), webhookID).
-			Return(devLicense, nil).
-			Times(1)
 
 		req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID+"/subscribe/list", bytes.NewReader([]byte("invalid json")))
 		req.Header.Set("Content-Type", "application/json")
@@ -419,7 +433,7 @@ func TestVehicleSubscriptionController_RemoveVehicleFromWebhook(t *testing.T) {
 		testCtrl := NewVehicleSubscriptionControllerAndMocks(t)
 
 		app := newApp()
-		devLicense := common.HexToAddress("0x1234567890abcdef")
+		devLicense := tests.RandomAddr(t)
 		app.Use(tokenInjector(devLicense))
 		app.Delete("/webhooks/:webhookId/unsubscribe/:assetDID", testCtrl.controller.RemoveVehicleFromWebhook)
 
@@ -432,8 +446,13 @@ func TestVehicleSubscriptionController_RemoveVehicleFromWebhook(t *testing.T) {
 
 		// Mock owner check
 		testCtrl.mockRepo.EXPECT().
-			GetWebhookOwner(gomock.Any(), webhookID).
-			Return(devLicense, nil).
+			GetTriggerByIDAndDeveloperLicense(gomock.Any(), webhookID, devLicense).
+			Return(&models.Trigger{
+				ID:                      webhookID,
+				DeveloperLicenseAddress: devLicense.Bytes(),
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              "speed",
+			}, nil).
 			Times(1)
 
 		// Mock subscription deletion
@@ -468,7 +487,7 @@ func TestVehicleSubscriptionController_SubscribeAllVehiclesToWebhook(t *testing.
 		testCtrl := NewVehicleSubscriptionControllerAndMocks(t)
 
 		app := newApp()
-		devLicense := common.HexToAddress("0x1234567890abcdef")
+		devLicense := tests.RandomAddr(t)
 		app.Use(tokenInjector(devLicense))
 		app.Post("/webhooks/:webhookId/subscribe/all", testCtrl.controller.SubscribeAllVehiclesToWebhook)
 
@@ -488,8 +507,13 @@ func TestVehicleSubscriptionController_SubscribeAllVehiclesToWebhook(t *testing.
 
 		// Mock owner check
 		testCtrl.mockRepo.EXPECT().
-			GetWebhookOwner(gomock.Any(), webhookID).
-			Return(devLicense, nil).
+			GetTriggerByIDAndDeveloperLicense(gomock.Any(), webhookID, devLicense).
+			Return(&models.Trigger{
+				ID:                      webhookID,
+				DeveloperLicenseAddress: devLicense.Bytes(),
+				Service:                 triggersrepo.ServiceEvent,
+				MetricName:              "name",
+			}, nil).
 			Times(1)
 
 		// Mock getting shared vehicles
@@ -542,7 +566,7 @@ func TestVehicleSubscriptionController_SubscribeAllVehiclesToWebhook(t *testing.
 		testCtrl := NewVehicleSubscriptionControllerAndMocks(t)
 
 		app := newApp()
-		devLicense := common.HexToAddress("0x1234567890abcdef")
+		devLicense := tests.RandomAddr(t)
 		app.Use(tokenInjector(devLicense))
 		app.Post("/webhooks/:webhookId/subscribe/all", testCtrl.controller.SubscribeAllVehiclesToWebhook)
 
@@ -550,8 +574,13 @@ func TestVehicleSubscriptionController_SubscribeAllVehiclesToWebhook(t *testing.
 
 		// Mock owner check
 		testCtrl.mockRepo.EXPECT().
-			GetWebhookOwner(gomock.Any(), webhookID).
-			Return(devLicense, nil).
+			GetTriggerByIDAndDeveloperLicense(gomock.Any(), webhookID, devLicense).
+			Return(&models.Trigger{
+				ID:                      webhookID,
+				DeveloperLicenseAddress: devLicense.Bytes(),
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              "speed",
+			}, nil).
 			Times(1)
 
 		// Mock getting shared vehicles - return error
@@ -576,7 +605,7 @@ func TestVehicleSubscriptionController_UnsubscribeAllVehiclesFromWebhook(t *test
 	t.Run("successful unsubscription", func(t *testing.T) {
 		testCtrl := NewVehicleSubscriptionControllerAndMocks(t)
 		app := newApp()
-		devLicense := common.HexToAddress("0x1234567890abcdef")
+		devLicense := tests.RandomAddr(t)
 		app.Use(tokenInjector(devLicense))
 		app.Delete("/webhooks/:webhookId/unsubscribe/all", testCtrl.controller.UnsubscribeAllVehiclesFromWebhook)
 
@@ -584,8 +613,13 @@ func TestVehicleSubscriptionController_UnsubscribeAllVehiclesFromWebhook(t *test
 
 		// Mock owner check
 		testCtrl.mockRepo.EXPECT().
-			GetWebhookOwner(gomock.Any(), webhookID).
-			Return(devLicense, nil).
+			GetTriggerByIDAndDeveloperLicense(gomock.Any(), webhookID, devLicense).
+			Return(&models.Trigger{
+				ID:                      webhookID,
+				DeveloperLicenseAddress: devLicense.Bytes(),
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              "speed",
+			}, nil).
 			Times(1)
 
 		// Mock deleting all subscriptions
@@ -620,7 +654,7 @@ func TestVehicleSubscriptionController_ListSubscriptions(t *testing.T) {
 		testCtrl := NewVehicleSubscriptionControllerAndMocks(t)
 
 		app := newApp()
-		devLicense := common.HexToAddress("0x1234567890abcdef")
+		devLicense := tests.RandomAddr(t)
 		app.Use(tokenInjector(devLicense))
 		app.Get("/webhooks/vehicles/:assetDID", testCtrl.controller.ListSubscriptions)
 
@@ -670,7 +704,7 @@ func TestVehicleSubscriptionController_ListVehiclesForWebhook(t *testing.T) {
 		testCtrl := NewVehicleSubscriptionControllerAndMocks(t)
 
 		app := newApp()
-		devLicense := common.HexToAddress("0x1234567890abcdef")
+		devLicense := tests.RandomAddr(t)
 		app.Use(tokenInjector(devLicense))
 		app.Get("/webhooks/:webhookId", testCtrl.controller.ListVehiclesForWebhook)
 
@@ -699,8 +733,13 @@ func TestVehicleSubscriptionController_ListVehiclesForWebhook(t *testing.T) {
 
 		// Mock owner check
 		testCtrl.mockRepo.EXPECT().
-			GetWebhookOwner(gomock.Any(), webhookID).
-			Return(devLicense, nil).
+			GetTriggerByIDAndDeveloperLicense(gomock.Any(), webhookID, devLicense).
+			Return(&models.Trigger{
+				ID:                      webhookID,
+				DeveloperLicenseAddress: devLicense.Bytes(),
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              "speed",
+			}, nil).
 			Times(1)
 
 		testCtrl.mockRepo.EXPECT().

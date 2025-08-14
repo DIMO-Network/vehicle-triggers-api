@@ -15,7 +15,6 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/tests"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,7 +35,7 @@ func TestCreateTrigger(t *testing.T) {
 		Status:                  StatusEnabled,
 		Description:             "Alert when vehicle speed exceeds 20 kph",
 		CooldownPeriod:          10,
-		DeveloperLicenseAddress: randomAddr(t),
+		DeveloperLicenseAddress: tests.RandomAddr(t),
 	}
 
 	t.Run("success", func(t *testing.T) {
@@ -145,11 +144,11 @@ func TestGetTriggersByDeveloperLicense(t *testing.T) {
 		Status:                  StatusEnabled,
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
-		DeveloperLicenseAddress: randomAddr(t),
+		DeveloperLicenseAddress: tests.RandomAddr(t),
 	}
 
 	t.Run("success with multiple triggers", func(t *testing.T) {
-		devAddress1 := randomAddr(t)
+		devAddress1 := tests.RandomAddr(t)
 		// Create test triggers for devAddress1
 		req1 := baseReq
 		req1.MetricName = "speed"
@@ -188,7 +187,7 @@ func TestGetTriggersByDeveloperLicense(t *testing.T) {
 	t.Run("success with single trigger", func(t *testing.T) {
 		// Create a trigger for devAddress2
 		req := baseReq
-		req.DeveloperLicenseAddress = randomAddr(t)
+		req.DeveloperLicenseAddress = tests.RandomAddr(t)
 		req.MetricName = "fuel_level"
 		req.Condition = "valueNumber < 10"
 		req.TargetURI = "https://example.com/webhook3"
@@ -209,7 +208,7 @@ func TestGetTriggersByDeveloperLicense(t *testing.T) {
 	})
 
 	t.Run("empty result for non-existent developer license", func(t *testing.T) {
-		nonExistentAddress := randomAddr(t)
+		nonExistentAddress := tests.RandomAddr(t)
 		triggers, err := repo.GetTriggersByDeveloperLicense(ctx, nonExistentAddress)
 		require.NoError(t, err)
 		require.Len(t, triggers, 0)
@@ -225,14 +224,14 @@ func TestGetTriggersByDeveloperLicense(t *testing.T) {
 	t.Run("isolation between different developer licenses", func(t *testing.T) {
 		// Create triggers for different developer licenses
 		req1 := baseReq
-		req1.DeveloperLicenseAddress = randomAddr(t)
+		req1.DeveloperLicenseAddress = tests.RandomAddr(t)
 		req1.MetricName = "battery"
 		req1.Condition = "valueNumber < 20"
 		req1.TargetURI = "https://example.com/webhook4"
 		req1.Description = "Low battery alert"
 
 		req2 := baseReq
-		req2.DeveloperLicenseAddress = randomAddr(t)
+		req2.DeveloperLicenseAddress = tests.RandomAddr(t)
 		req2.MetricName = "engine_temp"
 		req2.Condition = "valueNumber > 100"
 		req2.TargetURI = "https://example.com/webhook5"
@@ -277,11 +276,11 @@ func TestGetTriggerByIDAndDeveloperLicense(t *testing.T) {
 		Status:                  StatusEnabled,
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
-		DeveloperLicenseAddress: randomAddr(t),
+		DeveloperLicenseAddress: tests.RandomAddr(t),
 	}
 
 	t.Run("existing trigger", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 
@@ -297,7 +296,7 @@ func TestGetTriggerByIDAndDeveloperLicense(t *testing.T) {
 	})
 
 	t.Run("non-existent trigger", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 
@@ -311,8 +310,8 @@ func TestGetTriggerByIDAndDeveloperLicense(t *testing.T) {
 	})
 
 	t.Run("wrong developer license", func(t *testing.T) {
-		devAddress1 := randomAddr(t)
-		devAddress2 := randomAddr(t)
+		devAddress1 := tests.RandomAddr(t)
+		devAddress2 := tests.RandomAddr(t)
 
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress1
@@ -329,7 +328,7 @@ func TestGetTriggerByIDAndDeveloperLicense(t *testing.T) {
 	})
 
 	t.Run("empty trigger id", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		trigger, err := repo.GetTriggerByIDAndDeveloperLicense(ctx, "", devAddress)
 		require.Error(t, err)
 		assert.Nil(t, trigger)
@@ -337,7 +336,7 @@ func TestGetTriggerByIDAndDeveloperLicense(t *testing.T) {
 	})
 
 	t.Run("zero address", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 
@@ -354,8 +353,8 @@ func TestGetTriggerByIDAndDeveloperLicense(t *testing.T) {
 	})
 
 	t.Run("isolation between different developer licenses", func(t *testing.T) {
-		devAddress1 := randomAddr(t)
-		devAddress2 := randomAddr(t)
+		devAddress1 := tests.RandomAddr(t)
+		devAddress2 := tests.RandomAddr(t)
 
 		// Create triggers for different developer licenses
 		req1 := baseReq
@@ -423,11 +422,11 @@ func TestUpdateTrigger(t *testing.T) {
 		Status:                  StatusEnabled,
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
-		DeveloperLicenseAddress: randomAddr(t),
+		DeveloperLicenseAddress: tests.RandomAddr(t),
 	}
 
 	t.Run("successful update", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 
@@ -461,7 +460,7 @@ func TestUpdateTrigger(t *testing.T) {
 	})
 
 	t.Run("update non-existent trigger", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 
@@ -479,7 +478,7 @@ func TestUpdateTrigger(t *testing.T) {
 	})
 
 	t.Run("update multiple fields", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 		req.MetricName = "temperature"
@@ -534,11 +533,11 @@ func TestDeleteTrigger(t *testing.T) {
 		Status:                  StatusEnabled,
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
-		DeveloperLicenseAddress: randomAddr(t),
+		DeveloperLicenseAddress: tests.RandomAddr(t),
 	}
 
 	t.Run("successful delete", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 
@@ -563,7 +562,7 @@ func TestDeleteTrigger(t *testing.T) {
 	})
 
 	t.Run("delete non-existent trigger", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		// Test deleting non-existent trigger (should not error)
 		err := repo.DeleteTrigger(ctx, uuid.New().String(), devAddress)
 		require.Error(t, err)
@@ -571,8 +570,8 @@ func TestDeleteTrigger(t *testing.T) {
 	})
 
 	t.Run("delete with wrong developer license", func(t *testing.T) {
-		devAddress1 := randomAddr(t)
-		devAddress2 := randomAddr(t)
+		devAddress1 := tests.RandomAddr(t)
+		devAddress2 := tests.RandomAddr(t)
 
 		// Create a trigger for devAddress1
 		req := baseReq
@@ -599,7 +598,7 @@ func TestDeleteTrigger(t *testing.T) {
 	})
 
 	t.Run("delete multiple triggers", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 
 		// Create multiple triggers
 		req1 := baseReq
@@ -660,8 +659,8 @@ func TestDeleteTrigger(t *testing.T) {
 	})
 
 	t.Run("isolation between different developer licenses", func(t *testing.T) {
-		devAddress1 := randomAddr(t)
-		devAddress2 := randomAddr(t)
+		devAddress1 := tests.RandomAddr(t)
+		devAddress2 := tests.RandomAddr(t)
 
 		// Create triggers for different developer licenses
 		req1 := baseReq
@@ -728,11 +727,11 @@ func TestCreateVehicleSubscription(t *testing.T) {
 		Status:                  StatusEnabled,
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
-		DeveloperLicenseAddress: randomAddr(t),
+		DeveloperLicenseAddress: tests.RandomAddr(t),
 	}
 
 	t.Run("successful creation", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 
@@ -758,7 +757,7 @@ func TestCreateVehicleSubscription(t *testing.T) {
 	})
 
 	t.Run("create multiple subscriptions for same trigger", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 		req.MetricName = "temperature"
@@ -838,7 +837,7 @@ func TestCreateVehicleSubscription(t *testing.T) {
 	})
 
 	t.Run("create subscription with zero vehicle token ID", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 
@@ -869,7 +868,7 @@ func TestCreateVehicleSubscription(t *testing.T) {
 	})
 
 	t.Run("create duplicate subscription", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 		req.MetricName = "battery"
@@ -921,11 +920,11 @@ func TestGetVehicleSubscriptionsByTriggerID(t *testing.T) {
 		Status:                  StatusEnabled,
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
-		DeveloperLicenseAddress: randomAddr(t),
+		DeveloperLicenseAddress: tests.RandomAddr(t),
 	}
 
 	t.Run("successful retrieval", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 
 		// Create triggers
 		req1 := baseReq
@@ -1008,13 +1007,13 @@ func TestGetVehicleSubscriptionsByVehicleAndDeveloperLicense(t *testing.T) {
 		Status:                  StatusEnabled,
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
-		DeveloperLicenseAddress: randomAddr(t),
+		DeveloperLicenseAddress: tests.RandomAddr(t),
 	}
 
 	t.Run("successful retrieval for different developers", func(t *testing.T) {
-		devAddress1 := randomAddr(t)
+		devAddress1 := tests.RandomAddr(t)
 
-		devAddress2 := randomAddr(t)
+		devAddress2 := tests.RandomAddr(t)
 
 		// Create triggers for different developers
 		req1 := baseReq
@@ -1065,7 +1064,7 @@ func TestGetVehicleSubscriptionsByVehicleAndDeveloperLicense(t *testing.T) {
 	})
 
 	t.Run("empty result for non-existent vehicle", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 
@@ -1085,8 +1084,8 @@ func TestGetVehicleSubscriptionsByVehicleAndDeveloperLicense(t *testing.T) {
 	})
 
 	t.Run("empty result for non-existent developer license", func(t *testing.T) {
-		devAddress1 := randomAddr(t)
-		devAddress2 := randomAddr(t)
+		devAddress1 := tests.RandomAddr(t)
+		devAddress2 := tests.RandomAddr(t)
 
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress1
@@ -1105,7 +1104,7 @@ func TestGetVehicleSubscriptionsByVehicleAndDeveloperLicense(t *testing.T) {
 	})
 
 	t.Run("multiple subscriptions for same vehicle and developer", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 
 		// Create multiple triggers for the same developer
 		req1 := baseReq
@@ -1174,8 +1173,8 @@ func TestGetVehicleSubscriptionsByVehicleAndDeveloperLicense(t *testing.T) {
 	})
 
 	t.Run("isolation between different developers", func(t *testing.T) {
-		devAddress1 := randomAddr(t)
-		devAddress2 := randomAddr(t)
+		devAddress1 := tests.RandomAddr(t)
+		devAddress2 := tests.RandomAddr(t)
 
 		// Create triggers for different developers
 		req1 := baseReq
@@ -1243,11 +1242,11 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 		Status:                  StatusEnabled,
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
-		DeveloperLicenseAddress: randomAddr(t),
+		DeveloperLicenseAddress: tests.RandomAddr(t),
 	}
 
 	t.Run("successful deletion", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 
@@ -1278,7 +1277,7 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 	})
 
 	t.Run("delete non-existent subscription", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 
@@ -1305,7 +1304,7 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 	})
 
 	t.Run("delete specific subscription from multiple", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 		req.MetricName = "temperature"
@@ -1358,7 +1357,7 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 	})
 
 	t.Run("isolation between different triggers", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 
 		// Create two triggers
 		req1 := baseReq
@@ -1434,11 +1433,11 @@ func TestDeleteAllVehicleSubscriptionsForTrigger(t *testing.T) {
 		Status:                  StatusEnabled,
 		Description:             "Speed alert",
 		CooldownPeriod:          10,
-		DeveloperLicenseAddress: randomAddr(t),
+		DeveloperLicenseAddress: tests.RandomAddr(t),
 	}
 
 	t.Run("successful deletion of all subscriptions", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 
@@ -1477,7 +1476,7 @@ func TestDeleteAllVehicleSubscriptionsForTrigger(t *testing.T) {
 	})
 
 	t.Run("delete from trigger with no subscriptions", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 		req.MetricName = "temperature"
@@ -1510,7 +1509,7 @@ func TestDeleteAllVehicleSubscriptionsForTrigger(t *testing.T) {
 	})
 
 	t.Run("isolation between different triggers", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 
 		// Create two triggers
 		req1 := baseReq
@@ -1576,7 +1575,7 @@ func TestDeleteAllVehicleSubscriptionsForTrigger(t *testing.T) {
 	})
 
 	t.Run("delete large number of subscriptions", func(t *testing.T) {
-		devAddress := randomAddr(t)
+		devAddress := tests.RandomAddr(t)
 		req := baseReq
 		req.DeveloperLicenseAddress = devAddress
 		req.MetricName = "battery"
@@ -1612,46 +1611,6 @@ func TestDeleteAllVehicleSubscriptionsForTrigger(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, subscriptions, 0)
 	})
-}
-
-func TestGetWebhookOwner(t *testing.T) {
-	t.Parallel()
-	tc := tests.SetupTestContainer(t)
-
-	repo := NewRepository(tc.DB)
-	ctx := context.Background()
-
-	devAddress := randomAddr(t)
-
-	// Create a trigger
-	req := CreateTriggerRequest{
-		Service:                 "Telemetry",
-		MetricName:              "speed",
-		Condition:               "valueNumber > 20",
-		TargetURI:               "https://example.com/webhook",
-		Status:                  StatusEnabled,
-		Description:             "Speed alert",
-		CooldownPeriod:          10,
-		DeveloperLicenseAddress: devAddress,
-	}
-
-	trigger, err := repo.CreateTrigger(ctx, req)
-	require.NoError(t, err)
-
-	// Get webhook owner
-	owner, err := repo.GetWebhookOwner(ctx, trigger.ID)
-	require.NoError(t, err)
-	assert.Equal(t, devAddress, owner)
-
-	// Test with non-existent trigger
-	_, err = repo.GetWebhookOwner(ctx, uuid.New().String())
-	require.Error(t, err)
-}
-
-func randomAddr(t *testing.T) common.Address {
-	walletPrivateKey, err := crypto.GenerateKey()
-	require.NoError(t, err)
-	return crypto.PubkeyToAddress(walletPrivateKey.PublicKey)
 }
 
 func randAssetDID(t *testing.T) cloudevent.ERC721DID {

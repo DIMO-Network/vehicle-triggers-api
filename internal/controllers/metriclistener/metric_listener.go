@@ -166,18 +166,16 @@ func (m *MetricListener) sendWebhookNotification(ctx context.Context, trigger *m
 
 // createWebhookPayload creates a standardized webhook payload following industry best practices
 func (m *MetricListener) createWebhookPayload(trigger *models.Trigger, assetDid cloudevent.ERC721DID) *cloudevent.CloudEvent[webhook.WebhookPayload] {
-
 	payload := &cloudevent.CloudEvent[webhook.WebhookPayload]{
 		CloudEventHeader: cloudevent.CloudEventHeader{
 			ID:              uuid.New().String(),
 			Source:          "vehicle-triggers-api", //TODO(kevin): Should be 0x of the storageNode
 			Subject:         assetDid.String(),
-			Time:            time.Now(),
+			Time:            time.Now().UTC(),
 			DataContentType: "application/json",
 			DataVersion:     "telemetry.signals/v1.0",
 			Type:            "dimo.trigger",
 			SpecVersion:     "1.0",
-			Producer:        trigger.ID,
 		},
 		Data: webhook.WebhookPayload{
 			Service:     trigger.Service,
