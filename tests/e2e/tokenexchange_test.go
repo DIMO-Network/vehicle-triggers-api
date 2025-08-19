@@ -24,7 +24,6 @@ type mockTokenExchangeServer struct {
 	mutex             sync.Mutex
 	accessCheckReturn map[string]bool
 	pb.UnimplementedTokenExchangeServiceServer
-	t *testing.T
 }
 
 // NewTestTokenExchangeAPI creates and starts a gRPC server on a random available port
@@ -37,7 +36,6 @@ func NewTestTokenExchangeAPI(t *testing.T) *mockTokenExchangeServer {
 	grpcServer := grpc.NewServer()
 	testServer := &mockTokenExchangeServer{
 		grpcServer:        grpcServer,
-		t:                 t,
 		listener:          listener,
 		port:              listener.Addr().(*net.TCPAddr).Port,
 		accessCheckReturn: make(map[string]bool),
@@ -82,8 +80,6 @@ func (ts *mockTokenExchangeServer) URL() string {
 func (ts *mockTokenExchangeServer) AccessCheck(ctx context.Context, req *pb.AccessCheckRequest) (*pb.AccessCheckResponse, error) {
 	ts.mutex.Lock()
 	defer ts.mutex.Unlock()
-
-	ts.t.Logf("AccessCheck called with request: %+v", req)
 
 	access, ok := ts.accessCheckReturn[req.GetGrantee()]
 	if !ok {

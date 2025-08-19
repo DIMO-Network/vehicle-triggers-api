@@ -2,7 +2,9 @@ package e2e_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -15,6 +17,7 @@ import (
 	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/app"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/tests"
 	"github.com/ethereum/go-ethereum/common"
@@ -36,12 +39,16 @@ func TestSignalWebhookFlow(t *testing.T) {
 	servers, err := app.CreateServers(t.Context(), &settingsCopy, zerolog.New(os.Stdout))
 	go func() {
 		if err := servers.SignalConsumer.Start(t.Context()); err != nil {
-			t.Errorf("failed to start signal consumer: %v", err)
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("failed to start signal consumer: %v", err)
+			}
 		}
 	}()
 	go func() {
 		if err := servers.EventConsumer.Start(t.Context()); err != nil {
-			t.Errorf("failed to start event consumer: %v", err)
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("failed to start event consumer: %v", err)
+			}
 		}
 	}()
 	t.Cleanup(func() {
@@ -220,7 +227,7 @@ func TestSignalWebhookFlow(t *testing.T) {
 	// Step 5: Verify the webhook was not called
 	t.Log("Step 5: Verifying webhook was not called")
 	received = webhookReceiver.WaitForCall(2 * time.Second)
-	require.False(t, received, "Webhook was called within timeout")
+	require.False(t, received, "Webhook was unexpectedly called within timeout")
 	calls = webhookReceiver.GetReceivedCalls()
 	require.Len(t, calls, 0, "Expected exactly one webhook call")
 
@@ -270,6 +277,12 @@ func TestSignalWebhookFlow(t *testing.T) {
 	require.Equal(t, "speed", signal["name"].(string))
 
 	t.Log("Webhook flow test completed successfully")
+
+	// get webhook logs
+	logs, err := models.TriggerLogs().All(t.Context(), tc.Postgres.DB)
+	for _, log := range logs {
+		fmt.Printf("Trigger log: %+v\n", log)
+	}
 }
 
 func TestEventWebhookFlow(t *testing.T) {

@@ -7,14 +7,12 @@ import (
 	"fmt"
 
 	"github.com/DIMO-Network/cloudevent"
-	"github.com/DIMO-Network/model-garage/pkg/vss"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/celcondition"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -34,20 +32,20 @@ func (m *MetricListener) processEventMessage(msg *message.Message) error {
 }
 
 func (m *MetricListener) processSingleEvent(ctx context.Context, eventData json.RawMessage) error {
-	eventAndRaw := EventWithRawData{
+	eventEval := triggerevaluator.EventEvaluationData{
 		RawData: eventData,
 	}
-	err := json.Unmarshal(eventData, &eventAndRaw.Event)
+	err := json.Unmarshal(eventData, &eventEval.Event)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal event: %w", err)
 	}
 
-	eventAndRaw.VehicleDID, err = cloudevent.DecodeERC721DID(eventAndRaw.Event.Subject)
+	eventEval.VehicleDID, err = cloudevent.DecodeERC721DID(eventEval.Event.Subject)
 	if err != nil {
 		return fmt.Errorf("failed to decode ERC721DID: %w", err)
 	}
 
-	webhooks := m.webhookCache.GetWebhooks(eventAndRaw.VehicleDID.String(), triggersrepo.ServiceEvent, eventAndRaw.Event.Name)
+	webhooks := m.webhookCache.GetWebhooks(eventEval.VehicleDID.String(), triggersrepo.ServiceEvent, eventEval.Event.Name)
 	if len(webhooks) == 0 {
 		// no webhooks found for this signal, skip
 		return nil
@@ -57,7 +55,7 @@ func (m *MetricListener) processSingleEvent(ctx context.Context, eventData json.
 	group.SetLimit(100)
 	for _, wh := range webhooks {
 		group.Go(func() error {
-			if err := m.processEventWebhook(groupCtx, wh, &eventAndRaw); err != nil {
+			if err := m.processEventWebhook(groupCtx, wh, &eventEval); err != nil {
 				zerolog.Ctx(groupCtx).Error().Str("trigger_id", wh.Trigger.ID).Err(err).Msg("failed to process webhook")
 			}
 			return nil
@@ -66,56 +64,38 @@ func (m *MetricListener) processSingleEvent(ctx context.Context, eventData json.
 	return group.Wait()
 }
 
-func (m *MetricListener) processEventWebhook(ctx context.Context, wh *webhookcache.Webhook, eventAndRaw *EventWithRawData) error {
-	hasPerm, err := m.tokenExchangeClient.HasVehiclePermissions(ctx, eventAndRaw.VehicleDID, common.BytesToAddress(wh.Trigger.DeveloperLicenseAddress), []string{
-		"privilege:GetNonLocationHistory",
-		"privilege:GetLocationHistory",
-	})
+func (m *MetricListener) processEventWebhook(ctx context.Context, wh *webhookcache.Webhook, eventEval *triggerevaluator.EventEvaluationData) error {
+	// Evaluate the trigger using the new service
+	result, err := m.triggerEvaluator.EvaluateEventTrigger(ctx, wh.Trigger, wh.Program, eventEval)
 	if err != nil {
-		return fmt.Errorf("permission check failed: %w", err)
+		return fmt.Errorf("failed to evaluate event trigger: %w", err)
 	}
-	if !hasPerm {
-		// If we don't have permission, unsubscribe from the trigger and refresh the cache
-		zerolog.Ctx(ctx).Info().Msgf("permissions revoked for license %x on vehicle %s", wh.Trigger.DeveloperLicenseAddress, eventAndRaw.VehicleDID.String())
-		_, err := m.repo.DeleteVehicleSubscription(ctx, wh.Trigger.ID, eventAndRaw.VehicleDID)
-		if err != nil {
-			return fmt.Errorf("failed to delete vehicle subscription: %w", err)
+
+	if !result.ShouldFire {
+		// Handle permission denied - unsubscribe from the trigger
+		if result.PermissionDenied {
+			_, err := m.repo.DeleteVehicleSubscription(ctx, wh.Trigger.ID, eventEval.VehicleDID)
+			if err != nil {
+				return fmt.Errorf("failed to delete vehicle subscription: %w", err)
+			}
+			m.webhookCache.ScheduleRefresh(ctx)
 		}
-		m.webhookCache.ScheduleRefresh(ctx)
 		return nil
 	}
 
-	lastTrigger, err := m.getLastLogValue(ctx, wh.Trigger.ID, eventAndRaw.VehicleDID)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve event logs: %w", err)
-	}
+	payload := m.createEventPayload(wh.Trigger, eventEval)
+	return m.handleTriggeredWebhook(ctx, wh.Trigger, eventEval.RawData, payload)
 
-	var previousEvent vss.Event
-	if err := json.Unmarshal(lastTrigger.SnapshotData, &previousEvent); err != nil {
-		return fmt.Errorf("failed to unmarshal previous event: %w", err)
-	}
-
-	shouldFire, err := celcondition.EvaluateEventCondition(wh.Program, &eventAndRaw.Event, &previousEvent)
-	if err != nil {
-		return fmt.Errorf("failed to evaluate CEL condition: %w", err)
-	}
-	if !shouldFire {
-		return nil
-	}
-
-	payload := m.createEventPayload(wh.Trigger, eventAndRaw)
-
-	return m.handleTriggeredWebhook(ctx, wh.Trigger, lastTrigger, eventAndRaw.RawData, payload)
 }
-func (m *MetricListener) createEventPayload(trigger *models.Trigger, eventAndRaw *EventWithRawData) *cloudevent.CloudEvent[webhook.WebhookPayload] {
-	payload := m.createWebhookPayload(trigger, eventAndRaw.VehicleDID)
+func (m *MetricListener) createEventPayload(trigger *models.Trigger, eventEval *triggerevaluator.EventEvaluationData) *cloudevent.CloudEvent[webhook.WebhookPayload] {
+	payload := m.createWebhookPayload(trigger, eventEval.VehicleDID)
 	payload.Data.Event = &webhook.EventData{
-		Name:       eventAndRaw.Event.Name,
-		Timestamp:  eventAndRaw.Event.Timestamp,
-		Source:     eventAndRaw.Event.Source,
-		Producer:   eventAndRaw.Event.Producer,
-		DurationNs: eventAndRaw.Event.DurationNs,
-		Metadata:   eventAndRaw.Event.Metadata,
+		Name:       eventEval.Event.Name,
+		Timestamp:  eventEval.Event.Timestamp,
+		Source:     eventEval.Event.Source,
+		Producer:   eventEval.Event.Producer,
+		DurationNs: eventEval.Event.DurationNs,
+		Metadata:   eventEval.Event.Metadata,
 	}
 	return payload
 }

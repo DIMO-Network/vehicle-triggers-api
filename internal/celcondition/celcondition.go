@@ -10,6 +10,11 @@ import (
 	celtypes "github.com/google/cel-go/common/types"
 )
 
+const (
+	CostLimit               = 1_000
+	InterruptCheckFrequency = 1000
+)
+
 func PrepareCondition(serviceName, celCondition string, valueType string) (cel.Program, error) {
 	switch serviceName {
 	case triggersrepo.ServiceSignal:
@@ -115,7 +120,10 @@ func PrepareSignalCondition(celCondition string, valueType string) (cel.Program,
 	if issues != nil && issues.Err() != nil {
 		return nil, issues.Err()
 	}
-	prg, err := env.Program(ast)
+	prg, err := env.Program(ast,
+		cel.CostLimit(CostLimit),
+		cel.InterruptCheckFrequency(InterruptCheckFrequency),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to program CEL expression: %w", err)
 	}

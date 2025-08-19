@@ -5,10 +5,13 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"math/big"
 	"net/http"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
@@ -18,6 +21,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/volatiletech/null/v8"
 )
 
 func TestCreateTrigger(t *testing.T) {
@@ -1610,6 +1614,302 @@ func TestDeleteAllVehicleSubscriptionsForTrigger(t *testing.T) {
 		subscriptions, err = repo.GetVehicleSubscriptionsByTriggerID(ctx, trigger.ID)
 		require.NoError(t, err)
 		require.Len(t, subscriptions, 0)
+	})
+}
+
+func TestRepository_HandleTriggerReset(t *testing.T) {
+	t.Parallel()
+	tc := tests.SetupTestContainer(t)
+
+	repo := NewRepository(tc.DB)
+	ctx := context.Background()
+
+	t.Run("successful reset when trigger has failures", func(t *testing.T) {
+		// Create a trigger with failures
+		trigger := createTestTriggerWithFailures(t, repo, ctx, 3, StatusFailed)
+
+		err := repo.ResetTriggerFailureCount(ctx, trigger)
+		require.NoError(t, err)
+
+		// Verify trigger was reset
+		updatedTrigger, err := repo.GetTriggerByIDAndDeveloperLicense(ctx, trigger.ID, common.BytesToAddress(trigger.DeveloperLicenseAddress))
+		require.NoError(t, err)
+		assert.Equal(t, 0, updatedTrigger.FailureCount)
+		assert.Equal(t, StatusEnabled, updatedTrigger.Status)
+	})
+
+	t.Run("no action when trigger has no failures", func(t *testing.T) {
+		trigger := createTestTriggerWithFailures(t, repo, ctx, 0, StatusDisabled)
+
+		err := repo.ResetTriggerFailureCount(ctx, trigger)
+		require.NoError(t, err)
+
+		// Verify trigger unchanged
+		updatedTrigger, err := repo.GetTriggerByIDAndDeveloperLicense(ctx, trigger.ID, common.BytesToAddress(trigger.DeveloperLicenseAddress))
+		require.NoError(t, err)
+		assert.Equal(t, 0, updatedTrigger.FailureCount)
+		assert.Equal(t, StatusDisabled, updatedTrigger.Status)
+		assert.Equal(t, trigger.UpdatedAt.UTC(), updatedTrigger.UpdatedAt.UTC())
+	})
+}
+
+func TestRepository_IncrementTriggerFailureCount(t *testing.T) {
+	t.Parallel()
+	tc := tests.SetupTestContainer(t)
+
+	repo := NewRepository(tc.DB)
+	ctx := context.Background()
+
+	t.Run("successful failure increment", func(t *testing.T) {
+		trigger := createTestTriggerWithFailures(t, repo, ctx, 2, StatusEnabled)
+
+		err := repo.IncrementTriggerFailureCount(ctx, trigger, errors.New("webhook timeout"), 5)
+		require.NoError(t, err)
+
+		// Verify failure count incremented
+		updatedTrigger, err := repo.GetTriggerByIDAndDeveloperLicense(ctx, trigger.ID, common.BytesToAddress(trigger.DeveloperLicenseAddress))
+		require.NoError(t, err)
+		assert.Equal(t, 3, updatedTrigger.FailureCount)
+		assert.Equal(t, StatusEnabled, updatedTrigger.Status) // Still enabled
+	})
+
+	t.Run("disable webhook when reaching failure threshold", func(t *testing.T) {
+		trigger := createTestTriggerWithFailures(t, repo, ctx, 4, StatusEnabled)
+
+		err := repo.IncrementTriggerFailureCount(ctx, trigger, errors.New("webhook error"), 5)
+		require.NoError(t, err)
+
+		// Verify webhook was disabled
+		updatedTrigger, err := repo.GetTriggerByIDAndDeveloperLicense(ctx, trigger.ID, common.BytesToAddress(trigger.DeveloperLicenseAddress))
+		require.NoError(t, err)
+		assert.Equal(t, 5, updatedTrigger.FailureCount)
+		assert.Equal(t, StatusFailed, updatedTrigger.Status)
+	})
+}
+
+// Helper function
+func createTestTriggerWithFailures(t *testing.T, repo *Repository, ctx context.Context, failureCount int, status string) *models.Trigger {
+	req := CreateTriggerRequest{
+		Service:                 "Telemetry",
+		MetricName:              "speed",
+		Condition:               "valueNumber > 20",
+		TargetURI:               "https://example.com/webhook",
+		Status:                  status,
+		Description:             "Test trigger",
+		CooldownPeriod:          10,
+		DeveloperLicenseAddress: tests.RandomAddr(t),
+	}
+
+	trigger, err := repo.CreateTrigger(ctx, req)
+	require.NoError(t, err)
+
+	// Update failure count if needed
+	if failureCount > 0 {
+		trigger.FailureCount = failureCount
+		trigger.Status = status
+		err = repo.UpdateTrigger(ctx, trigger)
+		require.NoError(t, err)
+	}
+
+	return trigger
+}
+
+func TestCreateTriggerLog(t *testing.T) {
+	t.Parallel()
+	tc := tests.SetupTestContainer(t)
+
+	repo := NewRepository(tc.DB)
+	ctx := context.Background()
+
+	// Create a test trigger first
+	baseReq := CreateTriggerRequest{
+		Service:                 "Telemetry",
+		MetricName:              "speed",
+		Condition:               "valueNumber > 20",
+		TargetURI:               "https://example.com/webhook",
+		Status:                  StatusEnabled,
+		Description:             "Speed alert",
+		CooldownPeriod:          10,
+		DeveloperLicenseAddress: tests.RandomAddr(t),
+	}
+
+	trigger, err := repo.CreateTrigger(ctx, baseReq)
+	require.NoError(t, err)
+	require.NotNil(t, trigger)
+
+	assetDid := randAssetDID(t)
+
+	t.Run("successful creation", func(t *testing.T) {
+		log := &models.TriggerLog{
+			ID:              uuid.New().String(),
+			TriggerID:       trigger.ID,
+			AssetDid:        assetDid.String(),
+			SnapshotData:    []byte(`{"speed": 25, "timestamp": "2023-10-01T12:00:00Z"}`),
+			LastTriggeredAt: time.Now().UTC(),
+			CreatedAt:       time.Now().UTC(),
+		}
+
+		err := repo.CreateTriggerLog(ctx, log)
+		require.NoError(t, err)
+	})
+
+	t.Run("create multiple logs for same trigger", func(t *testing.T) {
+		log1 := &models.TriggerLog{
+			ID:              uuid.New().String(),
+			TriggerID:       trigger.ID,
+			AssetDid:        assetDid.String(),
+			SnapshotData:    []byte(`{"speed": 30, "timestamp": "2023-10-01T13:00:00Z"}`),
+			LastTriggeredAt: time.Now().UTC(),
+			CreatedAt:       time.Now().UTC(),
+		}
+
+		log2 := &models.TriggerLog{
+			ID:              uuid.New().String(),
+			TriggerID:       trigger.ID,
+			AssetDid:        assetDid.String(),
+			SnapshotData:    []byte(`{"speed": 35, "timestamp": "2023-10-01T14:00:00Z"}`),
+			LastTriggeredAt: time.Now().UTC(),
+			CreatedAt:       time.Now().UTC(),
+		}
+
+		err := repo.CreateTriggerLog(ctx, log1)
+		require.NoError(t, err)
+
+		err = repo.CreateTriggerLog(ctx, log2)
+		require.NoError(t, err)
+	})
+
+	t.Run("create log with failure reason", func(t *testing.T) {
+		log := &models.TriggerLog{
+			ID:              uuid.New().String(),
+			TriggerID:       trigger.ID,
+			AssetDid:        assetDid.String(),
+			SnapshotData:    []byte(`{"speed": 40, "timestamp": "2023-10-01T15:00:00Z"}`),
+			LastTriggeredAt: time.Now().UTC(),
+			CreatedAt:       time.Now().UTC(),
+			FailureReason:   null.StringFrom("Webhook timeout after 30 seconds"),
+		}
+
+		err := repo.CreateTriggerLog(ctx, log)
+		require.NoError(t, err)
+	})
+
+	t.Run("create log for non-existent trigger", func(t *testing.T) {
+		nonExistentTriggerID := uuid.New().String()
+		log := &models.TriggerLog{
+			ID:              uuid.New().String(),
+			TriggerID:       nonExistentTriggerID,
+			AssetDid:        assetDid.String(),
+			SnapshotData:    []byte(`{"speed": 45, "timestamp": "2023-10-01T16:00:00Z"}`),
+			LastTriggeredAt: time.Now().UTC(),
+			CreatedAt:       time.Now().UTC(),
+		}
+
+		err := repo.CreateTriggerLog(ctx, log)
+		require.Error(t, err)
+		var richErr richerrors.Error
+		require.ErrorAs(t, err, &richErr)
+		assert.Equal(t, http.StatusInternalServerError, richErr.Code)
+	})
+
+	t.Run("create log with missing required fields", func(t *testing.T) {
+		// Test with empty trigger ID
+		log := &models.TriggerLog{
+			ID:              uuid.New().String(),
+			TriggerID:       "",
+			AssetDid:        assetDid.String(),
+			SnapshotData:    []byte(`{"speed": 50, "timestamp": "2023-10-01T17:00:00Z"}`),
+			LastTriggeredAt: time.Now().UTC(),
+			CreatedAt:       time.Now().UTC(),
+		}
+
+		err := repo.CreateTriggerLog(ctx, log)
+		require.Error(t, err)
+		var richErr richerrors.Error
+		require.ErrorAs(t, err, &richErr)
+		assert.Equal(t, http.StatusBadRequest, richErr.Code)
+	})
+
+	t.Run("create log with empty asset DID", func(t *testing.T) {
+		log := &models.TriggerLog{
+			ID:              uuid.New().String(),
+			TriggerID:       trigger.ID,
+			AssetDid:        "",
+			SnapshotData:    []byte(`{"speed": 55, "timestamp": "2023-10-01T18:00:00Z"}`),
+			LastTriggeredAt: time.Now().UTC(),
+			CreatedAt:       time.Now().UTC(),
+		}
+
+		err := repo.CreateTriggerLog(ctx, log)
+		require.Error(t, err)
+		var richErr richerrors.Error
+		require.ErrorAs(t, err, &richErr)
+		assert.Equal(t, http.StatusBadRequest, richErr.Code)
+	})
+
+	t.Run("create log with duplicate ID", func(t *testing.T) {
+		logID := uuid.New().String()
+
+		log1 := &models.TriggerLog{
+			ID:              logID,
+			TriggerID:       trigger.ID,
+			AssetDid:        assetDid.String(),
+			SnapshotData:    []byte(`{"speed": 60, "timestamp": "2023-10-01T19:00:00Z"}`),
+			LastTriggeredAt: time.Now().UTC(),
+			CreatedAt:       time.Now().UTC(),
+		}
+
+		log2 := &models.TriggerLog{
+			ID:              logID, // Same ID
+			TriggerID:       trigger.ID,
+			AssetDid:        assetDid.String(),
+			SnapshotData:    []byte(`{"speed": 65, "timestamp": "2023-10-01T20:00:00Z"}`),
+			LastTriggeredAt: time.Now().UTC(),
+			CreatedAt:       time.Now().UTC(),
+		}
+
+		// First log should succeed
+		err := repo.CreateTriggerLog(ctx, log1)
+		require.NoError(t, err)
+
+		// Second log with duplicate ID should fail
+		err = repo.CreateTriggerLog(ctx, log2)
+		require.Error(t, err)
+		var richErr richerrors.Error
+		require.ErrorAs(t, err, &richErr)
+		assert.Equal(t, http.StatusInternalServerError, richErr.Code)
+	})
+
+	t.Run("create log with complex snapshot data", func(t *testing.T) {
+		complexSnapshot := map[string]interface{}{
+			"speed":       25.5,
+			"temperature": 85.2,
+			"fuel_level":  0.75,
+			"location": map[string]float64{
+				"latitude":  40.7128,
+				"longitude": -74.0060,
+			},
+			"metadata": map[string]interface{}{
+				"vehicle_id": "VIN123456789",
+				"trip_id":    "TRIP789",
+				"event_time": "2023-10-01T21:00:00Z",
+			},
+		}
+
+		snapshotBytes, err := json.Marshal(complexSnapshot)
+		require.NoError(t, err)
+
+		log := &models.TriggerLog{
+			ID:              uuid.New().String(),
+			TriggerID:       trigger.ID,
+			AssetDid:        assetDid.String(),
+			SnapshotData:    snapshotBytes,
+			LastTriggeredAt: time.Now().UTC(),
+			CreatedAt:       time.Now().UTC(),
+		}
+
+		err = repo.CreateTriggerLog(ctx, log)
+		require.NoError(t, err)
 	})
 }
 

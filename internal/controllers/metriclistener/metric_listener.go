@@ -1,59 +1,84 @@
 package metriclistener
 
 import (
-	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
 
 	"github.com/DIMO-Network/cloudevent"
-	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/tokenexchange"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhooksender"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/google/cel-go/cel"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/volatiletech/sqlboiler/v4/types"
 )
 
-const (
-	webhookFailureCode = -1
-)
+type TriggerRepo interface {
+	CreateTriggerLog(ctx context.Context, triggerLog *models.TriggerLog) error
+	DeleteVehicleSubscription(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (int64, error)
+	ResetTriggerFailureCount(ctx context.Context, trigger *models.Trigger) error
+	IncrementTriggerFailureCount(ctx context.Context, trigger *models.Trigger, failureReason error, maxFailureCount int) error
+}
 
-// EventWithRawData is a struct that contains an event and the raw data.
-type EventWithRawData struct {
-	Event      vss.Event
-	VehicleDID cloudevent.ERC721DID
-	RawData    json.RawMessage
+type WebhookSender interface {
+	SendWebhook(ctx context.Context, trigger *models.Trigger, payload *cloudevent.CloudEvent[webhook.WebhookPayload]) error
+}
+
+type WebhookFailureManager interface {
+	ShouldAttemptWebhook(trigger *models.Trigger) bool
+	HandleWebhookSuccess(ctx context.Context, trigger *models.Trigger) error
+	HandleWebhookFailure(ctx context.Context, trigger *models.Trigger, failureReason error) error
+}
+
+type TriggerEvaluator interface {
+	EvaluateSignalTrigger(ctx context.Context, trigger *models.Trigger, program cel.Program, signal *triggerevaluator.SignalEvaluationData) (*triggerevaluator.TriggerEvaluationResult, error)
+	EvaluateEventTrigger(ctx context.Context, trigger *models.Trigger, program cel.Program, ev *triggerevaluator.EventEvaluationData) (*triggerevaluator.TriggerEvaluationResult, error)
+}
+
+type WebhookCache interface {
+	GetWebhooks(vehicleDID string, service string, metricName string) []*webhookcache.Webhook
+	ScheduleRefresh(ctx context.Context)
 }
 
 type MetricListener struct {
-	webhookCache        *webhookcache.WebhookCache
-	repo                *triggersrepo.Repository
-	tokenExchangeClient *tokenexchange.Client
+	webhookCache        WebhookCache
+	repo                TriggerRepo
+	webhookSender       WebhookSender
+	triggerEvaluator    TriggerEvaluator
 	vehicleNFTAddress   common.Address
 	dimoRegistryChainID uint64
+	maxFailureCount     int
 }
 
 // NewMetricsListener creates a new MetrticListener.
-func NewMetricsListener(wc *webhookcache.WebhookCache, repo *triggersrepo.Repository, tokenExchangeAPI *tokenexchange.Client, settings *config.Settings) *MetricListener {
+func NewMetricsListener(wc WebhookCache,
+	repo TriggerRepo,
+	webhookSender WebhookSender,
+	triggerEvaluator TriggerEvaluator,
+	settings *config.Settings,
+) *MetricListener {
+	failureCount := int(settings.MaxWebhookFailureCount)
+	if failureCount < 1 {
+		failureCount = 1
+	}
 	return &MetricListener{
 		webhookCache:        wc,
 		repo:                repo,
-		tokenExchangeClient: tokenExchangeAPI,
+		webhookSender:       webhookSender,
+		triggerEvaluator:    triggerEvaluator,
 		vehicleNFTAddress:   settings.VehicleNFTAddress,
 		dimoRegistryChainID: settings.DIMORegistryChainID,
+		maxFailureCount:     failureCount,
 	}
 }
 
@@ -67,58 +92,64 @@ func (m *MetricListener) ProcessEventMessages(ctx context.Context, messages <-ch
 
 func processMessage(ctx context.Context, messages <-chan *message.Message, processor func(msg *message.Message) error) error {
 	logger := zerolog.Ctx(ctx)
-	for msg := range messages {
-		if ctx.Err() != nil {
+	for {
+		select {
+		case <-ctx.Done():
 			return ctx.Err()
+		case msg, ok := <-messages:
+			if !ok {
+				// channel is closed
+				return nil
+			}
+			if ctx.Err() != nil {
+				// check context since select is not deterministic when multiple cases are ready
+				return ctx.Err()
+			}
+			msg.SetContext(ctx)
+			if err := processor(msg); err != nil {
+				logger.Error().Err(err).Msg("error processing signal message")
+			}
+			msg.Ack()
 		}
-		msg.SetContext(ctx)
-		if err := processor(msg); err != nil {
-			logger.Error().Err(err).Msg("error processing signal message")
-		}
-		msg.Ack()
 	}
-	return nil
 }
 
-func (m *MetricListener) handleTriggeredWebhook(ctx context.Context, trigger *models.Trigger, lastTrigger *models.TriggerLog, metricData json.RawMessage, payload *cloudevent.CloudEvent[webhook.WebhookPayload]) error {
-	cooldownPassed, err := checkCooldown(trigger, lastTrigger.LastTriggeredAt)
-	if err != nil {
-		return fmt.Errorf("failed to check cooldown: %w", err)
-	}
-	if !cooldownPassed {
-		// If the cooldown period hasn't passed, skip the webhook
+func (m *MetricListener) handleTriggeredWebhook(ctx context.Context, trigger *models.Trigger, metricData json.RawMessage, payload *cloudevent.CloudEvent[webhook.WebhookPayload]) error {
+	// Check if we should attempt the webhook (circuit breaker logic)
+	if !m.ShouldAttemptWebhook(trigger) {
 		return nil
 	}
 
-	err = m.sendWebhookNotification(ctx, trigger, payload)
+	// Send the webhook
+	err := m.webhookSender.SendWebhook(ctx, trigger, payload)
 	if err != nil {
-		if richError, ok := richerrors.AsRichError(err); ok && richError.Code == webhookFailureCode {
-			if err := m.handleWebhookFailure(ctx, trigger); err != nil {
-				zerolog.Ctx(ctx).Error().Err(err).Msg("failed to handle webhook failure")
+		// Check if it's a webhook-specific failure
+		if richError, ok := richerrors.AsRichError(err); ok && richError.Code == webhooksender.WebhookFailureCode {
+			if failErr := m.repo.IncrementTriggerFailureCount(ctx, trigger, err, m.maxFailureCount); failErr != nil {
+				zerolog.Ctx(ctx).Error().Err(failErr).Str("triggerId", trigger.ID).Msg("failed to handle webhook failure")
 			}
+			return fmt.Errorf("webhook delivery failed: %w", err)
 		}
 		return fmt.Errorf("failed to send webhook: %w", err)
 	}
 
+	if trigger.FailureCount > 0 {
+		// If this webhook was previously failed, reset the failure count.
+		if err := m.repo.ResetTriggerFailureCount(ctx, trigger); err != nil {
+			zerolog.Ctx(ctx).Error().Err(err).Str("triggerId", trigger.ID).Msg("failed to handle webhook success")
+		}
+	}
+
+	// Log the successful trigger
 	if err := m.logWebhookTrigger(ctx, payload, metricData); err != nil {
 		return fmt.Errorf("failed to log webhook trigger: %w", err)
 	}
-	if err := m.resetWebhookFailure(ctx, trigger); err != nil {
-		return fmt.Errorf("failed to reset webhook failure: %w", err)
-	}
+
 	return nil
 }
 
-func checkCooldown(webhook *models.Trigger, lastTriggeredAt time.Time) (bool, error) {
-	cooldown := webhook.CooldownPeriod
-	if time.Since(lastTriggeredAt) >= time.Duration(cooldown)*time.Second {
-		return true, nil
-	}
-	return false, nil
-}
-
 func (m *MetricListener) logWebhookTrigger(ctx context.Context, payload *cloudevent.CloudEvent[webhook.WebhookPayload], metricData json.RawMessage) error {
-	now := time.Now()
+	now := time.Now().UTC()
 	eventLog := &models.TriggerLog{
 		ID:              payload.ID,
 		TriggerID:       payload.Data.WebhookId,
@@ -129,37 +160,6 @@ func (m *MetricListener) logWebhookTrigger(ctx context.Context, payload *cloudev
 	}
 	if err := m.repo.CreateTriggerLog(ctx, eventLog); err != nil {
 		return fmt.Errorf("failed to create trigger log: %w", err)
-	}
-	return nil
-}
-
-func (m *MetricListener) sendWebhookNotification(ctx context.Context, trigger *models.Trigger, payload *cloudevent.CloudEvent[webhook.WebhookPayload]) error {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal webhook payload: %w", err)
-	}
-
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, trigger.TargetURI, bytes.NewBuffer(body))
-	if err != nil {
-		return fmt.Errorf("failed to create webhook request: %w", err)
-	}
-	request.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return richerrors.Error{
-			Code: webhookFailureCode,
-			Err:  fmt.Errorf("failed to POST to webhook: %w", err),
-		}
-	}
-	defer resp.Body.Close() //nolint:errcheck
-
-	if resp.StatusCode >= 400 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return richerrors.Error{
-			Code: webhookFailureCode,
-			Err:  fmt.Errorf("webhook returned status code %d: %s", resp.StatusCode, string(respBody)),
-		}
 	}
 	return nil
 }
@@ -189,51 +189,17 @@ func (m *MetricListener) createWebhookPayload(trigger *models.Trigger, assetDid 
 	return payload
 }
 
-func (m *MetricListener) handleWebhookFailure(ctx context.Context, trigger *models.Trigger) error {
-	event, err := m.repo.GetTriggerByIDAndDeveloperLicense(ctx, trigger.ID, common.BytesToAddress(trigger.DeveloperLicenseAddress))
-	if err != nil {
-		return fmt.Errorf("could not fetch trigger: %w", err)
+// ShouldAttemptWebhook checks if a webhook should be attempted based on its current state
+func (m *MetricListener) ShouldAttemptWebhook(trigger *models.Trigger) bool {
+	// Don't attempt if webhook is disabled or failed
+	if trigger.Status != triggersrepo.StatusEnabled {
+		return false
 	}
-	event.FailureCount += 1
 
-	if event.FailureCount >= 5 {
-		event.Status = triggersrepo.StatusFailed
-		zerolog.Ctx(ctx).Info().Msgf("Webhook %s disabled due to excessive failures", trigger.ID)
+	// Don't attempt if already at failure threshold
+	if trigger.FailureCount >= m.maxFailureCount {
+		return false
 	}
-	if err := m.repo.UpdateTrigger(ctx, event); err != nil {
-		return fmt.Errorf("failed to update event failure count: %w", err)
-	}
-	return nil
-}
 
-func (m *MetricListener) resetWebhookFailure(ctx context.Context, webhook *models.Trigger) error {
-	event, err := m.repo.GetTriggerByIDAndDeveloperLicense(ctx, webhook.ID, common.BytesToAddress(webhook.DeveloperLicenseAddress))
-	if err != nil {
-		return fmt.Errorf("could not fetch event: %w", err)
-	}
-	if event.FailureCount == 0 {
-		// if the failure count is 0, we don't need to reset it
-		return nil
-	}
-	event.FailureCount = 0
-	zerolog.Ctx(ctx).Debug().Msgf("Reset FailureCount for webhook %s", webhook.ID)
-	if err := m.repo.UpdateTrigger(ctx, event); err != nil {
-		return fmt.Errorf("failed to reset event failure count: %w", err)
-	}
-	return nil
-}
-
-func (m *MetricListener) getLastLogValue(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (*models.TriggerLog, error) {
-	lastTrigger, err := m.repo.GetLastLogValue(ctx, triggerID, assetDid)
-	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("failed to retrieve event logs: %w", err)
-		}
-		lastTrigger = &models.TriggerLog{
-			SnapshotData: []byte("{}"),
-			AssetDid:     assetDid.String(),
-			TriggerID:    triggerID,
-		}
-	}
-	return lastTrigger, nil
+	return true
 }
