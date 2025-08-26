@@ -81,7 +81,7 @@ func (w *WebhookSender) SendWebhook(ctx context.Context, t *models.Trigger, payl
 			Err:  fmt.Errorf("failed to POST to webhook: %w", err),
 		}
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() // nolint:errcheck
 
 	// Check status code
 	if resp.StatusCode >= 400 {

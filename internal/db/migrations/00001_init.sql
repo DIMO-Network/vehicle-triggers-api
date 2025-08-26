@@ -1,9 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
 SELECT 'up SQL query';
-SELECT 'up SQL query';
-
-
 
 CREATE TABLE triggers (
     id uuid NOT NULL,

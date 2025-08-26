@@ -66,8 +66,6 @@ func TestWebhookCRUDOperations(t *testing.T) {
 	}
 	var webhookID string
 	t.Run("Step 1: Create Webhook", func(t *testing.T) {
-		t.Log("Creating initial webhook")
-
 		webhookPayload := webhook.RegisterWebhookRequest{
 			Service:           "telemetry.signals",
 			MetricName:        "speed",
@@ -99,7 +97,6 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		require.NoError(t, err)
 		bodyStr := string(body)
 		require.Equal(t, http.StatusCreated, resp.StatusCode, bodyStr)
-		t.Logf("Webhook created: %s", bodyStr)
 
 		// Parse the response to get the webhook ID
 		webhookResponse := map[string]any{}
@@ -114,7 +111,6 @@ func TestWebhookCRUDOperations(t *testing.T) {
 	require.NotEmpty(t, webhookID, "Webhook ID should be set from previous test")
 
 	t.Run("Step 2: List Webhooks", func(t *testing.T) {
-		t.Log("Listing webhooks")
 
 		req, err := http.NewRequestWithContext(
 			t.Context(),
@@ -138,11 +134,9 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, webhooks, 1, "Should have exactly one webhook")
 		require.Equal(t, webhookID, webhooks[0]["id"])
-		t.Logf("Found %d webhooks", len(webhooks))
 	})
 
 	t.Run("Step 3: Assign Vehicle to Webhook", func(t *testing.T) {
-		t.Log("Assigning vehicle to webhook")
 
 		assetDid := cloudevent.ERC721DID{
 			ChainID:         137,
@@ -163,13 +157,9 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
-
-		t.Logf("Assigned vehicle %s to webhook %s", assetDid1.String(), webhookID)
 	})
 
 	t.Run("Step 4: List Vehicles for Webhook", func(t *testing.T) {
-		t.Log("Listing vehicles subscribed to webhook")
-
 		req, err := http.NewRequestWithContext(
 			t.Context(),
 			"GET",
@@ -192,11 +182,9 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, vehicleIDs, 1, "Should have exactly one vehicle subscribed")
 		require.Equal(t, assetDid1.String(), vehicleIDs[0])
-		t.Logf("Found %d vehicles subscribed to webhook", len(vehicleIDs))
 	})
 
 	t.Run("Step 5: Assign Second Vehicle to Webhook", func(t *testing.T) {
-		t.Log("Assigning second vehicle to webhook")
 
 		subscribeURL := fmt.Sprintf("/v1/webhooks/%s/subscribe/%s", webhookID, assetDid2.String())
 		req, err := http.NewRequestWithContext(
@@ -212,12 +200,9 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
-
-		t.Logf("Assigned vehicle %s to webhook %s", assetDid2.String(), webhookID)
 	})
 
 	t.Run("Step 6: Verify Both Vehicles are Subscribed", func(t *testing.T) {
-		t.Log("Verifying both vehicles are subscribed")
 
 		req, err := http.NewRequestWithContext(
 			t.Context(),
@@ -248,11 +233,9 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		}
 		require.True(t, vehicleMap[assetDid1.String()], "First vehicle should be subscribed")
 		require.True(t, vehicleMap[assetDid2.String()], "Second vehicle should be subscribed")
-		t.Logf("Verified %d vehicles are subscribed to webhook", len(vehicleIDs))
 	})
 
 	t.Run("Step 7: Update Webhook", func(t *testing.T) {
-		t.Log("Updating webhook configuration")
 
 		updatePayload := webhook.UpdateWebhookRequest{
 			Description:    ref("Updated description for speed alert"),
@@ -286,12 +269,9 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, webhookID, response["id"])
 		require.Equal(t, "Webhook updated successfully", response["message"])
-
-		t.Logf("Updated webhook %s", webhookID)
 	})
 
 	t.Run("Step 8: Unassign First Vehicle from Webhook", func(t *testing.T) {
-		t.Log("Unassigning first vehicle from webhook")
 
 		unsubscribeURL := fmt.Sprintf("/v1/webhooks/%s/unsubscribe/%s", webhookID, assetDid1.String())
 		req, err := http.NewRequestWithContext(
@@ -307,12 +287,9 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		resp, err := servers.Application.Test(req, -1)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
-
-		t.Logf("Unassigned vehicle %s from webhook %s", assetDid1.String(), webhookID)
 	})
 
 	t.Run("Step 9: Verify Only Second Vehicle is Subscribed", func(t *testing.T) {
-		t.Log("Verifying only second vehicle is subscribed")
 
 		req, err := http.NewRequestWithContext(
 			t.Context(),
@@ -336,11 +313,9 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, vehicleIDs, 1, "Should have exactly one vehicle subscribed")
 		require.Equal(t, assetDid2.String(), vehicleIDs[0])
-		t.Logf("Verified only vehicle %s is subscribed to webhook", assetDid2.String())
 	})
 
 	t.Run("Step 10: Unassign All Vehicles from Webhook", func(t *testing.T) {
-		t.Log("Unassigning all vehicles from webhook")
 
 		unsubscribeAllURL := fmt.Sprintf("/v1/webhooks/%s/unsubscribe/all", webhookID)
 		req, err := http.NewRequestWithContext(
@@ -364,12 +339,9 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		err = json.Unmarshal(body, &response)
 		require.NoError(t, err)
 		require.Contains(t, response["message"], "Unsubscribed")
-
-		t.Logf("Unassigned all vehicles from webhook %s", webhookID)
 	})
 
 	t.Run("Step 11: Verify No Vehicles are Subscribed", func(t *testing.T) {
-		t.Log("Verifying no vehicles are subscribed")
 
 		req, err := http.NewRequestWithContext(
 			t.Context(),
@@ -392,11 +364,9 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		err = json.Unmarshal(body, &vehicleIDs)
 		require.NoError(t, err)
 		require.Len(t, vehicleIDs, 0, "Should have no vehicles subscribed")
-		t.Logf("Verified no vehicles are subscribed to webhook")
 	})
 
 	t.Run("Step 12: Delete Webhook", func(t *testing.T) {
-		t.Log("Deleting webhook")
 
 		req, err := http.NewRequestWithContext(
 			t.Context(),
@@ -419,13 +389,9 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		err = json.Unmarshal(body, &response)
 		require.NoError(t, err)
 		require.Equal(t, "Webhook deleted successfully", response["message"])
-
-		t.Logf("Deleted webhook %s", webhookID)
 	})
 
 	t.Run("Step 13: Verify Webhook is Deleted", func(t *testing.T) {
-		t.Log("Verifying webhook is deleted")
-
 		req, err := http.NewRequestWithContext(
 			t.Context(),
 			"GET",
@@ -447,7 +413,6 @@ func TestWebhookCRUDOperations(t *testing.T) {
 		err = json.Unmarshal(body, &webhooks)
 		require.NoError(t, err)
 		require.Len(t, webhooks, 0, "Should have no webhooks after deletion")
-		t.Logf("Verified webhook is deleted - found %d webhooks", len(webhooks))
 	})
 }
 

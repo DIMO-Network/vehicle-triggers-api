@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/IBM/sarama"
-	"github.com/rs/zerolog"
 	"github.com/testcontainers/testcontainers-go/modules/kafka"
 )
 
@@ -17,7 +16,6 @@ type mockKafkaServer struct {
 	producer  sarama.SyncProducer
 	topics    map[string][]any
 	mu        sync.RWMutex
-	logger    zerolog.Logger
 }
 
 func setupMockKafkaServer(t *testing.T) *mockKafkaServer {
