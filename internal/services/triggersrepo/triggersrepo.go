@@ -100,6 +100,7 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 	if displayName == "" {
 		displayName = id
 	}
+	currTime := time.Now().UTC()
 
 	trigger := &models.Trigger{
 		ID:                      id,
@@ -112,6 +113,8 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 		CooldownPeriod:          req.CooldownPeriod,
 		DeveloperLicenseAddress: req.DeveloperLicenseAddress.Bytes(),
 		Status:                  req.Status,
+		CreatedAt:               currTime,
+		UpdatedAt:               currTime,
 	}
 
 	if err := trigger.Insert(ctx, r.db, boil.Infer()); err != nil {
@@ -260,7 +263,6 @@ func (r *Repository) UpdateTrigger(ctx context.Context, trigger *models.Trigger)
 		}
 	}
 	defer RollbackTx(ctx, tx)
-	trigger.UpdatedAt = time.Now().UTC()
 	err = r.updateTrigger(tx, ctx, trigger)
 	if err != nil {
 		return err
@@ -281,6 +283,7 @@ func (r *Repository) UpdateTriggerWithTx(ctx context.Context, tx *sql.Tx, trigge
 }
 
 func (r *Repository) updateTrigger(tx *sql.Tx, ctx context.Context, trigger *models.Trigger) error {
+	trigger.UpdatedAt = time.Now().UTC()
 	ret, err := trigger.Update(ctx, tx, boil.Blacklist(models.TriggerColumns.ID,
 		models.TriggerColumns.ID,
 		models.TriggerColumns.DeveloperLicenseAddress,
