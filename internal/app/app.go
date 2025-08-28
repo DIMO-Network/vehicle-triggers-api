@@ -16,8 +16,10 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/metriclistener"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhooksender"
 	"github.com/IBM/sarama"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/swagger"
@@ -161,7 +163,9 @@ func createSignalConsumer(ctx context.Context, settings *config.Settings, tokenE
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-	vehicleProcessor := metriclistener.NewMetricsListener(webhookCache, repo, tokenExchangeAPI, settings)
+	webhookSender := webhooksender.NewWebhookSender(nil)
+	triggerEvaluator := triggerevaluator.NewTriggerEvaluator(repo, tokenExchangeAPI)
+	vehicleProcessor := metriclistener.NewMetricsListener(webhookCache, repo, webhookSender, triggerEvaluator, settings)
 	consumerConfig := &kafka.Config{
 		ClusterConfig:   clusterConfig,
 		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
@@ -183,7 +187,9 @@ func createEventConsumer(ctx context.Context, settings *config.Settings, tokenEx
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-	vehicleProcessor := metriclistener.NewMetricsListener(webhookCache, repo, tokenExchangeAPI, settings)
+	webhookSender := webhooksender.NewWebhookSender(nil)
+	triggerEvaluator := triggerevaluator.NewTriggerEvaluator(repo, tokenExchangeAPI)
+	vehicleProcessor := metriclistener.NewMetricsListener(webhookCache, repo, webhookSender, triggerEvaluator, settings)
 	consumerConfig := &kafka.Config{
 		ClusterConfig:   clusterConfig,
 		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),

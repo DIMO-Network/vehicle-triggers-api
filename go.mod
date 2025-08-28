@@ -11,7 +11,6 @@ require (
 	github.com/IBM/sarama v1.45.2
 	github.com/ThreeDotsLabs/watermill v1.4.7
 	github.com/ThreeDotsLabs/watermill-kafka/v3 v3.0.6
-	github.com/ericlagergren/decimal v0.0.0-20190420051523-6335edbaa640
 	github.com/ethereum/go-ethereum v1.16.1
 	github.com/friendsofgo/errors v0.9.2
 	github.com/go-jose/go-jose/v4 v4.1.1
@@ -64,6 +63,7 @@ require (
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/dnwe/otelsarama v0.0.0-20240308230250-9388d9d40bc0 // indirect
 	github.com/docker/docker v28.3.3+incompatible // indirect
@@ -76,6 +76,7 @@ require (
 	github.com/ebitengine/purego v0.8.4 // indirect
 	github.com/elastic/go-sysinfo v1.15.3 // indirect
 	github.com/elastic/go-windows v1.0.2 // indirect
+	github.com/ericlagergren/decimal v0.0.0-20190420051523-6335edbaa640 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-faster/city v1.0.1 // indirect

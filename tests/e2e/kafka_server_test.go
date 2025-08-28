@@ -8,16 +8,14 @@ import (
 	"testing"
 
 	"github.com/IBM/sarama"
-	"github.com/rs/zerolog"
 	"github.com/testcontainers/testcontainers-go/modules/kafka"
 )
 
 type mockKafkaServer struct {
 	container *kafka.KafkaContainer
 	producer  sarama.SyncProducer
-	topics    map[string][]interface{}
+	topics    map[string][]any
 	mu        sync.RWMutex
-	logger    zerolog.Logger
 }
 
 func setupMockKafkaServer(t *testing.T) *mockKafkaServer {
@@ -55,8 +53,7 @@ func setupMockKafkaServer(t *testing.T) *mockKafkaServer {
 	mockServer := &mockKafkaServer{
 		container: kafkaContainer,
 		producer:  producer,
-		topics:    make(map[string][]interface{}),
-		logger:    zerolog.New(zerolog.NewConsoleWriter()),
+		topics:    make(map[string][]any),
 	}
 
 	return mockServer
@@ -88,7 +85,7 @@ func (m *mockKafkaServer) PushMessageToTopic(topic string, payload []byte, heade
 
 	// Store in our internal topic storage for testing purposes
 	if m.topics[topic] == nil {
-		m.topics[topic] = make([]interface{}, 0)
+		m.topics[topic] = make([]any, 0)
 	}
 	m.topics[topic] = append(m.topics[topic], string(payload))
 
@@ -96,7 +93,7 @@ func (m *mockKafkaServer) PushMessageToTopic(topic string, payload []byte, heade
 }
 
 // PushJSONToTopic sends a JSON payload to a specific topic
-func (m *mockKafkaServer) PushJSONToTopic(topic string, payload interface{}) error {
+func (m *mockKafkaServer) PushJSONToTopic(topic string, payload any) error {
 	jsonBytes, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
@@ -106,17 +103,17 @@ func (m *mockKafkaServer) PushJSONToTopic(topic string, payload interface{}) err
 }
 
 // GetMessagesFromTopic returns all messages for a specific topic (from internal storage)
-func (m *mockKafkaServer) GetMessagesFromTopic(topic string) []interface{} {
+func (m *mockKafkaServer) GetMessagesFromTopic(topic string) []any {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	if messages, exists := m.topics[topic]; exists {
 		// Return a copy to avoid race conditions
-		result := make([]interface{}, len(messages))
+		result := make([]any, len(messages))
 		copy(result, messages)
 		return result
 	}
-	return []interface{}{}
+	return []any{}
 }
 
 // ClearTopic removes all messages from a specific topic (from internal storage)

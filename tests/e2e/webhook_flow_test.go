@@ -2,7 +2,9 @@ package e2e_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -36,12 +38,16 @@ func TestSignalWebhookFlow(t *testing.T) {
 	servers, err := app.CreateServers(t.Context(), &settingsCopy, zerolog.New(os.Stdout))
 	go func() {
 		if err := servers.SignalConsumer.Start(t.Context()); err != nil {
-			t.Errorf("failed to start signal consumer: %v", err)
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("failed to start signal consumer: %v", err)
+			}
 		}
 	}()
 	go func() {
 		if err := servers.EventConsumer.Start(t.Context()); err != nil {
-			t.Errorf("failed to start event consumer: %v", err)
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("failed to start event consumer: %v", err)
+			}
 		}
 	}()
 	t.Cleanup(func() {
@@ -55,7 +61,6 @@ func TestSignalWebhookFlow(t *testing.T) {
 	t.Cleanup(webhookReceiver.Close)
 
 	// Step 1: Create a webhook
-	t.Log("Step 1: Creating webhook")
 	webhookPayload := webhook.RegisterWebhookRequest{
 		Service:           triggersrepo.ServiceSignal,
 		MetricName:        "speed",
@@ -114,10 +119,7 @@ func TestSignalWebhookFlow(t *testing.T) {
 	require.True(t, ok, "Expected webhook ID in response")
 	require.NotEmpty(t, webhookID)
 
-	t.Logf("Created webhook with ID: %s", webhookID)
-
 	// Step 2: Subscribe a vehicle to the webhook
-	t.Log("Step 2: Subscribing vehicle to webhook")
 
 	// Use a test vehicle token ID
 	assetDid := cloudevent.ERC721DID{
@@ -145,11 +147,10 @@ func TestSignalWebhookFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	t.Logf("Subscribed vehicle %s to webhook %s waiting for webhook to be updated", assetDid.String(), webhookID)
+	// wait for webhook to be updated
 	time.Sleep(1 * time.Second)
 
 	// Step 3: Send a signal to Kafka to trigger the webhook
-	t.Log("Step 3: Sending signal to Kafka")
 	signalPayload := vss.Signal{
 		TokenID:      12345, // Same as assetDID.TokenID
 		Timestamp:    time.Now(),
@@ -164,10 +165,7 @@ func TestSignalWebhookFlow(t *testing.T) {
 	err = tc.Kafka.PushJSONToTopic(settingsCopy.DeviceSignalsTopic, signalPayload)
 	require.NoError(t, err)
 
-	t.Log("Signal sent to Kafka")
-
 	// Step 4: Verify the webhook was called
-	t.Log("Step 4: Verifying webhook was called")
 
 	// Wait for the webhook to be called (with timeout)
 	received := webhookReceiver.WaitForCall(10 * time.Second)
@@ -178,8 +176,6 @@ func TestSignalWebhookFlow(t *testing.T) {
 	require.Len(t, calls, 1, "Expected exactly one webhook call")
 
 	call := calls[0]
-	t.Logf("Webhook called with method: %s, URL: %s", call.Method, call.URL)
-	t.Logf("Webhook body: %s", call.Body)
 
 	// Verify the webhook call details
 	require.Equal(t, "POST", call.Method)
@@ -200,7 +196,6 @@ func TestSignalWebhookFlow(t *testing.T) {
 	webhookReceiver.ClearReceivedCalls()
 
 	// Step 5: Send a second signal to Kafka to trigger the webhook
-	t.Log("Step 5: Sending second signal with same value to Kafka")
 	signalPayload = vss.Signal{
 		TokenID:      12345, // Same as assetDID.TokenID
 		Timestamp:    time.Now(),
@@ -215,16 +210,11 @@ func TestSignalWebhookFlow(t *testing.T) {
 		t.Errorf("failed to push signal to Kafka: %v", err)
 	}
 
-	t.Log("Signal sent to Kafka")
-
-	// Step 5: Verify the webhook was not called
-	t.Log("Step 5: Verifying webhook was not called")
+	// Step 6: Verify the webhook was not called
 	received = webhookReceiver.WaitForCall(2 * time.Second)
-	require.False(t, received, "Webhook was called within timeout")
+	require.False(t, received, "Webhook was unexpectedly called within timeout")
 	calls = webhookReceiver.GetReceivedCalls()
 	require.Len(t, calls, 0, "Expected exactly one webhook call")
-
-	t.Log("Step 6: Sending signal with different value to Kafka")
 	signalPayload = vss.Signal{
 		TokenID:      12345, // Same as assetDID.TokenID
 		Timestamp:    time.Now(),
@@ -239,18 +229,13 @@ func TestSignalWebhookFlow(t *testing.T) {
 		t.Errorf("failed to push signal to Kafka: %v", err)
 	}
 
-	t.Log("Signal sent to Kafka")
-
 	// Step 7: Verify the webhook was called
-	t.Log("Step 7: Verifying webhook was called")
 	received = webhookReceiver.WaitForCall(10 * time.Second)
 	require.True(t, received, "Webhook was not called within timeout")
 	calls = webhookReceiver.GetReceivedCalls()
 	require.Len(t, calls, 1, "Expected exactly one webhook call")
 
 	call = calls[0]
-	t.Logf("Webhook called with method: %s, URL: %s", call.Method, call.URL)
-	t.Logf("Webhook body: %s", call.Body)
 
 	// Verify the webhook call details
 	require.Equal(t, "POST", call.Method)
@@ -268,8 +253,6 @@ func TestSignalWebhookFlow(t *testing.T) {
 	signal = data["signal"].(map[string]any)
 	require.Equal(t, float64(24), signal["value"].(float64))
 	require.Equal(t, "speed", signal["name"].(string))
-
-	t.Log("Webhook flow test completed successfully")
 }
 
 func TestEventWebhookFlow(t *testing.T) {
@@ -286,12 +269,16 @@ func TestEventWebhookFlow(t *testing.T) {
 	servers, err := app.CreateServers(t.Context(), &settingsCopy, zerolog.New(os.Stdout))
 	go func() {
 		if err := servers.SignalConsumer.Start(t.Context()); err != nil {
-			t.Errorf("failed to start signal consumer: %v", err)
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("failed to start signal consumer: %v", err)
+			}
 		}
 	}()
 	go func() {
 		if err := servers.EventConsumer.Start(t.Context()); err != nil {
-			t.Errorf("failed to start event consumer: %v", err)
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("failed to start event consumer: %v", err)
+			}
 		}
 	}()
 	t.Cleanup(func() {
@@ -305,7 +292,6 @@ func TestEventWebhookFlow(t *testing.T) {
 	t.Cleanup(webhookReceiver.Close)
 
 	// Step 1: Create a webhook
-	t.Log("Step 1: Creating webhook")
 	webhookPayload := webhook.RegisterWebhookRequest{
 		Service:           triggersrepo.ServiceEvent,
 		MetricName:        "HarshBraking",
@@ -364,10 +350,7 @@ func TestEventWebhookFlow(t *testing.T) {
 	require.True(t, ok, "Expected webhook ID in response")
 	require.NotEmpty(t, webhookID)
 
-	t.Logf("Created webhook with ID: %s", webhookID)
-
 	// Step 2: Subscribe a vehicle to the webhook
-	t.Log("Step 2: Subscribing vehicle to webhook")
 
 	// Use a test vehicle token ID
 	assetDid := cloudevent.ERC721DID{
@@ -395,11 +378,10 @@ func TestEventWebhookFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	t.Logf("Subscribed vehicle %s to webhook %s waiting for webhook to be updated", assetDid.String(), webhookID)
+	// wait for webhook to be updated
 	time.Sleep(1 * time.Second)
 
 	// Step 3: Send a signal to Kafka to trigger the webhook
-	t.Log("Step 3: Sending event to Kafka")
 	eventPayload := []vss.Event{
 		{
 			Subject:      assetDid.String(),
@@ -416,11 +398,7 @@ func TestEventWebhookFlow(t *testing.T) {
 	err = tc.Kafka.PushJSONToTopic(settingsCopy.DeviceEventsTopic, eventPayload)
 	require.NoError(t, err)
 
-	t.Log("Event sent to Kafka")
-
 	// Step 4: Verify the webhook was called
-	t.Log("Step 4: Verifying webhook was called")
-
 	// Wait for the webhook to be called (with timeout)
 	received := webhookReceiver.WaitForCall(10 * time.Second)
 	require.True(t, received, "Webhook was not called within timeout")
@@ -430,8 +408,6 @@ func TestEventWebhookFlow(t *testing.T) {
 	require.Len(t, calls, 1, "Expected exactly one webhook call")
 
 	call := calls[0]
-	t.Logf("Webhook called with method: %s, URL: %s", call.Method, call.URL)
-	t.Logf("Webhook body: %s", call.Body)
 
 	// Verify the webhook call details
 	require.Equal(t, "POST", call.Method)
@@ -453,5 +429,4 @@ func TestEventWebhookFlow(t *testing.T) {
 	require.Equal(t, float64(1000000000), event["durationNs"].(float64))
 	require.Equal(t, `{"counter": 1}`, event["metadata"].(string))
 
-	t.Log("Webhook flow test completed successfully")
 }

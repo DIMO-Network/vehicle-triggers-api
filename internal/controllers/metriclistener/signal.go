@@ -7,29 +7,19 @@ import (
 	"math/big"
 
 	"github.com/DIMO-Network/cloudevent"
-	"github.com/DIMO-Network/model-garage/pkg/vss"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/celcondition"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
 
-// SignalWithRawData is a struct that contains a signal and the raw data.
-type SignalWithRawData struct {
-	Signal     vss.Signal
-	VehicleDID cloudevent.ERC721DID
-	Def        signals.SignalDefinition
-	RawData    json.RawMessage
-}
-
 func (m *MetricListener) processSignalMessage(msg *message.Message) error {
-	sigAndRaw := SignalWithRawData{
+	sigAndRaw := triggerevaluator.SignalEvaluationData{
 		RawData: json.RawMessage(msg.Payload),
 	}
 	if err := json.Unmarshal(sigAndRaw.RawData, &sigAndRaw.Signal); err != nil {
@@ -66,37 +56,22 @@ func (m *MetricListener) processSignalMessage(msg *message.Message) error {
 	return group.Wait()
 }
 
-func (m *MetricListener) processSignalWebhook(ctx context.Context, wh *webhookcache.Webhook, sigAndRaw *SignalWithRawData) error {
-	hasPerm, err := m.tokenExchangeClient.HasVehiclePermissions(ctx, sigAndRaw.VehicleDID, common.BytesToAddress(wh.Trigger.DeveloperLicenseAddress), sigAndRaw.Def.Permissions)
+func (m *MetricListener) processSignalWebhook(ctx context.Context, wh *webhookcache.Webhook, sigAndRaw *triggerevaluator.SignalEvaluationData) error {
+	// Evaluate the trigger using the new service
+	result, err := m.triggerEvaluator.EvaluateSignalTrigger(ctx, wh.Trigger, wh.Program, sigAndRaw)
 	if err != nil {
-		return fmt.Errorf("permission check failed: %w", err)
+		return fmt.Errorf("failed to evaluate signal trigger: %w", err)
 	}
-	if !hasPerm {
-		// If we don't have permission, unsubscribe from the trigger and refresh the cache
-		zerolog.Ctx(ctx).Info().Msgf("permissions revoked for license %x on vehicle %d", wh.Trigger.DeveloperLicenseAddress, sigAndRaw.Signal.TokenID)
-		_, err := m.repo.DeleteVehicleSubscription(ctx, wh.Trigger.ID, sigAndRaw.VehicleDID)
-		if err != nil {
-			return fmt.Errorf("failed to delete vehicle subscription: %w", err)
+
+	if !result.ShouldFire {
+		// Handle permission denied - unsubscribe from the trigger
+		if result.PermissionDenied {
+			_, err := m.repo.DeleteVehicleSubscription(ctx, wh.Trigger.ID, sigAndRaw.VehicleDID)
+			if err != nil {
+				return fmt.Errorf("failed to delete vehicle subscription: %w", err)
+			}
+			m.webhookCache.ScheduleRefresh(ctx)
 		}
-		m.webhookCache.ScheduleRefresh(ctx)
-		return nil
-	}
-
-	lastTrigger, err := m.getLastLogValue(ctx, wh.Trigger.ID, sigAndRaw.VehicleDID)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve event logs: %w", err)
-	}
-
-	var previousSignal vss.Signal
-	if err := json.Unmarshal(lastTrigger.SnapshotData, &previousSignal); err != nil {
-		return fmt.Errorf("failed to unmarshal previous signal: %w", err)
-	}
-
-	shouldFire, err := celcondition.EvaluateSignalCondition(wh.Program, &sigAndRaw.Signal, &previousSignal, sigAndRaw.Def.ValueType)
-	if err != nil {
-		return fmt.Errorf("failed to evaluate CEL condition: %w", err)
-	}
-	if !shouldFire {
 		return nil
 	}
 
@@ -105,26 +80,26 @@ func (m *MetricListener) processSignalWebhook(ctx context.Context, wh *webhookca
 		return fmt.Errorf("failed to create webhook payload: %w", err)
 	}
 
-	return m.handleTriggeredWebhook(ctx, wh.Trigger, lastTrigger, sigAndRaw.RawData, payload)
+	return m.handleTriggeredWebhook(ctx, wh.Trigger, sigAndRaw.RawData, payload)
 }
-func (m *MetricListener) createSignalPayload(trigger *models.Trigger, signalAndRaw *SignalWithRawData) (*cloudevent.CloudEvent[webhook.WebhookPayload], error) {
+func (m *MetricListener) createSignalPayload(trigger *models.Trigger, sigEval *triggerevaluator.SignalEvaluationData) (*cloudevent.CloudEvent[webhook.WebhookPayload], error) {
 	var signalValue any
-	switch signalAndRaw.Def.ValueType {
+	switch sigEval.Def.ValueType {
 	case signals.NumberType:
-		signalValue = signalAndRaw.Signal.ValueNumber
+		signalValue = sigEval.Signal.ValueNumber
 	case signals.StringType:
-		signalValue = signalAndRaw.Signal.ValueString
+		signalValue = sigEval.Signal.ValueString
 	default:
-		return nil, fmt.Errorf("unsupported signal type: %s", signalAndRaw.Def.ValueType)
+		return nil, fmt.Errorf("unsupported signal type: %s", sigEval.Def.ValueType)
 	}
-	payload := m.createWebhookPayload(trigger, signalAndRaw.VehicleDID)
+	payload := m.createWebhookPayload(trigger, sigEval.VehicleDID)
 	payload.Data.Signal = &webhook.SignalData{
-		Name:      signalAndRaw.Signal.Name,
-		Source:    signalAndRaw.Signal.Source,
-		Units:     signalAndRaw.Def.Unit,
-		Timestamp: signalAndRaw.Signal.Timestamp,
-		Producer:  signalAndRaw.Signal.Producer,
-		ValueType: signalAndRaw.Def.ValueType,
+		Name:      sigEval.Signal.Name,
+		Source:    sigEval.Signal.Source,
+		Units:     sigEval.Def.Unit,
+		Timestamp: sigEval.Signal.Timestamp,
+		Producer:  sigEval.Signal.Producer,
+		ValueType: sigEval.Def.ValueType,
 		Value:     signalValue,
 	}
 	return payload, nil

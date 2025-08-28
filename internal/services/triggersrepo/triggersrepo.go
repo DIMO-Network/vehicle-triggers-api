@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/rs/zerolog"
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
@@ -99,6 +100,7 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 	if displayName == "" {
 		displayName = id
 	}
+	currTime := time.Now().UTC()
 
 	trigger := &models.Trigger{
 		ID:                      id,
@@ -111,6 +113,8 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 		CooldownPeriod:          req.CooldownPeriod,
 		DeveloperLicenseAddress: req.DeveloperLicenseAddress.Bytes(),
 		Status:                  req.Status,
+		CreatedAt:               currTime,
+		UpdatedAt:               currTime,
 	}
 
 	if err := trigger.Insert(ctx, r.db, boil.Infer()); err != nil {
@@ -163,6 +167,50 @@ func (r *Repository) GetTriggersByDeveloperLicense(ctx context.Context, develope
 
 // GetTriggerByIDAndDeveloperLicense retrieves a specific trigger by ID and developer license.
 func (r *Repository) GetTriggerByIDAndDeveloperLicense(ctx context.Context, triggerID string, developerLicenseAddress common.Address) (*models.Trigger, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, richerrors.Error{
+			ExternalMsg: "Error starting transaction",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	defer RollbackTx(ctx, tx)
+	trigger, err := r.getTriggerByIDAndDeveloperLicense(tx, ctx, triggerID, developerLicenseAddress, false)
+	if err != nil {
+		return nil, err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return nil, richerrors.Error{
+			ExternalMsg: "Error committing transaction",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	return trigger, nil
+}
+
+// GetTriggerByIDAndDeveloperLicenseForUpdate retrieves a specific trigger by ID and developer license in the given transaction for update.
+func (r *Repository) GetTriggerByIDAndDeveloperLicenseForUpdate(ctx context.Context, triggerID string, developerLicenseAddress common.Address) (*models.Trigger, *sql.Tx, error) {
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelReadCommitted,
+	})
+	if err != nil {
+		return nil, nil, richerrors.Error{
+			ExternalMsg: "Error starting transaction",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	trigger, err := r.getTriggerByIDAndDeveloperLicense(tx, ctx, triggerID, developerLicenseAddress, true)
+	if err != nil {
+		return nil, nil, err
+	}
+	return trigger, tx, nil
+}
+
+func (r *Repository) getTriggerByIDAndDeveloperLicense(tx *sql.Tx, ctx context.Context, triggerID string, developerLicenseAddress common.Address, forUpdate bool) (*models.Trigger, error) {
 	if triggerID == "" {
 		return nil, richerrors.Error{
 			ExternalMsg: "Webhook id is required",
@@ -177,12 +225,15 @@ func (r *Repository) GetTriggerByIDAndDeveloperLicense(ctx context.Context, trig
 			Code:        http.StatusBadRequest,
 		}
 	}
-
-	trigger, err := models.Triggers(
+	mods := []qm.QueryMod{
 		models.TriggerWhere.ID.EQ(triggerID),
 		models.TriggerWhere.DeveloperLicenseAddress.EQ(developerLicenseAddress.Bytes()),
 		models.TriggerWhere.Status.NEQ(StatusDeleted),
-	).One(ctx, r.db)
+	}
+	if forUpdate {
+		mods = append(mods, qm.For("UPDATE"))
+	}
+	trigger, err := models.Triggers(mods...).One(ctx, tx)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -202,9 +253,38 @@ func (r *Repository) GetTriggerByIDAndDeveloperLicense(ctx context.Context, trig
 	return trigger, nil
 }
 
-// UpdateTrigger updates an existing trigger.
 func (r *Repository) UpdateTrigger(ctx context.Context, trigger *models.Trigger) error {
-	ret, err := trigger.Update(ctx, r.db, boil.Blacklist(models.TriggerColumns.ID,
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return richerrors.Error{
+			ExternalMsg: "Error starting transaction",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	defer RollbackTx(ctx, tx)
+	err = r.updateTrigger(tx, ctx, trigger)
+	if err != nil {
+		return err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return richerrors.Error{
+			ExternalMsg: "Failed to commit Update.",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	return nil
+}
+
+func (r *Repository) UpdateTriggerWithTx(ctx context.Context, tx *sql.Tx, trigger *models.Trigger) error {
+	return r.updateTrigger(tx, ctx, trigger)
+}
+
+func (r *Repository) updateTrigger(tx *sql.Tx, ctx context.Context, trigger *models.Trigger) error {
+	trigger.UpdatedAt = time.Now().UTC()
+	ret, err := trigger.Update(ctx, tx, boil.Blacklist(models.TriggerColumns.ID,
 		models.TriggerColumns.ID,
 		models.TriggerColumns.DeveloperLicenseAddress,
 		models.TriggerColumns.Service,
@@ -259,14 +339,12 @@ func (r *Repository) DeleteTrigger(ctx context.Context, triggerID string, develo
 			Code:        http.StatusInternalServerError,
 		}
 	}
-	defer func() {
-		// Rollback if still active
-		_ = tx.Rollback()
-	}()
+	defer RollbackTx(ctx, tx)
 
 	// Soft-delete the trigger by setting status to Deleted
 	trigger.Status = StatusDeleted
-	if _, err := trigger.Update(ctx, tx, boil.Whitelist(models.TriggerColumns.Status)); err != nil {
+	trigger.UpdatedAt = time.Now().UTC()
+	if _, err := trigger.Update(ctx, tx, boil.Whitelist(models.TriggerColumns.Status, models.TriggerColumns.UpdatedAt)); err != nil {
 		return richerrors.Error{
 			ExternalMsg: "Error deleting trigger",
 			Err:         err,
@@ -317,8 +395,8 @@ func (r *Repository) CreateVehicleSubscription(ctx context.Context, assetDid clo
 	subscription := &models.VehicleSubscription{
 		AssetDid:  assetDid.String(),
 		TriggerID: triggerID,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
 	}
 
 	if err := subscription.Insert(ctx, r.db, boil.Infer()); err != nil {
@@ -529,6 +607,26 @@ func (r *Repository) GetLastLogValue(ctx context.Context, triggerID string, asse
 
 // CreateTriggerLog creates a new trigger log.
 func (r *Repository) CreateTriggerLog(ctx context.Context, log *models.TriggerLog) error {
+	if log.AssetDid == "" {
+		return richerrors.Error{
+			ExternalMsg: "Asset DID is required",
+			Err:         ValidationError,
+			Code:        http.StatusBadRequest,
+		}
+	}
+	if log.TriggerID == "" {
+		return richerrors.Error{
+			ExternalMsg: "Trigger ID is required",
+			Err:         ValidationError,
+			Code:        http.StatusBadRequest,
+		}
+	}
+	if log.ID == "" {
+		log.ID = uuid.New().String()
+	}
+	if log.CreatedAt.IsZero() {
+		log.CreatedAt = time.Now().UTC()
+	}
 	if err := log.Insert(ctx, r.db, boil.Infer()); err != nil {
 		return richerrors.Error{
 			ExternalMsg: "Failed to create trigger log",
@@ -537,4 +635,86 @@ func (r *Repository) CreateTriggerLog(ctx context.Context, log *models.TriggerLo
 		}
 	}
 	return nil
+}
+
+// ResetTriggerFailureCount resets failure count on successful webhook delivery
+func (r *Repository) ResetTriggerFailureCount(ctx context.Context, trigger *models.Trigger) error {
+	// Fetch latest trigger state
+	updatedTrigger, tx, err := r.GetTriggerByIDAndDeveloperLicenseForUpdate(ctx, trigger.ID, common.BytesToAddress(trigger.DeveloperLicenseAddress))
+	if err != nil {
+		return fmt.Errorf("failed to fetch trigger for success reset: %w", err)
+	}
+	defer RollbackTx(ctx, tx)
+
+	if updatedTrigger.FailureCount < 1 {
+		// do not update if don't have anything to reset
+		return nil
+	}
+
+	// Reset failure count
+	updatedTrigger.FailureCount = 0
+
+	// If trigger was in failed state, re-enable it
+	if updatedTrigger.Status == StatusFailed {
+		updatedTrigger.Status = StatusEnabled
+	}
+
+	if err := r.UpdateTriggerWithTx(ctx, tx, updatedTrigger); err != nil {
+		return fmt.Errorf("failed to reset failure count: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return richerrors.Error{
+			ExternalMsg: "Failed to commit Update.",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+
+	return nil
+}
+
+// IncrementTriggerFailureCount increments failure count and disables webhook if threshold reached.
+func (r *Repository) IncrementTriggerFailureCount(ctx context.Context, trigger *models.Trigger, failureReason error, maxFailureCount int) error {
+	// Fetch latest trigger state
+	updatedTrigger, tx, err := r.GetTriggerByIDAndDeveloperLicenseForUpdate(ctx, trigger.ID, common.BytesToAddress(trigger.DeveloperLicenseAddress))
+	if err != nil {
+		return fmt.Errorf("failed to fetch trigger for failure handling: %w", err)
+	}
+	defer RollbackTx(ctx, tx)
+
+	// Increment failure count
+	updatedTrigger.FailureCount++
+
+	// Disable webhook if failure threshold reached
+	if updatedTrigger.FailureCount >= maxFailureCount {
+		updatedTrigger.Status = StatusFailed
+		zerolog.Ctx(ctx).Warn().
+			Str("triggerId", trigger.ID).
+			Int("maxFailures", maxFailureCount).
+			Msg("webhook disabled due to excessive failures")
+	}
+
+	if err := r.UpdateTriggerWithTx(ctx, tx, updatedTrigger); err != nil {
+		return fmt.Errorf("failed to update failure count: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return richerrors.Error{
+			ExternalMsg: "Failed to commit Update.",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+
+	return nil
+}
+
+func RollbackTx(ctx context.Context, tx *sql.Tx) {
+	if tx == nil {
+		return
+	}
+	if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to rollback transaction")
+	}
 }

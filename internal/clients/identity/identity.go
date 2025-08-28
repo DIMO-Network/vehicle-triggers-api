@@ -78,7 +78,7 @@ func (c *Client) GetSharedVehicles(ctx context.Context, devLicense []byte) ([]cl
 	ethAddress := common.BytesToAddress(devLicense).Hex()
 	query := `
 	query($clientId: Address){
-		vehicles(first: 50, filterBy: { privileged: $clientId }) {
+		vehicles(first: 100, filterBy: { privileged: $clientId }) {
 			nodes {
 				tokenDID
 			}
