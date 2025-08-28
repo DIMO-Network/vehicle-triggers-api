@@ -24,87 +24,82 @@ import (
 
 // Trigger is an object representing the database table.
 type Trigger struct {
-	ID                         string      `boil:"id" json:"id" toml:"id" yaml:"id"`
-	Service                    string      `boil:"service" json:"service" toml:"service" yaml:"service"`
-	MetricName                 string      `boil:"metric_name" json:"metric_name" toml:"metric_name" yaml:"metric_name"`
-	Condition                  string      `boil:"condition" json:"condition" toml:"condition" yaml:"condition"`
-	TargetURI                  string      `boil:"target_uri" json:"target_uri" toml:"target_uri" yaml:"target_uri"`
-	CooldownPeriod             int         `boil:"cooldown_period" json:"cooldown_period" toml:"cooldown_period" yaml:"cooldown_period"`
-	DeveloperLicenseAddress    []byte      `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
-	CreatedAt                  time.Time   `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
-	UpdatedAt                  time.Time   `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
-	Status                     string      `boil:"status" json:"status" toml:"status" yaml:"status"`
-	Description                null.String `boil:"description" json:"description,omitempty" toml:"description" yaml:"description,omitempty"`
-	FailureCount               int         `boil:"failure_count" json:"failure_count" toml:"failure_count" yaml:"failure_count"`
-	DeveloperLicenseAddressHex []byte      `boil:"developer_license_address_hex" json:"developer_license_address_hex" toml:"developer_license_address_hex" yaml:"developer_license_address_hex"`
-	DisplayName                string      `boil:"display_name" json:"display_name" toml:"display_name" yaml:"display_name"`
+	ID                      string      `boil:"id" json:"id" toml:"id" yaml:"id"`
+	Service                 string      `boil:"service" json:"service" toml:"service" yaml:"service"`
+	MetricName              string      `boil:"metric_name" json:"metric_name" toml:"metric_name" yaml:"metric_name"`
+	Condition               string      `boil:"condition" json:"condition" toml:"condition" yaml:"condition"`
+	TargetURI               string      `boil:"target_uri" json:"target_uri" toml:"target_uri" yaml:"target_uri"`
+	CooldownPeriod          int         `boil:"cooldown_period" json:"cooldown_period" toml:"cooldown_period" yaml:"cooldown_period"`
+	DeveloperLicenseAddress []byte      `boil:"developer_license_address" json:"developer_license_address" toml:"developer_license_address" yaml:"developer_license_address"`
+	CreatedAt               time.Time   `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
+	UpdatedAt               time.Time   `boil:"updated_at" json:"updated_at" toml:"updated_at" yaml:"updated_at"`
+	Status                  string      `boil:"status" json:"status" toml:"status" yaml:"status"`
+	Description             null.String `boil:"description" json:"description,omitempty" toml:"description" yaml:"description,omitempty"`
+	FailureCount            int         `boil:"failure_count" json:"failure_count" toml:"failure_count" yaml:"failure_count"`
+	DisplayName             string      `boil:"display_name" json:"display_name" toml:"display_name" yaml:"display_name"`
 
 	R *triggerR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L triggerL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var TriggerColumns = struct {
-	ID                         string
-	Service                    string
-	MetricName                 string
-	Condition                  string
-	TargetURI                  string
-	CooldownPeriod             string
-	DeveloperLicenseAddress    string
-	CreatedAt                  string
-	UpdatedAt                  string
-	Status                     string
-	Description                string
-	FailureCount               string
-	DeveloperLicenseAddressHex string
-	DisplayName                string
+	ID                      string
+	Service                 string
+	MetricName              string
+	Condition               string
+	TargetURI               string
+	CooldownPeriod          string
+	DeveloperLicenseAddress string
+	CreatedAt               string
+	UpdatedAt               string
+	Status                  string
+	Description             string
+	FailureCount            string
+	DisplayName             string
 }{
-	ID:                         "id",
-	Service:                    "service",
-	MetricName:                 "metric_name",
-	Condition:                  "condition",
-	TargetURI:                  "target_uri",
-	CooldownPeriod:             "cooldown_period",
-	DeveloperLicenseAddress:    "developer_license_address",
-	CreatedAt:                  "created_at",
-	UpdatedAt:                  "updated_at",
-	Status:                     "status",
-	Description:                "description",
-	FailureCount:               "failure_count",
-	DeveloperLicenseAddressHex: "developer_license_address_hex",
-	DisplayName:                "display_name",
+	ID:                      "id",
+	Service:                 "service",
+	MetricName:              "metric_name",
+	Condition:               "condition",
+	TargetURI:               "target_uri",
+	CooldownPeriod:          "cooldown_period",
+	DeveloperLicenseAddress: "developer_license_address",
+	CreatedAt:               "created_at",
+	UpdatedAt:               "updated_at",
+	Status:                  "status",
+	Description:             "description",
+	FailureCount:            "failure_count",
+	DisplayName:             "display_name",
 }
 
 var TriggerTableColumns = struct {
-	ID                         string
-	Service                    string
-	MetricName                 string
-	Condition                  string
-	TargetURI                  string
-	CooldownPeriod             string
-	DeveloperLicenseAddress    string
-	CreatedAt                  string
-	UpdatedAt                  string
-	Status                     string
-	Description                string
-	FailureCount               string
-	DeveloperLicenseAddressHex string
-	DisplayName                string
+	ID                      string
+	Service                 string
+	MetricName              string
+	Condition               string
+	TargetURI               string
+	CooldownPeriod          string
+	DeveloperLicenseAddress string
+	CreatedAt               string
+	UpdatedAt               string
+	Status                  string
+	Description             string
+	FailureCount            string
+	DisplayName             string
 }{
-	ID:                         "triggers.id",
-	Service:                    "triggers.service",
-	MetricName:                 "triggers.metric_name",
-	Condition:                  "triggers.condition",
-	TargetURI:                  "triggers.target_uri",
-	CooldownPeriod:             "triggers.cooldown_period",
-	DeveloperLicenseAddress:    "triggers.developer_license_address",
-	CreatedAt:                  "triggers.created_at",
-	UpdatedAt:                  "triggers.updated_at",
-	Status:                     "triggers.status",
-	Description:                "triggers.description",
-	FailureCount:               "triggers.failure_count",
-	DeveloperLicenseAddressHex: "triggers.developer_license_address_hex",
-	DisplayName:                "triggers.display_name",
+	ID:                      "triggers.id",
+	Service:                 "triggers.service",
+	MetricName:              "triggers.metric_name",
+	Condition:               "triggers.condition",
+	TargetURI:               "triggers.target_uri",
+	CooldownPeriod:          "triggers.cooldown_period",
+	DeveloperLicenseAddress: "triggers.developer_license_address",
+	CreatedAt:               "triggers.created_at",
+	UpdatedAt:               "triggers.updated_at",
+	Status:                  "triggers.status",
+	Description:             "triggers.description",
+	FailureCount:            "triggers.failure_count",
+	DisplayName:             "triggers.display_name",
 }
 
 // Generated where
@@ -142,35 +137,33 @@ func (w whereHelper__byte) GT(x []byte) qm.QueryMod  { return qmhelper.Where(w.f
 func (w whereHelper__byte) GTE(x []byte) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.GTE, x) }
 
 var TriggerWhere = struct {
-	ID                         whereHelperstring
-	Service                    whereHelperstring
-	MetricName                 whereHelperstring
-	Condition                  whereHelperstring
-	TargetURI                  whereHelperstring
-	CooldownPeriod             whereHelperint
-	DeveloperLicenseAddress    whereHelper__byte
-	CreatedAt                  whereHelpertime_Time
-	UpdatedAt                  whereHelpertime_Time
-	Status                     whereHelperstring
-	Description                whereHelpernull_String
-	FailureCount               whereHelperint
-	DeveloperLicenseAddressHex whereHelper__byte
-	DisplayName                whereHelperstring
+	ID                      whereHelperstring
+	Service                 whereHelperstring
+	MetricName              whereHelperstring
+	Condition               whereHelperstring
+	TargetURI               whereHelperstring
+	CooldownPeriod          whereHelperint
+	DeveloperLicenseAddress whereHelper__byte
+	CreatedAt               whereHelpertime_Time
+	UpdatedAt               whereHelpertime_Time
+	Status                  whereHelperstring
+	Description             whereHelpernull_String
+	FailureCount            whereHelperint
+	DisplayName             whereHelperstring
 }{
-	ID:                         whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"id\""},
-	Service:                    whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"service\""},
-	MetricName:                 whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"metric_name\""},
-	Condition:                  whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"condition\""},
-	TargetURI:                  whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"target_uri\""},
-	CooldownPeriod:             whereHelperint{field: "\"vehicle_triggers_api\".\"triggers\".\"cooldown_period\""},
-	DeveloperLicenseAddress:    whereHelper__byte{field: "\"vehicle_triggers_api\".\"triggers\".\"developer_license_address\""},
-	CreatedAt:                  whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"triggers\".\"created_at\""},
-	UpdatedAt:                  whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"triggers\".\"updated_at\""},
-	Status:                     whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"status\""},
-	Description:                whereHelpernull_String{field: "\"vehicle_triggers_api\".\"triggers\".\"description\""},
-	FailureCount:               whereHelperint{field: "\"vehicle_triggers_api\".\"triggers\".\"failure_count\""},
-	DeveloperLicenseAddressHex: whereHelper__byte{field: "\"vehicle_triggers_api\".\"triggers\".\"developer_license_address_hex\""},
-	DisplayName:                whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"display_name\""},
+	ID:                      whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"id\""},
+	Service:                 whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"service\""},
+	MetricName:              whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"metric_name\""},
+	Condition:               whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"condition\""},
+	TargetURI:               whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"target_uri\""},
+	CooldownPeriod:          whereHelperint{field: "\"vehicle_triggers_api\".\"triggers\".\"cooldown_period\""},
+	DeveloperLicenseAddress: whereHelper__byte{field: "\"vehicle_triggers_api\".\"triggers\".\"developer_license_address\""},
+	CreatedAt:               whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"triggers\".\"created_at\""},
+	UpdatedAt:               whereHelpertime_Time{field: "\"vehicle_triggers_api\".\"triggers\".\"updated_at\""},
+	Status:                  whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"status\""},
+	Description:             whereHelpernull_String{field: "\"vehicle_triggers_api\".\"triggers\".\"description\""},
+	FailureCount:            whereHelperint{field: "\"vehicle_triggers_api\".\"triggers\".\"failure_count\""},
+	DisplayName:             whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"display_name\""},
 }
 
 // TriggerRels is where relationship names are stored.
@@ -229,8 +222,8 @@ func (r *triggerR) GetVehicleSubscriptions() VehicleSubscriptionSlice {
 type triggerL struct{}
 
 var (
-	triggerAllColumns            = []string{"id", "service", "metric_name", "condition", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description", "failure_count", "developer_license_address_hex", "display_name"}
-	triggerColumnsWithoutDefault = []string{"id", "service", "metric_name", "condition", "target_uri", "developer_license_address", "status", "developer_license_address_hex"}
+	triggerAllColumns            = []string{"id", "service", "metric_name", "condition", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description", "failure_count", "display_name"}
+	triggerColumnsWithoutDefault = []string{"id", "service", "metric_name", "condition", "target_uri", "developer_license_address", "status"}
 	triggerColumnsWithDefault    = []string{"cooldown_period", "created_at", "updated_at", "description", "failure_count", "display_name"}
 	triggerPrimaryKeyColumns     = []string{"id"}
 	triggerGeneratedColumns      = []string{}

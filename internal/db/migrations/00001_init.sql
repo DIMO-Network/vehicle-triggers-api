@@ -1,7 +1,5 @@
 -- +goose Up
 -- +goose StatementBegin
-SELECT 'up SQL query';
-
 CREATE TABLE triggers (
     id uuid NOT NULL,
     service text NOT NULL,
@@ -52,7 +50,6 @@ CREATE TABLE trigger_logs (
 
 -- +goose Down
 -- +goose StatementBegin
-SELECT 'down SQL query';
 DROP TABLE trigger_logs;
 DROP TABLE triggers;
 DROP TABLE vehicle_subscriptions;
