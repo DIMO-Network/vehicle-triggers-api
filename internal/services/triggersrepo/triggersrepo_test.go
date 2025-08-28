@@ -1708,9 +1708,11 @@ func createTestTriggerWithFailures(t *testing.T, repo *Repository, ctx context.C
 		trigger.FailureCount = failureCount
 		trigger.Status = status
 		err = repo.UpdateTrigger(ctx, trigger)
-		trigger.Reload(ctx, repo.db)
 		require.NoError(t, err)
 	}
+
+	err = trigger.Reload(ctx, repo.db)
+	require.NoError(t, err)
 
 	return trigger
 }
