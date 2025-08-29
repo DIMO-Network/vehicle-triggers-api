@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/DIMO-Network/cloudevent v0.1.3
-	github.com/DIMO-Network/model-garage v0.7.1
+	github.com/DIMO-Network/model-garage v0.7.2
 	github.com/DIMO-Network/server-garage v0.0.4
 	github.com/DIMO-Network/shared v1.0.7
 	github.com/DIMO-Network/token-exchange-api v0.3.4
@@ -23,7 +23,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/pressly/goose/v3 v3.25.0
 	github.com/rs/zerolog v1.34.0
-	github.com/stretchr/testify v1.11.0
+	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/swag v1.16.6
 	github.com/testcontainers/testcontainers-go v0.38.0
 	github.com/testcontainers/testcontainers-go/modules/kafka v0.38.0
