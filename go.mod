@@ -3,15 +3,15 @@ module github.com/DIMO-Network/vehicle-triggers-api
 go 1.24.0
 
 require (
-	github.com/DIMO-Network/cloudevent v0.1.3
-	github.com/DIMO-Network/model-garage v0.7.1
-	github.com/DIMO-Network/server-garage v0.0.4
+	github.com/DIMO-Network/cloudevent v0.1.4
+	github.com/DIMO-Network/model-garage v0.7.2
+	github.com/DIMO-Network/server-garage v0.0.5
 	github.com/DIMO-Network/shared v1.0.7
-	github.com/DIMO-Network/token-exchange-api v0.3.4
+	github.com/DIMO-Network/token-exchange-api v0.3.6
 	github.com/IBM/sarama v1.46.0
-	github.com/ThreeDotsLabs/watermill v1.5.0
-	github.com/ThreeDotsLabs/watermill-kafka/v3 v3.1.0
-	github.com/ethereum/go-ethereum v1.16.2
+	github.com/ThreeDotsLabs/watermill v1.5.1
+	github.com/ThreeDotsLabs/watermill-kafka/v3 v3.1.2
+	github.com/ethereum/go-ethereum v1.16.3
 	github.com/friendsofgo/errors v0.9.2
 	github.com/go-jose/go-jose/v4 v4.1.2
 	github.com/gofiber/contrib/jwt v1.1.2
@@ -23,7 +23,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/pressly/goose/v3 v3.25.0
 	github.com/rs/zerolog v1.34.0
-	github.com/stretchr/testify v1.11.0
+	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/swag v1.16.6
 	github.com/testcontainers/testcontainers-go v0.38.0
 	github.com/testcontainers/testcontainers-go/modules/kafka v0.38.0
@@ -32,8 +32,8 @@ require (
 	github.com/volatiletech/sqlboiler/v4 v4.19.1
 	github.com/volatiletech/strmangle v0.0.8
 	go.uber.org/mock v0.6.0
-	golang.org/x/sync v0.16.0
-	google.golang.org/grpc v1.75.0
+	golang.org/x/sync v0.17.0
+	google.golang.org/grpc v1.75.1
 )
 
 require (
@@ -152,7 +152,7 @@ require (
 	github.com/prometheus/client_golang v1.23.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.65.0 // indirect
-	github.com/prometheus/procfs v0.16.1 // indirect
+	github.com/prometheus/procfs v0.17.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
