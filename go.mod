@@ -5,12 +5,12 @@ go 1.25
 require (
 	github.com/DIMO-Network/cloudevent v0.1.4
 	github.com/DIMO-Network/model-garage v0.7.4
-	github.com/DIMO-Network/server-garage v0.0.4
+	github.com/DIMO-Network/server-garage v0.0.5
 	github.com/DIMO-Network/shared v1.0.7
-	github.com/DIMO-Network/token-exchange-api v0.3.4
-	github.com/IBM/sarama v1.46.0
-	github.com/ThreeDotsLabs/watermill v1.5.0
-	github.com/ThreeDotsLabs/watermill-kafka/v3 v3.1.0
+	github.com/DIMO-Network/token-exchange-api v0.3.6
+	github.com/IBM/sarama v1.46.1
+	github.com/ThreeDotsLabs/watermill v1.5.1
+	github.com/ThreeDotsLabs/watermill-kafka/v3 v3.1.2
 	github.com/aarondl/null/v8 v8.1.3
 	github.com/aarondl/sqlboiler/v4 v4.19.5
 	github.com/aarondl/strmangle v0.0.9
@@ -29,17 +29,17 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/swag v1.16.6
-	github.com/testcontainers/testcontainers-go v0.38.0
-	github.com/testcontainers/testcontainers-go/modules/kafka v0.38.0
-	github.com/testcontainers/testcontainers-go/modules/postgres v0.38.0
+	github.com/testcontainers/testcontainers-go v0.39.0
+	github.com/testcontainers/testcontainers-go/modules/kafka v0.39.0
+	github.com/testcontainers/testcontainers-go/modules/postgres v0.39.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/sync v0.17.0
-	google.golang.org/grpc v1.75.0
+	google.golang.org/grpc v1.75.1
 )
 
 require (
 	cel.dev/expr v0.24.0 // indirect
-	dario.cat/mergo v1.0.1 // indirect
+	dario.cat/mergo v1.0.2 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/ClickHouse/ch-go v0.67.0 // indirect
@@ -155,14 +155,14 @@ require (
 	github.com/prometheus/client_golang v1.23.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.65.0 // indirect
-	github.com/prometheus/procfs v0.16.1 // indirect
+	github.com/prometheus/procfs v0.17.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/sethvargo/go-retry v0.3.0 // indirect
-	github.com/shirou/gopsutil/v4 v4.25.5 // indirect
+	github.com/shirou/gopsutil/v4 v4.25.6 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/afero v1.10.0 // indirect
