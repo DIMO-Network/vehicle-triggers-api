@@ -16,11 +16,11 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhooksender"
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/aarondl/sqlboiler/v4/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/cel-go/cel"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/volatiletech/sqlboiler/v4/types"
 )
 
 type TriggerRepo interface {
