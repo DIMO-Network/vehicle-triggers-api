@@ -22,6 +22,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhooksender"
 	"github.com/IBM/sarama"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/redirect"
 	"github.com/gofiber/swagger"
 	"github.com/rs/zerolog"
 )
@@ -90,7 +91,14 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 	app.Use(fibercommon.ContextLoggerMiddleware)
 
 	app.Get("/swagger/*", swagger.HandlerDefault)
-
+	// redirect v1 to v2
+	app.Use(redirect.New(redirect.Config{
+		Rules: map[string]string{
+			"/v1/swagger":   "/swagger",
+			"/v1/swagger/*": "/swagger/$1",
+		},
+		StatusCode: fiber.StatusTemporaryRedirect,
+	}))
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Welcome to the Vehicle Triggers API!")
 	})
