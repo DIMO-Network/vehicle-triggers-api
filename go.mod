@@ -1,6 +1,6 @@
 module github.com/DIMO-Network/vehicle-triggers-api
 
-go 1.24.0
+go 1.25
 
 require (
 	github.com/DIMO-Network/cloudevent v0.1.3
