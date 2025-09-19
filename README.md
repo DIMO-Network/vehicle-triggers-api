@@ -100,6 +100,15 @@ For signal webhooks, these variables are available in CEL expressions:
 - `previousValue`: Previous signal value as a number or a string depending on the signal definition
 - `previousSource`: Previous signal source
 
+For location-type signals, additional variables are available:
+
+- `value.Latitude`: Current latitude coordinate
+- `value.Longitude`: Current longitude coordinate
+- `value.HDOP`: Current Horizontal Dilution of Precision
+- `previousValue.Latitude`: Previous latitude coordinate
+- `previousValue.Longitude`: Previous longitude coordinate
+- `previousValue.HDOP`: Previous Horizontal Dilution of Precision
+
 **Examples:**
 
 ```javascript
@@ -120,6 +129,47 @@ For signal webhooks, these variables are available in CEL expressions:
 
 // String contains check
 "valueString.contains('emergency')";
+
+// Location-based conditions
+"value.Latitude > 40.0 && value.Longitude < -70.0";
+
+// GPS accuracy check
+"value.HDOP < 5.0";
+```
+
+#### Geographic Distance Function
+
+The `geoDistance` function is available for location-based conditions and calculates the distance in kilometers between two geographic coordinates using the Haversine formula.
+
+**Syntax:**
+
+```javascript
+geoDistance(lat1, lon1, lat2, lon2);
+```
+
+**Parameters:**
+
+- `lat1`: First location's latitude (decimal degrees)
+- `lon1`: First location's longitude (decimal degrees)
+- `lat2`: Second location's latitude (decimal degrees)
+- `lon2`: Second location's longitude (decimal degrees)
+
+**Returns:** Distance in kilometers as a floating-point number
+
+**Examples:**
+
+```javascript
+// Check if vehicle is within 10km of a specific location
+"geoDistance(value.Latitude, value.Longitude, 40.7128, -74.0060) < 10.0";
+
+// Detect significant movement from previous location
+"geoDistance(value.Latitude, value.Longitude, previousValue.Latitude, previousValue.Longitude) > 5.0";
+
+// Geofencing with accuracy check
+"geoDistance(value.Latitude, value.Longitude, 37.7749, -122.4194) <= 1.0 && value.HDOP < 5.0";
+
+// Distance range check (between 50km and 100km from a point)
+"geoDistance(value.Latitude, value.Longitude, 51.5074, -0.1278) >= 50.0 && geoDistance(value.Latitude, value.Longitude, 51.5074, -0.1278) <= 100.0";
 ```
 
 #### Event Conditions (telemetry.events)

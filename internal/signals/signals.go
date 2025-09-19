@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	NumberType string = "float64"
-	StringType string = "string"
+	NumberType   string = "float64"
+	StringType   string = "string"
+	LocationType string = "vss.Location"
 )
 
 func init() {

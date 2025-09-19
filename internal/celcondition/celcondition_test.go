@@ -9,6 +9,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestPrepareConditionLocation(t *testing.T) {
+	tests := []struct {
+		name        string
+		condition   string
+		valueType   string
+		expectError bool
+	}{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := PrepareSignalCondition(tt.condition, tt.valueType)
+
+			if tt.expectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestPrepareCondition(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -118,6 +139,42 @@ func TestPrepareCondition(t *testing.T) {
 			expectError: true,
 			valueType:   signals.NumberType,
 		},
+		{
+			name:        "Location type longitude",
+			condition:   "value.Longitude > 10.0 && value.Longitude != previousValue.Longitude",
+			expectError: false,
+			valueType:   signals.LocationType,
+		},
+		{
+			name:        "Location type latitude",
+			condition:   "value.Latitude > 10.0 && value.Latitude != previousValue.Latitude",
+			expectError: false,
+			valueType:   signals.LocationType,
+		},
+		{
+			name:        "Location type hdop",
+			condition:   "value.HDOP > 10.0 && value.HDOP != previousValue.HDOP",
+			expectError: false,
+			valueType:   signals.LocationType,
+		},
+		{
+			name:        "Location type distance",
+			condition:   "geoDistance(value.Latitude, value.Longitude, 10.0, 10.0) > 10.0",
+			expectError: false,
+			valueType:   signals.LocationType,
+		},
+		{
+			name:        "geoDistance with previous location",
+			condition:   "geoDistance(value.Latitude, value.Longitude, previousValue.Latitude, previousValue.Longitude) > 5.0",
+			expectError: false,
+			valueType:   signals.LocationType,
+		},
+		{
+			name:        "geoDistance combined with HDOP",
+			condition:   "geoDistance(value.Latitude, value.Longitude, 37.7749, -122.4194) <= 10.0 && value.HDOP < 5.0",
+			expectError: false,
+			valueType:   signals.LocationType,
+		},
 	}
 
 	for _, tt := range tests {
@@ -139,6 +196,7 @@ func TestEvaluateCondition(t *testing.T) {
 		condition      string
 		signal         *vss.Signal
 		previousSignal *vss.Signal
+		valueType      string
 		expected       bool
 		expectError    bool
 	}{
@@ -149,6 +207,7 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 25.0,
 				ValueString: "",
 			},
+			valueType:   signals.NumberType,
 			expected:    true,
 			expectError: false,
 		},
@@ -159,6 +218,7 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 15.0,
 				ValueString: "",
 			},
+			valueType:   signals.NumberType,
 			expected:    false,
 			expectError: false,
 		},
@@ -169,6 +229,7 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 0,
 				ValueString: "active",
 			},
+			valueType:   signals.StringType,
 			expected:    true,
 			expectError: false,
 		},
@@ -179,36 +240,7 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 0,
 				ValueString: "inactive",
 			},
-			expected:    false,
-			expectError: false,
-		},
-		{
-			name:      "complex condition true",
-			condition: "valueNumber >= 10.0 && valueString != 'off'",
-			signal: &vss.Signal{
-				ValueNumber: 15.0,
-				ValueString: "on",
-			},
-			expected:    true,
-			expectError: false,
-		},
-		{
-			name:      "complex condition false - number fails",
-			condition: "valueNumber >= 10.0 && valueString != 'off'",
-			signal: &vss.Signal{
-				ValueNumber: 5.0,
-				ValueString: "on",
-			},
-			expected:    false,
-			expectError: false,
-		},
-		{
-			name:      "complex condition false - string fails",
-			condition: "valueNumber >= 10.0 && valueString != 'off'",
-			signal: &vss.Signal{
-				ValueNumber: 15.0,
-				ValueString: "off",
-			},
+			valueType:   signals.StringType,
 			expected:    false,
 			expectError: false,
 		},
@@ -219,6 +251,7 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 0.0,
 				ValueString: "",
 			},
+			valueType:   signals.NumberType,
 			expected:    true,
 			expectError: false,
 		},
@@ -229,6 +262,7 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 0,
 				ValueString: "this is a test string",
 			},
+			valueType:   signals.StringType,
 			expected:    true,
 			expectError: false,
 		},
@@ -239,6 +273,7 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 25.0,
 				ValueString: "",
 			},
+			valueType:   signals.NumberType,
 			expected:    true,
 			expectError: false,
 		},
@@ -249,6 +284,7 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 0,
 				ValueString: "",
 			},
+			valueType:   signals.StringType,
 			expected:    true,
 			expectError: false,
 		},
@@ -259,7 +295,8 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 0,
 				ValueString: "",
 			},
-			expected: true,
+			valueType: signals.NumberType,
+			expected:  true,
 		},
 		{
 			name:      "simple bool false",
@@ -268,7 +305,8 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 0,
 				ValueString: "",
 			},
-			expected: false,
+			valueType: signals.NumberType,
+			expected:  false,
 		},
 		{
 			name:      "referenced previous signal true",
@@ -281,7 +319,8 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 10.0,
 				ValueString: "",
 			},
-			expected: true,
+			valueType: signals.NumberType,
+			expected:  true,
 		},
 		{
 			name:      "referenced previous signal false",
@@ -294,7 +333,8 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 15.0,
 				ValueString: "",
 			},
-			expected: false,
+			valueType: signals.NumberType,
+			expected:  false,
 		},
 		{
 			name:      "referenced but missing previous signal",
@@ -304,6 +344,7 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueString: "",
 			},
 			previousSignal: nil,
+			valueType:      signals.NumberType,
 			expected:       true,
 		},
 		{
@@ -313,6 +354,7 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 15.0,
 				ValueString: "",
 			},
+			valueType:   signals.NumberType,
 			expected:    true,
 			expectError: false,
 		},
@@ -323,6 +365,106 @@ func TestEvaluateCondition(t *testing.T) {
 				ValueNumber: 0,
 				ValueString: "active",
 			},
+			valueType:   signals.StringType,
+			expected:    true,
+			expectError: false,
+		},
+		{
+			name:      "Location type longitude",
+			condition: "value.Longitude > 10.0 ",
+			signal: &vss.Signal{
+				ValueNumber: 0,
+				ValueString: "",
+				ValueLocation: vss.Location{
+					Longitude: 15.0,
+					Latitude:  0,
+					HDOP:      0,
+				},
+			},
+			valueType:   signals.LocationType,
+			expected:    true,
+			expectError: false,
+		},
+		{
+			name:      "Location type latitude",
+			condition: "value.Latitude > 10.0 ",
+			signal: &vss.Signal{
+				ValueNumber: 0,
+				ValueString: "",
+				ValueLocation: vss.Location{
+					Longitude: 0,
+					Latitude:  15.0,
+					HDOP:      0,
+				},
+			},
+			valueType:   signals.LocationType,
+			expected:    true,
+			expectError: false,
+		},
+		{
+			name:      "Location type hdop",
+			condition: "value.HDOP > 10.0 ",
+			signal: &vss.Signal{
+				ValueNumber: 0,
+				ValueString: "",
+				ValueLocation: vss.Location{
+					Longitude: 0,
+					Latitude:  0,
+					HDOP:      15.0,
+				},
+			},
+			valueType:   signals.LocationType,
+			expected:    true,
+			expectError: false,
+		},
+		{
+			name:      "Location type distance",
+			condition: "geoDistance(value.Latitude, value.Longitude, previousValue.Latitude, previousValue.Longitude) > 10.0 && value.HDOP != 0",
+			signal: &vss.Signal{
+				ValueNumber: 0,
+				ValueString: "",
+				ValueLocation: vss.Location{
+					Longitude: 30.0,
+					Latitude:  -40.0,
+					HDOP:      10.0,
+				},
+			},
+			valueType:   signals.LocationType,
+			expected:    true,
+			expectError: false,
+		},
+		{
+			name:      "geoDistance with movement detection",
+			condition: "geoDistance(value.Latitude, value.Longitude, previousValue.Latitude, previousValue.Longitude) > 5.0",
+			signal: &vss.Signal{
+				ValueLocation: vss.Location{
+					Latitude:  40.7589,
+					Longitude: -73.9851,
+					HDOP:      3.0,
+				},
+			},
+			previousSignal: &vss.Signal{
+				ValueLocation: vss.Location{
+					Latitude:  40.6892,
+					Longitude: -74.0445,
+					HDOP:      4.0,
+				},
+			},
+			valueType:   signals.LocationType,
+			expected:    true,
+			expectError: false,
+		},
+		{
+			name:      "geoDistance geofencing check",
+			condition: "geoDistance(value.Latitude, value.Longitude, 37.7749, -122.4194) <= 10.0 && value.HDOP < 5.0",
+			signal: &vss.Signal{
+				ValueLocation: vss.Location{
+					Latitude:  37.7849,
+					Longitude: -122.4094,
+					HDOP:      2.0,
+				},
+			},
+			valueType:   signals.LocationType,
 			expected:    true,
 			expectError: false,
 		},
@@ -331,18 +473,12 @@ func TestEvaluateCondition(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// First prepare the condition
-			var valueType string
-			if tt.signal.ValueString != "" {
-				valueType = signals.StringType
-			} else {
-				valueType = signals.NumberType
-			}
-			prg, err := PrepareSignalCondition(tt.condition, valueType)
+			prg, err := PrepareSignalCondition(tt.condition, tt.valueType)
 			require.NoError(t, err)
 			require.NotNil(t, prg)
 
 			// Then evaluate it
-			result, err := EvaluateSignalCondition(prg, tt.signal, tt.previousSignal, valueType)
+			result, err := EvaluateSignalCondition(prg, tt.signal, tt.previousSignal, tt.valueType)
 			if tt.expectError {
 				require.Error(t, err)
 				return

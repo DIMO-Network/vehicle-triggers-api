@@ -8,6 +8,8 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/google/cel-go/cel"
 	celtypes "github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
+	"github.com/jftuga/geodist"
 )
 
 const (
@@ -98,16 +100,72 @@ func EvaluateEventCondition(prg cel.Program, event *vss.Event, previousEvent *vs
 	return out.Type() == celtypes.BoolType && out.Value() == true, nil
 }
 
-func PrepareSignalCondition(celCondition string, valueType string) (cel.Program, error) {
+func toFloat64(value any) float64 {
+	switch v := value.(type) {
+	case float64:
+		return v
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	case int32:
+		return float64(v)
+	case int16:
+		return float64(v)
+	case int8:
+		return float64(v)
+	case float32:
+		return float64(v)
+	case uint64:
+		return float64(v)
+	case uint32:
+		return float64(v)
+	case uint16:
+		return float64(v)
+	case uint8:
+		return float64(v)
+	case uint:
+		return float64(v)
+	}
+	return 0
+}
 
+func geoDistanceOpt() cel.EnvOption {
+	return cel.Function("geoDistance",
+		cel.Overload("geoDistance_double_double_double_double",
+			[]*cel.Type{cel.DynType, cel.DynType, cel.DynType, cel.DynType},
+			cel.DoubleType,
+			cel.FunctionBinding(func(values ...ref.Val) ref.Val {
+				coord1Lat := toFloat64(values[0].Value())
+				coord1Lon := toFloat64(values[1].Value())
+				coord2Lat := toFloat64(values[2].Value())
+				coord2Lon := toFloat64(values[3].Value())
+
+				coord1 := geodist.Coord{Lat: coord1Lat, Lon: coord1Lon}
+				coord2 := geodist.Coord{Lat: coord2Lat, Lon: coord2Lon}
+				_, km := geodist.HaversineDistance(coord1, coord2)
+				return celtypes.Double(km)
+			}),
+		),
+	)
+}
+
+func PrepareSignalCondition(celCondition string, valueType string) (cel.Program, error) {
 	opts := []cel.EnvOption{
 		cel.Variable("valueNumber", cel.DynType),
 		cel.Variable("valueString", cel.StringType),
 		cel.Variable("value", cel.DynType),
+		cel.Variable("value.Latitude", cel.DynType),
+		cel.Variable("value.Longitude", cel.DynType),
+		cel.Variable("value.HDOP", cel.DynType),
+		geoDistanceOpt(),
 		cel.Variable("source", cel.DoubleType),
 		cel.Variable("previousValueNumber", cel.DoubleType),
 		cel.Variable("previousValueString", cel.StringType),
 		cel.Variable("previousValue", cel.DynType),
+		cel.Variable("previousValue.Latitude", cel.DynType),
+		cel.Variable("previousValue.Longitude", cel.DynType),
+		cel.Variable("previousValue.HDOP", cel.DynType),
 		cel.Variable("previousSource", cel.StringType),
 		cel.CrossTypeNumericComparisons(true),
 	}
@@ -143,6 +201,13 @@ func PrepareSignalCondition(celCondition string, valueType string) (cel.Program,
 	case signals.StringType:
 		vars["value"] = ""
 		vars["previousValue"] = ""
+	case signals.LocationType:
+		vars["value.Latitude"] = 0
+		vars["value.Longitude"] = 0
+		vars["value.HDOP"] = 0
+		vars["previousValue.Latitude"] = 0
+		vars["previousValue.Longitude"] = 0
+		vars["previousValue.HDOP"] = 0
 	default:
 		return nil, fmt.Errorf("unknown value type: %s", valueType)
 	}
@@ -179,6 +244,13 @@ func EvaluateSignalCondition(prg cel.Program, signal, previousSignal *vss.Signal
 	case signals.StringType:
 		vars["value"] = signal.ValueString
 		vars["previousValue"] = previousSignal.ValueString
+	case signals.LocationType:
+		vars["value.Latitude"] = signal.ValueLocation.Latitude
+		vars["value.Longitude"] = signal.ValueLocation.Longitude
+		vars["value.HDOP"] = signal.ValueLocation.HDOP
+		vars["previousValue.Latitude"] = previousSignal.ValueLocation.Latitude
+		vars["previousValue.Longitude"] = previousSignal.ValueLocation.Longitude
+		vars["previousValue.HDOP"] = previousSignal.ValueLocation.HDOP
 	default:
 		return false, fmt.Errorf("unknown value type: %s", valueType)
 	}
