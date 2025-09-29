@@ -193,8 +193,8 @@ github.com/envoyproxy/go-control-plane v0.10.2-0.20220325020618-49ff273808a1/go.
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/ericlagergren/decimal v0.0.0-20190420051523-6335edbaa640 h1:VMAacqPM03GapxpfNORtKNl9o6Uws1BQYL54WjmolN0=
 github.com/ericlagergren/decimal v0.0.0-20190420051523-6335edbaa640/go.mod h1:mdYyfAkzn9kyJ/kMk/7WE9ufl9lflh+2NvecQ5mAghs=
-github.com/ethereum/go-ethereum v1.16.3 h1:nDoBSrmsrPbrDIVLTkDQCy1U9KdHN+F2PzvMbDoS42Q=
-github.com/ethereum/go-ethereum v1.16.3/go.mod h1:Lrsc6bt9Gm9RyvhfFK53vboCia8kpF9nv+2Ukntnl+8=
+github.com/ethereum/go-ethereum v1.16.4 h1:H6dU0r2p/amA7cYg6zyG9Nt2JrKKH6oX2utfcqrSpkQ=
+github.com/ethereum/go-ethereum v1.16.4/go.mod h1:P7551slMFbjn2zOQaKrJShZVN/d8bGxp4/I6yZVlb5w=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/fortytw2/leaktest v1.3.0 h1:u8491cBMTQ8ft8aeV+adlcytMZylmA5nnwwkRZjI8vw=
