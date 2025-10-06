@@ -89,6 +89,8 @@ func (m *MetricListener) createSignalPayload(trigger *models.Trigger, sigEval *t
 		signalValue = sigEval.Signal.ValueNumber
 	case signals.StringType:
 		signalValue = sigEval.Signal.ValueString
+	case signals.LocationType:
+		signalValue = sigEval.Signal.ValueLocation
 	default:
 		return nil, fmt.Errorf("unsupported signal type: %s", sigEval.Def.ValueType)
 	}
