@@ -918,3 +918,6 @@ Kubernetes deployment configuration is in [`charts/vehicle-triggers-api/`](chart
 - Use the user/vehicle combination as the cache key
 - Significantly reduce latency for webhook evaluations
 - Balance security requirements with performance needs
+
+### 4. Credit Tracking
+- tracking and or rate limiting per dev 
