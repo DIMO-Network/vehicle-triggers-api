@@ -49,7 +49,7 @@ func (c *Cache) HasVehiclePermissions(ctx context.Context, assetDid cloudevent.E
 }
 
 // accessRequestCacheKey creates a key for the access request.
-// Warning: this only works for request with out events.
+// Warning: this only works for request without events.
 func accessRequestCacheKey(request *pb.AccessCheckRequest) string {
 	slices.Sort(request.Privileges)
 	return request.GetAsset() + ":" + request.GetGrantee() + ":" + strings.Join(request.GetPrivileges(), ",")

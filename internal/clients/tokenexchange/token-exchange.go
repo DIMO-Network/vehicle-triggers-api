@@ -2,9 +2,12 @@ package tokenexchange
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/DIMO-Network/cloudevent"
+	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	pb "github.com/DIMO-Network/token-exchange-api/pkg/grpc"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/ethereum/go-ethereum/common"
@@ -12,13 +15,12 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// Client for the Token Exchange API GRPC server
+// Client for the Token Exchange API GRPC server.
 type Client struct {
 	client pb.TokenExchangeServiceClient
 }
 
-// New creates a new instance of Client with the specified server address,
-// vehicle contract address, aftermarket contract address, and chain ID
+// New creates a new instance of Client with the specified server address.
 func New(settings *config.Settings) (*Client, error) {
 	conn, err := grpc.NewClient(settings.TokenExchangeGRPCAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -42,5 +44,17 @@ func (c *Client) HasVehiclePermissions(ctx context.Context, assetDid cloudevent.
 	if err != nil {
 		return false, fmt.Errorf("failed to check access: %w", err)
 	}
-	return resp.HasAccess, nil
+	if resp.GetHasAccess() {
+		return true, nil
+	}
+	// if the error is not forbidden, return the error
+	if resp.GetRichError().GetCode() != int32(http.StatusForbidden) {
+		richErr := richerrors.Error{
+			Code:        int(resp.GetRichError().GetCode()),
+			ExternalMsg: resp.GetRichError().GetExternalMsg(),
+			Err:         errors.New(resp.GetRichError().GetErr()),
+		}
+		return false, richErr
+	}
+	return false, nil
 }
