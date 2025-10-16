@@ -41,10 +41,11 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token exchange API: %w", err)
 	}
+	tokenExchangeCache := tokenexchange.NewCache(settings.TokenExchangeCacheExpiration, settings.TokenExchangeCacheCleanupInterval, tokenExchangeAPI)
 
 	repo := triggersrepo.NewRepository(store.DBS().Writer.DB)
 
-	webhookCache, err := startWebhookCache(ctx, settings, tokenExchangeAPI, repo)
+	webhookCache, err := startWebhookCache(ctx, settings, tokenExchangeCache, repo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start webhook cache: %w", err)
 	}
@@ -142,12 +143,12 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 	return app, nil
 }
 
-// startWebhookCache sets up and starts the Kafka consumer for topic.device.signals
-func startWebhookCache(ctx context.Context, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, repo *triggersrepo.Repository) (*webhookcache.WebhookCache, error) {
+// startWebhookCache sets up and starts the Kafka consumer for signals and events.
+func startWebhookCache(ctx context.Context, settings *config.Settings, tokenExchangeAPI *tokenexchange.Cache, repo *triggersrepo.Repository) (*webhookcache.WebhookCache, error) {
 	// Initialize the in-memory webhook cache.
 	webhookCache := webhookcache.NewWebhookCache(repo, settings)
 
-	//load all existing webhooks into memory** so GetWebhooks() won't be empty
+	// load all existing webhooks into memory so GetWebhooks() won't be empty
 	if err := webhookCache.PopulateCache(ctx); err != nil {
 		return nil, fmt.Errorf("failed to populate webhook cache at startup: %w", err)
 	}

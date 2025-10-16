@@ -7,7 +7,7 @@ require (
 	github.com/DIMO-Network/model-garage v0.7.4
 	github.com/DIMO-Network/server-garage v0.0.5
 	github.com/DIMO-Network/shared v1.0.7
-	github.com/DIMO-Network/token-exchange-api v0.3.6
+	github.com/DIMO-Network/token-exchange-api v0.3.8-0.20251015163407-530d08daccd8
 	github.com/IBM/sarama v1.46.1
 	github.com/ThreeDotsLabs/watermill v1.5.1
 	github.com/ThreeDotsLabs/watermill-kafka/v3 v3.1.2
@@ -25,6 +25,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jftuga/geodist v1.0.0
 	github.com/lib/pq v1.10.9
+	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pressly/goose/v3 v3.25.0
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
