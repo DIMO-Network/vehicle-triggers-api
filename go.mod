@@ -4,7 +4,7 @@ go 1.25
 
 require (
 	github.com/DIMO-Network/cloudevent v0.1.4
-	github.com/DIMO-Network/model-garage v0.7.7
+	github.com/DIMO-Network/model-garage v0.7.10
 	github.com/DIMO-Network/server-garage v0.0.5
 	github.com/DIMO-Network/shared v1.0.7
 	github.com/DIMO-Network/token-exchange-api v0.3.8-0.20251015163407-530d08daccd8
