@@ -21,6 +21,7 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/semaphore"
 )
 
 type TriggerRepo interface {
@@ -82,34 +83,50 @@ func NewMetricsListener(wc WebhookCache,
 	}
 }
 
-func (m *MetricListener) ProcessSignalMessages(ctx context.Context, messages <-chan *message.Message) error {
-	return processMessage(ctx, messages, m.processSignalMessage)
+func (m *MetricListener) ProcessSignalMessages(ctx context.Context, messages <-chan *message.Message, maxInFlight int) error {
+	return processMessage(ctx, messages, m.processSignalMessage, maxInFlight)
 }
 
-func (m *MetricListener) ProcessEventMessages(ctx context.Context, messages <-chan *message.Message) error {
-	return processMessage(ctx, messages, m.processEventMessage)
+func (m *MetricListener) ProcessEventMessages(ctx context.Context, messages <-chan *message.Message, maxInFlight int) error {
+	return processMessage(ctx, messages, m.processEventMessage, maxInFlight)
 }
 
-func processMessage(ctx context.Context, messages <-chan *message.Message, processor func(msg *message.Message) error) error {
+func processMessage(ctx context.Context, messages <-chan *message.Message, processor func(msg *message.Message) error, maxInFlight int) error {
 	logger := zerolog.Ctx(ctx)
+	sem := semaphore.NewWeighted(int64(maxInFlight))
+
 	for {
 		select {
 		case <-ctx.Done():
+			// Wait for all in-flight messages to complete before returning
+			_ = sem.Acquire(context.Background(), int64(maxInFlight))
 			return ctx.Err()
 		case msg, ok := <-messages:
 			if !ok {
-				// channel is closed
+				// channel is closed, wait for all in-flight messages to complete
+				_ = sem.Acquire(context.Background(), int64(maxInFlight))
 				return nil
 			}
 			if ctx.Err() != nil {
 				// check context since select is not deterministic when multiple cases are ready
+				_ = sem.Acquire(context.Background(), int64(maxInFlight))
 				return ctx.Err()
 			}
-			msg.SetContext(ctx)
-			if err := processor(msg); err != nil {
-				logger.Error().Err(err).Msg("error processing signal message")
+
+			// Acquire semaphore slot before processing
+			if err := sem.Acquire(ctx, 1); err != nil {
+				// Context cancelled while waiting for slot
+				return ctx.Err()
 			}
-			msg.Ack()
+
+			msg.SetContext(ctx)
+			go func(m *message.Message) {
+				defer sem.Release(1)
+				if err := processor(m); err != nil {
+					logger.Error().Err(err).Msg("error processing message")
+				}
+				m.Ack()
+			}(msg)
 		}
 	}
 }

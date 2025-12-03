@@ -180,7 +180,7 @@ func createSignalConsumer(ctx context.Context, settings *config.Settings, tokenE
 		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
 		Topic:           settings.DeviceSignalsTopic,
 		GroupID:         "vehicle-triggers",
-		MaxInFlight:     1,
+		MaxInFlight:     int64(settings.MaxInFlight),
 		Processor:       vehicleProcessor.ProcessSignalMessages,
 	}
 
@@ -204,7 +204,7 @@ func createEventConsumer(ctx context.Context, settings *config.Settings, tokenEx
 		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
 		Topic:           settings.DeviceEventsTopic,
 		GroupID:         "vehicle-triggers",
-		MaxInFlight:     1,
+		MaxInFlight:     int64(settings.MaxInFlight),
 		Processor:       vehicleProcessor.ProcessEventMessages,
 	}
 

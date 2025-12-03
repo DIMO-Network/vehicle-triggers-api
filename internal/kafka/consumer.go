@@ -10,7 +10,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 )
 
-type ProcessorFunc func(ctx context.Context, messages <-chan *message.Message) error
+type ProcessorFunc func(ctx context.Context, messages <-chan *message.Message, maxInFlight int) error
 
 type Config struct {
 	ClusterConfig   *sarama.Config
@@ -22,9 +22,10 @@ type Config struct {
 }
 
 type Consumer struct {
-	subscriber *wmkafka.Subscriber
-	topic      string
-	Processor  ProcessorFunc
+	subscriber  *wmkafka.Subscriber
+	topic       string
+	Processor   ProcessorFunc
+	maxInFlight int
 }
 
 func NewConsumer(cfg *Config) (*Consumer, error) {
@@ -46,10 +47,16 @@ func NewConsumer(cfg *Config) (*Consumer, error) {
 		return nil, err
 	}
 
+	maxInFlight := int(cfg.MaxInFlight)
+	if maxInFlight < 1 {
+		maxInFlight = 1
+	}
+
 	return &Consumer{
-		subscriber: subscriber,
-		topic:      cfg.Topic,
-		Processor:  cfg.Processor,
+		subscriber:  subscriber,
+		topic:       cfg.Topic,
+		Processor:   cfg.Processor,
+		maxInFlight: maxInFlight,
 	}, nil
 }
 
@@ -62,7 +69,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 		return fmt.Errorf("processor function is nil")
 	}
 
-	return c.Processor(ctx, messages)
+	return c.Processor(ctx, messages, c.maxInFlight)
 }
 
 func (c *Consumer) Stop(ctx context.Context) error {
