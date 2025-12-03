@@ -154,7 +154,7 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 		messages <- msg
 		close(messages)
 
-		err = listener.ProcessSignalMessages(ctx, messages)
+		err = listener.ProcessSignalMessages(ctx, messages, 1)
 		require.NoError(t, err)
 	})
 
@@ -233,7 +233,7 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 		messages <- msg
 		close(messages)
 
-		err = listener.ProcessSignalMessages(ctx, messages)
+		err = listener.ProcessSignalMessages(ctx, messages, 1)
 		require.NoError(t, err)
 	})
 
@@ -263,7 +263,7 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 		msg := message.NewMessage(uuid.New().String(), signalJSON)
 		messages <- msg
 
-		err = listener.ProcessSignalMessages(ctx, messages)
+		err = listener.ProcessSignalMessages(ctx, messages, 1)
 		require.Error(t, err)
 		assert.Equal(t, context.Canceled, err)
 	})
@@ -312,7 +312,7 @@ func TestMetricListener_ProcessEventMessages(t *testing.T) {
 		messages <- msg
 		close(messages)
 
-		err = listener.ProcessEventMessages(ctx, messages)
+		err = listener.ProcessEventMessages(ctx, messages, 1)
 		require.NoError(t, err)
 	})
 
@@ -388,7 +388,7 @@ func TestMetricListener_ProcessEventMessages(t *testing.T) {
 		messages <- msg
 		close(messages)
 
-		err = listener.ProcessEventMessages(ctx, messages)
+		err = listener.ProcessEventMessages(ctx, messages, 1)
 		require.NoError(t, err)
 	})
 
@@ -423,7 +423,7 @@ func TestMetricListener_ProcessEventMessages(t *testing.T) {
 		msg := message.NewMessage(uuid.New().String(), eventJSON)
 		messages <- msg
 
-		err = listener.ProcessEventMessages(ctx, messages)
+		err = listener.ProcessEventMessages(ctx, messages, 1)
 		require.Error(t, err)
 		assert.Equal(t, context.Canceled, err)
 	})
