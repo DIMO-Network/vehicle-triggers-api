@@ -95,27 +95,33 @@ func processMessage(ctx context.Context, messages <-chan *message.Message, proce
 	logger := zerolog.Ctx(ctx)
 	sem := semaphore.NewWeighted(int64(maxInFlight))
 
+	// waitForInFlight waits for all in-flight goroutines to complete
+	waitForInFlight := func() {
+		_ = sem.Acquire(context.Background(), int64(maxInFlight))
+		sem.Release(int64(maxInFlight))
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
-			// Wait for all in-flight messages to complete before returning
-			_ = sem.Acquire(context.Background(), int64(maxInFlight))
+			waitForInFlight()
 			return ctx.Err()
 		case msg, ok := <-messages:
 			if !ok {
 				// channel is closed, wait for all in-flight messages to complete
-				_ = sem.Acquire(context.Background(), int64(maxInFlight))
+				waitForInFlight()
 				return nil
 			}
 			if ctx.Err() != nil {
 				// check context since select is not deterministic when multiple cases are ready
-				_ = sem.Acquire(context.Background(), int64(maxInFlight))
+				waitForInFlight()
 				return ctx.Err()
 			}
 
 			// Acquire semaphore slot before processing
 			if err := sem.Acquire(ctx, 1); err != nil {
-				// Context cancelled while waiting for slot
+				// Context cancelled while waiting for slot, wait for in-flight to complete
+				waitForInFlight()
 				return ctx.Err()
 			}
 
