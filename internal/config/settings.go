@@ -25,6 +25,8 @@ type Settings struct {
 	VehicleNFTAddress                 common.Address `env:"VEHICLE_NFT_ADDRESS"`
 	DIMORegistryChainID               uint64         `env:"DIMO_REGISTRY_CHAIN_ID"`
 	MaxWebhookFailureCount            uint           `env:"MAX_WEBHOOK_FAILURE_COUNT"`
+	// MaxInFlight is the maximum number of messages to process concurrently per consumer
+	MaxInFlight int `env:"MAX_IN_FLIGHT" envDefault:"50"`
 	// CacheDebounceTime wait time betweeen to successive cache refreshes
 	CacheDebounceTime time.Duration `env:"CACHE_DEBOUNCE_TIME"`
 

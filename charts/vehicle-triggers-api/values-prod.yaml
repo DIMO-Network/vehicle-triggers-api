@@ -19,6 +19,7 @@ env:
   TOKEN_EXCHANGE_GRPC_ADDR: token-exchange-api-prod:8086
   DIMO_REGISTRY_CHAIN_ID: 137
   VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
+  MAX_IN_FLIGHT: 50
 ingress:
   enabled: true
   className: nginx
