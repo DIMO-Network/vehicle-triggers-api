@@ -6,6 +6,7 @@ import (
 	"embed"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/DIMO-Network/shared/pkg/db"
 	"github.com/pressly/goose/v3"
@@ -61,8 +62,10 @@ func setupDatabase(ctx context.Context, settings db.Settings) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open db connection: %w", err)
 	}
+	_ = db.Ping()               // warm up the connection
+	time.Sleep(5 * time.Second) // wait for the database to be available
 	if err = db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping db: %w", err)
+		return nil, fmt.Errorf("failed to ping db after 5s: %w", err)
 	}
 
 	_, err = db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS "+SchemaName+";")
