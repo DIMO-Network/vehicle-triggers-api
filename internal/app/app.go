@@ -50,12 +50,12 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		return nil, fmt.Errorf("failed to start webhook cache: %w", err)
 	}
 
-	signalConsumer, err := createSignalConsumer(ctx, settings, tokenExchangeAPI, repo, webhookCache)
+	signalConsumer, err := createSignalConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create signal consumer: %w", err)
 	}
 
-	eventConsumer, err := createEventConsumer(ctx, settings, tokenExchangeAPI, repo, webhookCache)
+	eventConsumer, err := createEventConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create event consumer: %w", err)
 	}
@@ -168,12 +168,12 @@ func startWebhookCache(ctx context.Context, settings *config.Settings, tokenExch
 	return webhookCache, nil
 }
 
-func createSignalConsumer(ctx context.Context, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache) (*kafka.Consumer, error) {
+func createSignalConsumer(ctx context.Context, settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache) (*kafka.Consumer, error) {
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
 	webhookSender := webhooksender.NewWebhookSender(nil)
-	triggerEvaluator := triggerevaluator.NewTriggerEvaluator(repo, tokenExchangeAPI)
+	triggerEvaluator := triggerevaluator.NewTriggerEvaluator(repo, tokenExchangeCache)
 	vehicleProcessor := metriclistener.NewMetricsListener(webhookCache, repo, webhookSender, triggerEvaluator, settings)
 	consumerConfig := &kafka.Config{
 		ClusterConfig:   clusterConfig,
@@ -192,12 +192,12 @@ func createSignalConsumer(ctx context.Context, settings *config.Settings, tokenE
 	return consumer, nil
 }
 
-func createEventConsumer(ctx context.Context, settings *config.Settings, tokenExchangeAPI *tokenexchange.Client, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache) (*kafka.Consumer, error) {
+func createEventConsumer(ctx context.Context, settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache) (*kafka.Consumer, error) {
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
 	webhookSender := webhooksender.NewWebhookSender(nil)
-	triggerEvaluator := triggerevaluator.NewTriggerEvaluator(repo, tokenExchangeAPI)
+	triggerEvaluator := triggerevaluator.NewTriggerEvaluator(repo, tokenExchangeCache)
 	vehicleProcessor := metriclistener.NewMetricsListener(webhookCache, repo, webhookSender, triggerEvaluator, settings)
 	consumerConfig := &kafka.Config{
 		ClusterConfig:   clusterConfig,
