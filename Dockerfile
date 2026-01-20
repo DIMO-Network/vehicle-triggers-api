@@ -14,6 +14,9 @@ LABEL maintainer="DIMO <hello@dimo.zone>"
 
 USER nonroot:nonroot
 
+# Set HOME to /tmp so Go/CEL can create cache directories
+ENV HOME=/tmp
+
 COPY --from=build --chown=nonroot:nonroot /build/bin/${APP_NAME} /app
 
 EXPOSE 8080

@@ -132,7 +132,11 @@ func (wc *WebhookCache) fetchEventVehicleWebhooks(ctx context.Context) (map[stri
 				// only signals have dynamic value types
 				signalDef, err := signals.GetSignalDefinition(webhook.Trigger.MetricName)
 				if err != nil {
-					logger.Error().Err(err).Str("trigger_id", webhook.Trigger.ID).Msg("failed to get signal definition")
+					logger.Error().Err(err).
+						Str("trigger_id", webhook.Trigger.ID).
+						Str("signal_name", webhook.Trigger.MetricName).
+						Str("asset_did", sub.AssetDid).
+						Msg("failed to get signal definition")
 					continue
 				}
 				valueType = signalDef.ValueType

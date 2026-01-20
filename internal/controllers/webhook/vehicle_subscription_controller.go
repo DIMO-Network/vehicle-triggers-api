@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 var (
@@ -87,6 +88,11 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 	if trigger.Service == triggersrepo.ServiceSignal {
 		signalDef, err := signals.GetSignalDefinition(trigger.MetricName)
 		if err != nil {
+			zerolog.Ctx(c.Context()).Error().Err(err).
+				Str("signal_name", trigger.MetricName).
+				Str("asset_did", assetDid.String()).
+				Str("trigger_id", trigger.ID).
+				Msg("failed to get signal definition")
 			return fmt.Errorf("failed to get signal definition: %w", err)
 		}
 		permissions = signalDef.Permissions
@@ -156,6 +162,10 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromList(c *fiber.Ctx) 
 	if trigger.Service == triggersrepo.ServiceSignal {
 		signalDef, err := signals.GetSignalDefinition(trigger.MetricName)
 		if err != nil {
+			zerolog.Ctx(c.Context()).Error().Err(err).
+				Str("signal_name", trigger.MetricName).
+				Str("trigger_id", trigger.ID).
+				Msg("failed to get signal definition")
 			return err
 		}
 		permissions = signalDef.Permissions
@@ -292,6 +302,10 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 	if trigger.Service == triggersrepo.ServiceSignal {
 		signalDef, err := signals.GetSignalDefinition(trigger.MetricName)
 		if err != nil {
+			zerolog.Ctx(c.Context()).Error().Err(err).
+				Str("signal_name", trigger.MetricName).
+				Str("trigger_id", trigger.ID).
+				Msg("failed to get signal definition")
 			return err
 		}
 		permissions = signalDef.Permissions

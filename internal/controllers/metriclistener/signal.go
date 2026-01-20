@@ -32,6 +32,11 @@ func (m *MetricListener) processSignalMessage(msg *message.Message) error {
 	}
 	signalDef, err := signals.GetSignalDefinition(sigAndRaw.Signal.Name)
 	if err != nil {
+		zerolog.Ctx(msg.Context()).Error().Err(err).
+			Str("signal_name", sigAndRaw.Signal.Name).
+			Str("asset_did", sigAndRaw.VehicleDID.String()).
+			Uint32("token_id", sigAndRaw.Signal.TokenID).
+			Msg("failed to get signal definition")
 		return fmt.Errorf("failed to get signal definition: %w", err)
 	}
 	sigAndRaw.Def = signalDef
