@@ -20,6 +20,7 @@ import (
 
 type TriggerRepo interface {
 	GetLastLogValue(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (*models.TriggerLog, error)
+	GetLastLogForMetric(ctx context.Context, assetDid cloudevent.ERC721DID, metricName string) (*models.TriggerLog, error)
 }
 
 // SignalEvaluationData is a struct that contains the data needed to evaluate a signal trigger.
@@ -78,7 +79,7 @@ func (t *TriggerEvaluator) EvaluateSignalTrigger(ctx context.Context, trigger *m
 		}, nil
 	}
 
-	// Get last trigger log for cooldown and condition evaluation
+	// Get last trigger log for cooldown (per-trigger)
 	lastTrigger, err := t.getLastLogValue(ctx, trigger.ID, signal.VehicleDID)
 	if err != nil {
 		return nil, richerrors.Error{
@@ -104,13 +105,24 @@ func (t *TriggerEvaluator) EvaluateSignalTrigger(ctx context.Context, trigger *m
 		}, nil
 	}
 
-	// Evaluate condition
-	var previousSignal vss.Signal
-	if err := json.Unmarshal(lastTrigger.SnapshotData, &previousSignal); err != nil {
+	// Previous signal for condition: use last log for this (vehicle, metric) so transition-to-zero
+	// conditions see the prior value (e.g. 1) from when another trigger fired, not only this trigger's log.
+	lastLogForMetric, err := t.repo.GetLastLogForMetric(ctx, signal.VehicleDID, trigger.MetricName)
+	if err != nil {
 		return nil, richerrors.Error{
 			Code:        http.StatusInternalServerError,
 			Err:         err,
-			ExternalMsg: "failed to unmarshal previous signal",
+			ExternalMsg: "failed to retrieve last signal for metric",
+		}
+	}
+	var previousSignal vss.Signal
+	if lastLogForMetric != nil {
+		if err := json.Unmarshal(lastLogForMetric.SnapshotData, &previousSignal); err != nil {
+			return nil, richerrors.Error{
+				Code:        http.StatusInternalServerError,
+				Err:         err,
+				ExternalMsg: "failed to unmarshal previous signal",
+			}
 		}
 	}
 

@@ -605,6 +605,43 @@ func (r *Repository) GetLastLogValue(ctx context.Context, triggerID string, asse
 	return logs, nil
 }
 
+// GetLastLogForMetric returns the most recent trigger log for the given asset and metric (across any trigger with that metric).
+// Used for condition evaluation so "previous" is the last seen value for the metric, not only when this trigger fired.
+// Returns (nil, nil) when no log exists for this vehicle+metric.
+func (r *Repository) GetLastLogForMetric(ctx context.Context, assetDid cloudevent.ERC721DID, metricName string) (*models.TriggerLog, error) {
+	triggers, err := models.Triggers(models.TriggerWhere.MetricName.EQ(metricName)).All(ctx, r.db)
+	if err != nil {
+		return nil, richerrors.Error{
+			ExternalMsg: "Failed to get triggers for metric",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	if len(triggers) == 0 {
+		return nil, nil
+	}
+	triggerIDs := make([]string, 0, len(triggers))
+	for _, t := range triggers {
+		triggerIDs = append(triggerIDs, t.ID)
+	}
+	log, err := models.TriggerLogs(
+		models.TriggerLogWhere.AssetDid.EQ(assetDid.String()),
+		models.TriggerLogWhere.TriggerID.IN(triggerIDs),
+		qm.OrderBy(models.TriggerLogTableColumns.LastTriggeredAt+" DESC"),
+	).One(ctx, r.db)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, richerrors.Error{
+			ExternalMsg: "Failed to get last log for metric",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	return log, nil
+}
+
 // CreateTriggerLog creates a new trigger log.
 func (r *Repository) CreateTriggerLog(ctx context.Context, log *models.TriggerLog) error {
 	if log.AssetDid == "" {

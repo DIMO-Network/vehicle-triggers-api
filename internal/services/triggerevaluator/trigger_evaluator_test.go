@@ -77,6 +77,10 @@ func TestTriggerEvaluator_EvaluateSignalTrigger(t *testing.T) {
 			GetLastLogValue(ctx, trigger.ID, signalData.VehicleDID).
 			Return(lastLog, nil).
 			Times(1)
+		mockRepo.EXPECT().
+			GetLastLogForMetric(ctx, signalData.VehicleDID, trigger.MetricName).
+			Return(lastLog, nil).
+			Times(1)
 
 		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
 
@@ -169,7 +173,7 @@ func TestTriggerEvaluator_EvaluateSignalTrigger(t *testing.T) {
 			Return(true, nil).
 			Times(1)
 
-		// Mock last log retrieval - recent trigger
+		// Mock last log retrieval - recent trigger (cooldown not passed; GetLastLogForMetric not called)
 		lastLog := &models.TriggerLog{
 			SnapshotData: snapShotFromSignal(t, vss.Signal{
 				Timestamp:   signalData.Signal.Timestamp.Add(-time.Hour), // previous value 1 hour ago
@@ -228,6 +232,10 @@ func TestTriggerEvaluator_EvaluateSignalTrigger(t *testing.T) {
 			GetLastLogValue(ctx, trigger.ID, signalData.VehicleDID).
 			Return(lastLog, nil).
 			Times(1)
+		mockRepo.EXPECT().
+			GetLastLogForMetric(ctx, signalData.VehicleDID, trigger.MetricName).
+			Return(lastLog, nil).
+			Times(1)
 
 		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
 
@@ -263,6 +271,10 @@ func TestTriggerEvaluator_EvaluateSignalTrigger(t *testing.T) {
 		mockRepo.EXPECT().
 			GetLastLogValue(ctx, trigger.ID, signalData.VehicleDID).
 			Return(nil, sql.ErrNoRows).
+			Times(1)
+		mockRepo.EXPECT().
+			GetLastLogForMetric(ctx, signalData.VehicleDID, trigger.MetricName).
+			Return(nil, nil).
 			Times(1)
 
 		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
@@ -330,7 +342,7 @@ func TestTriggerEvaluator_EvaluateSignalTrigger(t *testing.T) {
 			Return(true, nil).
 			Times(1)
 
-		// Mock last log retrieval - invalid JSON
+		// Mock last log retrieval - cooldown passed; previous from GetLastLogForMetric has invalid JSON
 		lastLog := &models.TriggerLog{
 			SnapshotData:    []byte(`invalid json`),
 			AssetDid:        signalData.VehicleDID.String(),
@@ -341,6 +353,10 @@ func TestTriggerEvaluator_EvaluateSignalTrigger(t *testing.T) {
 			GetLastLogValue(ctx, trigger.ID, signalData.VehicleDID).
 			Return(lastLog, nil).
 			Times(1)
+		mockRepo.EXPECT().
+			GetLastLogForMetric(ctx, signalData.VehicleDID, trigger.MetricName).
+			Return(lastLog, nil).
+			Times(1)
 
 		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
 
@@ -349,6 +365,219 @@ func TestTriggerEvaluator_EvaluateSignalTrigger(t *testing.T) {
 		richErr, ok := richerrors.AsRichError(err)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusInternalServerError, richErr.Code)
+	})
+}
+
+// TestTransitionConditions verifies isIgnitionOn (1 and 0) and obdIsPluggedIn (0) transition
+// conditions fire correctly with and without an existing previous value (fix for transition-to-zero).
+func TestTransitionConditions(t *testing.T) {
+	t.Parallel()
+
+	vehicleDID := createTestAssetDID()
+	perm := []string{"privilege:GetNonLocationHistory"}
+	numberDef := signals.SignalDefinition{Name: "ignition", ValueType: signals.NumberType, Permissions: perm}
+
+	t.Run("isIgnitionOn valueNumber==1 with existing value (previous 0) - should fire", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockRepo := NewMockTriggerRepo(ctrl)
+		mockTokenClient := NewMockTokenExchangeClient(ctrl)
+		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
+
+		trigger := &models.Trigger{
+			ID: "trigger-ignition-on", Service: "telemetry.signals", MetricName: "isIgnitionOn",
+			Condition: "valueNumber == 1 && valueNumber != previousValueNumber",
+			CooldownPeriod: 600, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
+		}
+		signalData := &SignalEvaluationData{
+			Signal:     vss.Signal{Timestamp: time.Now().UTC(), ValueNumber: 1},
+			VehicleDID: vehicleDID,
+			Def:        numberDef,
+			RawData:    json.RawMessage(`{"valueNumber": 1}`),
+		}
+		signalData.Def.Name = "isIgnitionOn"
+
+		program, err := celcondition.PrepareSignalCondition(trigger.Condition, signals.NumberType)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
+		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(&models.TriggerLog{LastTriggeredAt: time.Now().Add(-2 * time.Hour)}, nil).Times(1)
+		prevLog := &models.TriggerLog{SnapshotData: snapShotFromSignal(t, vss.Signal{ValueNumber: 0})}
+		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "isIgnitionOn").Return(prevLog, nil).Times(1)
+
+		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.ShouldFire, "isIgnitionOn==1 with previous 0 should fire")
+	})
+
+	t.Run("isIgnitionOn valueNumber==1 with no existing value - should fire", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockRepo := NewMockTriggerRepo(ctrl)
+		mockTokenClient := NewMockTokenExchangeClient(ctrl)
+		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
+
+		trigger := &models.Trigger{
+			ID: "trigger-ignition-on", Service: "telemetry.signals", MetricName: "isIgnitionOn",
+			Condition: "valueNumber == 1 && valueNumber != previousValueNumber",
+			CooldownPeriod: 600, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
+		}
+		signalData := &SignalEvaluationData{
+			Signal:     vss.Signal{Timestamp: time.Now().UTC(), ValueNumber: 1},
+			VehicleDID: vehicleDID,
+			Def:        numberDef,
+			RawData:    json.RawMessage(`{"valueNumber": 1}`),
+		}
+		signalData.Def.Name = "isIgnitionOn"
+
+		program, err := celcondition.PrepareSignalCondition(trigger.Condition, signals.NumberType)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
+		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(nil, sql.ErrNoRows).Times(1)
+		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "isIgnitionOn").Return(nil, nil).Times(1)
+
+		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.ShouldFire, "isIgnitionOn==1 with no previous (0) should fire: 1 != 0")
+	})
+
+	t.Run("isIgnitionOn valueNumber==0 with existing value (previous 1) - should fire", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockRepo := NewMockTriggerRepo(ctrl)
+		mockTokenClient := NewMockTokenExchangeClient(ctrl)
+		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
+
+		trigger := &models.Trigger{
+			ID: "trigger-ignition-off", Service: "telemetry.signals", MetricName: "isIgnitionOn",
+			Condition: "valueNumber == 0 && valueNumber != previousValueNumber",
+			CooldownPeriod: 600, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
+		}
+		signalData := &SignalEvaluationData{
+			Signal:     vss.Signal{Timestamp: time.Now().UTC(), ValueNumber: 0},
+			VehicleDID: vehicleDID,
+			Def:        numberDef,
+			RawData:    json.RawMessage(`{"valueNumber": 0}`),
+		}
+		signalData.Def.Name = "isIgnitionOn"
+
+		program, err := celcondition.PrepareSignalCondition(trigger.Condition, signals.NumberType)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
+		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(&models.TriggerLog{LastTriggeredAt: time.Now().Add(-2 * time.Hour)}, nil).Times(1)
+		prevLog := &models.TriggerLog{SnapshotData: snapShotFromSignal(t, vss.Signal{ValueNumber: 1})}
+		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "isIgnitionOn").Return(prevLog, nil).Times(1)
+
+		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.ShouldFire, "isIgnitionOn==0 with previous 1 should fire (transition to off)")
+	})
+
+	t.Run("isIgnitionOn valueNumber==0 with no existing value - should not fire", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockRepo := NewMockTriggerRepo(ctrl)
+		mockTokenClient := NewMockTokenExchangeClient(ctrl)
+		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
+
+		trigger := &models.Trigger{
+			ID: "trigger-ignition-off", Service: "telemetry.signals", MetricName: "isIgnitionOn",
+			Condition: "valueNumber == 0 && valueNumber != previousValueNumber",
+			CooldownPeriod: 600, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
+		}
+		signalData := &SignalEvaluationData{
+			Signal:     vss.Signal{Timestamp: time.Now().UTC(), ValueNumber: 0},
+			VehicleDID: vehicleDID,
+			Def:        numberDef,
+			RawData:    json.RawMessage(`{"valueNumber": 0}`),
+		}
+		signalData.Def.Name = "isIgnitionOn"
+
+		program, err := celcondition.PrepareSignalCondition(trigger.Condition, signals.NumberType)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
+		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(nil, sql.ErrNoRows).Times(1)
+		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "isIgnitionOn").Return(nil, nil).Times(1)
+
+		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.ShouldFire, "isIgnitionOn==0 with no previous (0) should not fire: 0 == 0")
+		assert.True(t, result.ConditionNotMet)
+	})
+
+	t.Run("obdIsPluggedIn valueNumber==0 with existing value (previous 1) - should fire", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockRepo := NewMockTriggerRepo(ctrl)
+		mockTokenClient := NewMockTokenExchangeClient(ctrl)
+		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
+
+		trigger := &models.Trigger{
+			ID: "trigger-obd-unplugged", Service: "telemetry.signals", MetricName: "obdisPluggedin",
+			Condition: "valueNumber == 0 && valueNumber != previousValueNumber",
+			CooldownPeriod: 60, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
+		}
+		signalData := &SignalEvaluationData{
+			Signal:     vss.Signal{Timestamp: time.Now().UTC(), ValueNumber: 0},
+			VehicleDID: vehicleDID,
+			Def:        numberDef,
+			RawData:    json.RawMessage(`{"valueNumber": 0}`),
+		}
+		signalData.Def.Name = "obdisPluggedin"
+
+		program, err := celcondition.PrepareSignalCondition(trigger.Condition, signals.NumberType)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
+		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(&models.TriggerLog{LastTriggeredAt: time.Now().Add(-2 * time.Minute)}, nil).Times(1)
+		prevLog := &models.TriggerLog{SnapshotData: snapShotFromSignal(t, vss.Signal{ValueNumber: 1})}
+		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "obdisPluggedin").Return(prevLog, nil).Times(1)
+
+		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.ShouldFire, "obdIsPluggedIn==0 with previous 1 should fire (transition to unplugged)")
+	})
+
+	t.Run("obdIsPluggedIn valueNumber==0 with no existing value - should not fire", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockRepo := NewMockTriggerRepo(ctrl)
+		mockTokenClient := NewMockTokenExchangeClient(ctrl)
+		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
+
+		trigger := &models.Trigger{
+			ID: "trigger-obd-unplugged", Service: "telemetry.signals", MetricName: "obdisPluggedin",
+			Condition: "valueNumber == 0 && valueNumber != previousValueNumber",
+			CooldownPeriod: 60, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
+		}
+		signalData := &SignalEvaluationData{
+			Signal:     vss.Signal{Timestamp: time.Now().UTC(), ValueNumber: 0},
+			VehicleDID: vehicleDID,
+			Def:        numberDef,
+			RawData:    json.RawMessage(`{"valueNumber": 0}`),
+		}
+		signalData.Def.Name = "obdisPluggedin"
+
+		program, err := celcondition.PrepareSignalCondition(trigger.Condition, signals.NumberType)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
+		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(nil, sql.ErrNoRows).Times(1)
+		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "obdisPluggedin").Return(nil, nil).Times(1)
+
+		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.ShouldFire, "obdIsPluggedIn==0 with no previous (0) should not fire")
+		assert.True(t, result.ConditionNotMet)
 	})
 }
 
