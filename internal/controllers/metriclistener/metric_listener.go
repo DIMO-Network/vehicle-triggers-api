@@ -17,7 +17,6 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhooksender"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/aarondl/sqlboiler/v4/types"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/cel-go/cel"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -52,13 +51,11 @@ type WebhookCache interface {
 }
 
 type MetricListener struct {
-	webhookCache        WebhookCache
-	repo                TriggerRepo
-	webhookSender       WebhookSender
-	triggerEvaluator    TriggerEvaluator
-	vehicleNFTAddress   common.Address
-	dimoRegistryChainID uint64
-	maxFailureCount     int
+	webhookCache     WebhookCache
+	repo             TriggerRepo
+	webhookSender    WebhookSender
+	triggerEvaluator TriggerEvaluator
+	maxFailureCount  int
 }
 
 // NewMetricsListener creates a new MetrticListener.
@@ -73,13 +70,11 @@ func NewMetricsListener(wc WebhookCache,
 		failureCount = 1
 	}
 	return &MetricListener{
-		webhookCache:        wc,
-		repo:                repo,
-		webhookSender:       webhookSender,
-		triggerEvaluator:    triggerEvaluator,
-		vehicleNFTAddress:   settings.VehicleNFTAddress,
-		dimoRegistryChainID: settings.DIMORegistryChainID,
-		maxFailureCount:     failureCount,
+		webhookCache:     wc,
+		repo:             repo,
+		webhookSender:    webhookSender,
+		triggerEvaluator: triggerEvaluator,
+		maxFailureCount:  failureCount,
 	}
 }
 

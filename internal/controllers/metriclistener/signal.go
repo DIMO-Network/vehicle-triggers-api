@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/big"
 
 	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
@@ -25,17 +24,17 @@ func (m *MetricListener) processSignalMessage(msg *message.Message) error {
 	if err := json.Unmarshal(sigAndRaw.RawData, &sigAndRaw.Signal); err != nil {
 		return fmt.Errorf("failed to parse vehicle signal JSON: %w", err)
 	}
-	sigAndRaw.VehicleDID = cloudevent.ERC721DID{
-		ChainID:         m.dimoRegistryChainID,
-		ContractAddress: m.vehicleNFTAddress,
-		TokenID:         big.NewInt(int64(sigAndRaw.Signal.TokenID)),
+	var err error
+	sigAndRaw.VehicleDID, err = cloudevent.DecodeERC721DID(sigAndRaw.Signal.Subject)
+	if err != nil {
+		return fmt.Errorf("failed to decode ERC721DID from signal subject: %w", err)
 	}
 	signalDef, err := signals.GetSignalDefinition(sigAndRaw.Signal.Name)
 	if err != nil {
 		zerolog.Ctx(msg.Context()).Error().Err(err).
 			Str("signal_name", sigAndRaw.Signal.Name).
 			Str("asset_did", sigAndRaw.VehicleDID.String()).
-			Uint32("token_id", sigAndRaw.Signal.TokenID).
+			Str("subject", sigAndRaw.Signal.Subject).
 			Msg("failed to get signal definition")
 		return fmt.Errorf("failed to get signal definition: %w", err)
 	}

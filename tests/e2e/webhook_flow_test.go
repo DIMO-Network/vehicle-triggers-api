@@ -152,7 +152,7 @@ func TestSignalWebhookFlow(t *testing.T) {
 
 	// Step 3: Send a signal to Kafka to trigger the webhook
 	signalPayload := vss.Signal{
-		TokenID:      12345, // Same as assetDID.TokenID
+		Subject:      assetDid.String(),
 		Timestamp:    time.Now(),
 		Name:         "speed",
 		ValueNumber:  25.0, // Above the 20 threshold to trigger the webhook
@@ -197,7 +197,7 @@ func TestSignalWebhookFlow(t *testing.T) {
 
 	// Step 5: Send a second signal to Kafka to trigger the webhook
 	signalPayload = vss.Signal{
-		TokenID:      12345, // Same as assetDID.TokenID
+		Subject:      assetDid.String(),
 		Timestamp:    time.Now(),
 		Name:         "speed",
 		ValueNumber:  25.0, // Above the 20 threshold to trigger the webhook
@@ -216,7 +216,7 @@ func TestSignalWebhookFlow(t *testing.T) {
 	calls = webhookReceiver.GetReceivedCalls()
 	require.Len(t, calls, 0, "Expected exactly one webhook call")
 	signalPayload = vss.Signal{
-		TokenID:      12345, // Same as assetDID.TokenID
+		Subject:      assetDid.String(),
 		Timestamp:    time.Now(),
 		Name:         "speed",
 		ValueNumber:  24.0, // Below the 20 threshold to trigger the webhook
@@ -384,7 +384,7 @@ func TestSignalWebhookFlowLocation(t *testing.T) {
 	// Step 3: Send a location signal to Kafka to trigger the webhook
 	// Using coordinates that are within the 0.7km radius of the target location (54.71061320000001, 25.239925999999997)
 	signalPayload := vss.Signal{
-		TokenID:     12345, // Same as assetDID.TokenID
+		Subject:     assetDid.String(),
 		Timestamp:   time.Now(),
 		Name:        "currentLocationCoordinates",
 		ValueNumber: 0,
@@ -439,7 +439,7 @@ func TestSignalWebhookFlowLocation(t *testing.T) {
 
 	// Step 5: Send a location signal with coordinates outside the radius
 	signalPayload = vss.Signal{
-		TokenID:     12345, // Same as assetDID.TokenID
+		Subject:     assetDid.String(),
 		Timestamp:   time.Now(),
 		Name:        "currentLocationCoordinates",
 		ValueNumber: 0,
