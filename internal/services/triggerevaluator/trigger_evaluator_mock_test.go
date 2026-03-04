@@ -43,21 +43,6 @@ func (m *MockTriggerRepo) EXPECT() *MockTriggerRepoMockRecorder {
 	return m.recorder
 }
 
-// GetLastLogValue mocks base method.
-func (m *MockTriggerRepo) GetLastLogValue(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (*models.TriggerLog, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLastLogValue", ctx, triggerID, assetDid)
-	ret0, _ := ret[0].(*models.TriggerLog)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetLastLogValue indicates an expected call of GetLastLogValue.
-func (mr *MockTriggerRepoMockRecorder) GetLastLogValue(ctx, triggerID, assetDid any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastLogValue", reflect.TypeOf((*MockTriggerRepo)(nil).GetLastLogValue), ctx, triggerID, assetDid)
-}
-
 // GetLastLogForMetric mocks base method.
 func (m *MockTriggerRepo) GetLastLogForMetric(ctx context.Context, assetDid cloudevent.ERC721DID, metricName string) (*models.TriggerLog, error) {
 	m.ctrl.T.Helper()
@@ -71,6 +56,21 @@ func (m *MockTriggerRepo) GetLastLogForMetric(ctx context.Context, assetDid clou
 func (mr *MockTriggerRepoMockRecorder) GetLastLogForMetric(ctx, assetDid, metricName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastLogForMetric", reflect.TypeOf((*MockTriggerRepo)(nil).GetLastLogForMetric), ctx, assetDid, metricName)
+}
+
+// GetLastLogValue mocks base method.
+func (m *MockTriggerRepo) GetLastLogValue(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (*models.TriggerLog, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLastLogValue", ctx, triggerID, assetDid)
+	ret0, _ := ret[0].(*models.TriggerLog)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLastLogValue indicates an expected call of GetLastLogValue.
+func (mr *MockTriggerRepoMockRecorder) GetLastLogValue(ctx, triggerID, assetDid any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastLogValue", reflect.TypeOf((*MockTriggerRepo)(nil).GetLastLogValue), ctx, triggerID, assetDid)
 }
 
 // MockTokenExchangeClient is a mock of TokenExchangeClient interface.
