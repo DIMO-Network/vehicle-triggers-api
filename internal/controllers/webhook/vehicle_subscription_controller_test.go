@@ -139,7 +139,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 				ID:                      webhookID,
 				DeveloperLicenseAddress: devLicense.Bytes(),
 				Service:                 triggersrepo.ServiceSignal,
-				MetricName:              vss.FieldCurrentLocationLatitude,
+				MetricName:              vss.FieldCurrentLocationCoordinates,
 			}, nil).
 			Times(1)
 
