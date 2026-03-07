@@ -3,8 +3,8 @@ module github.com/DIMO-Network/vehicle-triggers-api
 go 1.25
 
 require (
-	github.com/DIMO-Network/cloudevent v0.1.4
-	github.com/DIMO-Network/model-garage v0.8.17
+	github.com/DIMO-Network/cloudevent v0.1.6
+	github.com/DIMO-Network/model-garage v0.8.18-0.20260303220624-7b973b516a3a
 	github.com/DIMO-Network/server-garage v0.0.5
 	github.com/DIMO-Network/shared v1.0.7
 	github.com/DIMO-Network/token-exchange-api v0.3.8-0.20251015163407-530d08daccd8

@@ -41,8 +41,6 @@ func TestNewMetricsListener(t *testing.T) {
 		listener := NewMetricsListener(mockCache, mockRepo, mockWebhookSender, mockTriggerEvaluator, settings)
 
 		require.NotNil(t, listener)
-		assert.Equal(t, settings.VehicleNFTAddress, listener.vehicleNFTAddress)
-		assert.Equal(t, settings.DIMORegistryChainID, listener.dimoRegistryChainID)
 		assert.Equal(t, int(settings.MaxWebhookFailureCount), listener.maxFailureCount)
 	})
 }
@@ -123,9 +121,15 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 		listener := NewMetricsListener(mockCache, mockRepo, mockWebhookSender, mockTriggerEvaluator, createTestSettings())
 		ctx := context.Background()
 
+		vehicleDID := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
+
 		// Create proper VSS signal data
 		testSignal := vss.Signal{
-			TokenID:     12345,
+			Subject:     vehicleDID.String(),
 			Timestamp:   time.Now().UTC(),
 			Name:        "speed",
 			ValueNumber: 25.0,
@@ -138,11 +142,6 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 		require.NoError(t, err)
 
 		// Mock expectations - no webhooks found for this signal
-		vehicleDID := cloudevent.ERC721DID{
-			ChainID:         137,
-			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
-			TokenID:         big.NewInt(12345),
-		}
 
 		mockCache.EXPECT().
 			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignal, "speed").
@@ -170,9 +169,15 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 		listener := NewMetricsListener(mockCache, mockRepo, mockWebhookSender, mockTriggerEvaluator, createTestSettings())
 		ctx := context.Background()
 
+		vehicleDID := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
+
 		// Create proper VSS signal data
 		testSignal := vss.Signal{
-			TokenID:     12345,
+			Subject:     vehicleDID.String(),
 			Timestamp:   time.Now().UTC(),
 			Name:        "speed",
 			ValueNumber: 25.0,
@@ -183,12 +188,6 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 
 		signalJSON, err := json.Marshal(testSignal)
 		require.NoError(t, err)
-
-		vehicleDID := cloudevent.ERC721DID{
-			ChainID:         137,
-			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
-			TokenID:         big.NewInt(12345),
-		}
 
 		// Create mock webhook and trigger
 		mockTrigger := &models.Trigger{
@@ -251,8 +250,13 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 		cancel() // Cancel immediately
 
 		messages := make(chan *message.Message, 1)
+		vehicleDID := cloudevent.ERC721DID{
+			ChainID:         137,
+			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+			TokenID:         big.NewInt(12345),
+		}
 		testSignal := vss.Signal{
-			TokenID:     12345,
+			Subject:     vehicleDID.String(),
 			Timestamp:   time.Now().UTC(),
 			Name:        "speed",
 			ValueNumber: 25.0,
