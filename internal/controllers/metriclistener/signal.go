@@ -3,9 +3,11 @@ package metriclistener
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/DIMO-Network/cloudevent"
+	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
@@ -18,36 +20,56 @@ import (
 )
 
 func (m *MetricListener) processSignalMessage(msg *message.Message) error {
-	sigAndRaw := triggerevaluator.SignalEvaluationData{
-		RawData: json.RawMessage(msg.Payload),
+	var signalCE vss.SignalCloudEvent
+	if err := json.Unmarshal(msg.Payload, &signalCE); err != nil {
+		return fmt.Errorf("failed to parse signal CloudEvent: %w", err)
 	}
-	if err := json.Unmarshal(sigAndRaw.RawData, &sigAndRaw.Signal); err != nil {
-		return fmt.Errorf("failed to parse vehicle signal JSON: %w", err)
-	}
-	var err error
-	sigAndRaw.VehicleDID, err = cloudevent.DecodeERC721DID(sigAndRaw.Signal.Subject)
+
+	sigs := vss.UnpackSignals(signalCE)
+
+	vehicleDID, err := cloudevent.DecodeERC721DID(signalCE.Subject)
 	if err != nil {
-		return fmt.Errorf("failed to decode ERC721DID from signal subject: %w", err)
+		return fmt.Errorf("failed to decode ERC721DID from envelope: %w", err)
 	}
-	signalDef, err := signals.GetSignalDefinition(sigAndRaw.Signal.Name)
+
+	var errs error
+	for _, sig := range sigs {
+		sigData, err := json.Marshal(sig)
+		if err != nil {
+			errs = errors.Join(errs, fmt.Errorf("failed to marshal signal: %w", err))
+			continue
+		}
+		if err := m.processSingleSignal(msg.Context(), sig, vehicleDID, sigData); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+	return errs
+}
+
+func (m *MetricListener) processSingleSignal(ctx context.Context, sig vss.Signal, vehicleDID cloudevent.ERC721DID, rawPayload json.RawMessage) error {
+	signalDef, err := signals.GetSignalDefinition(sig.Data.Name)
 	if err != nil {
-		zerolog.Ctx(msg.Context()).Error().Err(err).
-			Str("signal_name", sigAndRaw.Signal.Name).
-			Str("asset_did", sigAndRaw.VehicleDID.String()).
-			Str("subject", sigAndRaw.Signal.Subject).
+		zerolog.Ctx(ctx).Error().Err(err).
+			Str("signal_name", sig.Data.Name).
+			Str("asset_did", vehicleDID.String()).
+			Str("subject", sig.Subject).
 			Msg("failed to get signal definition")
 		return fmt.Errorf("failed to get signal definition: %w", err)
 	}
-	sigAndRaw.Def = signalDef
 
-	webhooks := m.webhookCache.GetWebhooks(sigAndRaw.VehicleDID.String(), triggersrepo.ServiceSignal, sigAndRaw.Signal.Name)
+	sigAndRaw := triggerevaluator.SignalEvaluationData{
+		Signal:     sig,
+		VehicleDID: vehicleDID,
+		Def:        signalDef,
+		RawData:    rawPayload,
+	}
 
+	webhooks := m.webhookCache.GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignalVSS, sig.Data.Name)
 	if len(webhooks) == 0 {
-		// no webhooks found for this signal, skip
 		return nil
 	}
 
-	group, groupCtx := errgroup.WithContext(msg.Context())
+	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(100)
 	for _, wh := range webhooks {
 		group.Go(func() error {
@@ -90,20 +112,20 @@ func (m *MetricListener) createSignalPayload(trigger *models.Trigger, sigEval *t
 	var signalValue any
 	switch sigEval.Def.ValueType {
 	case signals.NumberType:
-		signalValue = sigEval.Signal.ValueNumber
+		signalValue = sigEval.Signal.Data.ValueNumber
 	case signals.StringType:
-		signalValue = sigEval.Signal.ValueString
+		signalValue = sigEval.Signal.Data.ValueString
 	case signals.LocationType:
-		signalValue = sigEval.Signal.ValueLocation
+		signalValue = sigEval.Signal.Data.ValueLocation
 	default:
 		return nil, fmt.Errorf("unsupported signal type: %s", sigEval.Def.ValueType)
 	}
 	payload := m.createWebhookPayload(trigger, sigEval.VehicleDID)
 	payload.Data.Signal = &webhook.SignalData{
-		Name:      sigEval.Signal.Name,
+		Name:      sigEval.Signal.Data.Name,
 		Source:    sigEval.Signal.Source,
 		Units:     sigEval.Def.Unit,
-		Timestamp: sigEval.Signal.Timestamp,
+		Timestamp: sigEval.Signal.Data.Timestamp,
 		Producer:  sigEval.Signal.Producer,
 		ValueType: sigEval.Def.ValueType,
 		Value:     signalValue,

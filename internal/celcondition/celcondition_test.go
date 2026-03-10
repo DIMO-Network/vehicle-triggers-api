@@ -3,6 +3,7 @@ package celcondition
 import (
 	"testing"
 
+	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
@@ -204,8 +205,9 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "numeric condition true",
 			condition: "valueNumber > 20.0",
 			signal: &vss.Signal{
-				ValueNumber: 25.0,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueNumber: 25.0,
+				},
 			},
 			valueType:   signals.NumberType,
 			expected:    true,
@@ -215,8 +217,9 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "numeric condition false",
 			condition: "valueNumber > 20.0",
 			signal: &vss.Signal{
-				ValueNumber: 15.0,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueNumber: 15.0,
+				},
 			},
 			valueType:   signals.NumberType,
 			expected:    false,
@@ -226,8 +229,9 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "string condition true",
 			condition: "valueString == 'active'",
 			signal: &vss.Signal{
-				ValueNumber: 0,
-				ValueString: "active",
+				Data: vss.SignalData{
+					ValueString: "active",
+				},
 			},
 			valueType:   signals.StringType,
 			expected:    true,
@@ -237,8 +241,9 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "string condition false",
 			condition: "valueString == 'active'",
 			signal: &vss.Signal{
-				ValueNumber: 0,
-				ValueString: "inactive",
+				Data: vss.SignalData{
+					ValueString: "inactive",
+				},
 			},
 			valueType:   signals.StringType,
 			expected:    false,
@@ -248,8 +253,9 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "equality check with zero",
 			condition: "valueNumber == 0.0",
 			signal: &vss.Signal{
-				ValueNumber: 0.0,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueNumber: 0.0,
+				},
 			},
 			valueType:   signals.NumberType,
 			expected:    true,
@@ -259,8 +265,9 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "string contains check",
 			condition: "valueString.contains('test')",
 			signal: &vss.Signal{
-				ValueNumber: 0,
-				ValueString: "this is a test string",
+				Data: vss.SignalData{
+					ValueString: "this is a test string",
+				},
 			},
 			valueType:   signals.StringType,
 			expected:    true,
@@ -270,8 +277,9 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "numeric range check",
 			condition: "valueNumber >= 10.0 && valueNumber <= 50.0",
 			signal: &vss.Signal{
-				ValueNumber: 25.0,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueNumber: 25.0,
+				},
 			},
 			valueType:   signals.NumberType,
 			expected:    true,
@@ -281,8 +289,9 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "empty string check",
 			condition: "valueString == ''",
 			signal: &vss.Signal{
-				ValueNumber: 0,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueString: "",
+				},
 			},
 			valueType:   signals.StringType,
 			expected:    true,
@@ -292,8 +301,7 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "simple bool true",
 			condition: "true",
 			signal: &vss.Signal{
-				ValueNumber: 0,
-				ValueString: "",
+				Data: vss.SignalData{},
 			},
 			valueType: signals.NumberType,
 			expected:  true,
@@ -302,8 +310,7 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "simple bool false",
 			condition: "false",
 			signal: &vss.Signal{
-				ValueNumber: 0,
-				ValueString: "",
+				Data: vss.SignalData{},
 			},
 			valueType: signals.NumberType,
 			expected:  false,
@@ -312,12 +319,14 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "referenced previous signal true",
 			condition: "previousValueNumber != valueNumber",
 			signal: &vss.Signal{
-				ValueNumber: 15.0,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueNumber: 15.0,
+				},
 			},
 			previousSignal: &vss.Signal{
-				ValueNumber: 10.0,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueNumber: 10.0,
+				},
 			},
 			valueType: signals.NumberType,
 			expected:  true,
@@ -326,12 +335,14 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "referenced previous signal false",
 			condition: "previousValueNumber != valueNumber",
 			signal: &vss.Signal{
-				ValueNumber: 15.0,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueNumber: 15.0,
+				},
 			},
 			previousSignal: &vss.Signal{
-				ValueNumber: 15.0,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueNumber: 15.0,
+				},
 			},
 			valueType: signals.NumberType,
 			expected:  false,
@@ -340,8 +351,9 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "referenced but missing previous signal",
 			condition: "previousValueNumber != valueNumber",
 			signal: &vss.Signal{
-				ValueNumber: 15.0,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueNumber: 15.0,
+				},
 			},
 			previousSignal: nil,
 			valueType:      signals.NumberType,
@@ -351,8 +363,9 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "generic value as number",
 			condition: "value > 10.0",
 			signal: &vss.Signal{
-				ValueNumber: 15.0,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueNumber: 15.0,
+				},
 			},
 			valueType:   signals.NumberType,
 			expected:    true,
@@ -362,8 +375,9 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "generic value as string",
 			condition: "value == 'active'",
 			signal: &vss.Signal{
-				ValueNumber: 0,
-				ValueString: "active",
+				Data: vss.SignalData{
+					ValueString: "active",
+				},
 			},
 			valueType:   signals.StringType,
 			expected:    true,
@@ -373,12 +387,12 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "Location type longitude",
 			condition: "value.Longitude > 10.0 ",
 			signal: &vss.Signal{
-				ValueNumber: 0,
-				ValueString: "",
-				ValueLocation: vss.Location{
-					Longitude: 15.0,
-					Latitude:  0,
-					HDOP:      0,
+				Data: vss.SignalData{
+					ValueLocation: vss.Location{
+						Longitude: 15.0,
+						Latitude:  0,
+						HDOP:      0,
+					},
 				},
 			},
 			valueType:   signals.LocationType,
@@ -389,12 +403,12 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "Location type latitude",
 			condition: "value.Latitude > 10.0 ",
 			signal: &vss.Signal{
-				ValueNumber: 0,
-				ValueString: "",
-				ValueLocation: vss.Location{
-					Longitude: 0,
-					Latitude:  15.0,
-					HDOP:      0,
+				Data: vss.SignalData{
+					ValueLocation: vss.Location{
+						Longitude: 0,
+						Latitude:  15.0,
+						HDOP:      0,
+					},
 				},
 			},
 			valueType:   signals.LocationType,
@@ -405,12 +419,12 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "Location type hdop",
 			condition: "value.HDOP > 10.0 ",
 			signal: &vss.Signal{
-				ValueNumber: 0,
-				ValueString: "",
-				ValueLocation: vss.Location{
-					Longitude: 0,
-					Latitude:  0,
-					HDOP:      15.0,
+				Data: vss.SignalData{
+					ValueLocation: vss.Location{
+						Longitude: 0,
+						Latitude:  0,
+						HDOP:      15.0,
+					},
 				},
 			},
 			valueType:   signals.LocationType,
@@ -421,12 +435,12 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "Location type distance",
 			condition: "geoDistance(value.Latitude, value.Longitude, previousValue.Latitude, previousValue.Longitude) > 10.0 && value.HDOP != 0",
 			signal: &vss.Signal{
-				ValueNumber: 0,
-				ValueString: "",
-				ValueLocation: vss.Location{
-					Longitude: 30.0,
-					Latitude:  -40.0,
-					HDOP:      10.0,
+				Data: vss.SignalData{
+					ValueLocation: vss.Location{
+						Longitude: 30.0,
+						Latitude:  -40.0,
+						HDOP:      10.0,
+					},
 				},
 			},
 			valueType:   signals.LocationType,
@@ -437,17 +451,21 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "geoDistance with movement detection",
 			condition: "geoDistance(value.Latitude, value.Longitude, previousValue.Latitude, previousValue.Longitude) > 5.0",
 			signal: &vss.Signal{
-				ValueLocation: vss.Location{
-					Latitude:  40.7589,
-					Longitude: -73.9851,
-					HDOP:      3.0,
+				Data: vss.SignalData{
+					ValueLocation: vss.Location{
+						Latitude:  40.7589,
+						Longitude: -73.9851,
+						HDOP:      3.0,
+					},
 				},
 			},
 			previousSignal: &vss.Signal{
-				ValueLocation: vss.Location{
-					Latitude:  40.6892,
-					Longitude: -74.0445,
-					HDOP:      4.0,
+				Data: vss.SignalData{
+					ValueLocation: vss.Location{
+						Latitude:  40.6892,
+						Longitude: -74.0445,
+						HDOP:      4.0,
+					},
 				},
 			},
 			valueType:   signals.LocationType,
@@ -458,10 +476,12 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "geoDistance geofencing check",
 			condition: "geoDistance(value.Latitude, value.Longitude, 37.7749, -122.4194) <= 10.0 && value.HDOP < 5.0",
 			signal: &vss.Signal{
-				ValueLocation: vss.Location{
-					Latitude:  37.7849,
-					Longitude: -122.4094,
-					HDOP:      2.0,
+				Data: vss.SignalData{
+					ValueLocation: vss.Location{
+						Latitude:  37.7849,
+						Longitude: -122.4094,
+						HDOP:      2.0,
+					},
 				},
 			},
 			valueType:   signals.LocationType,
@@ -516,8 +536,9 @@ func TestPrepareCondition_WithDecimalNumbers(t *testing.T) {
 			name:      "decimal comparison",
 			condition: "valueNumber > 10.5",
 			signal: &vss.Signal{
-				ValueNumber: 15.0,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueNumber: 15.0,
+				},
 			},
 			expected: true,
 		},
@@ -525,8 +546,9 @@ func TestPrepareCondition_WithDecimalNumbers(t *testing.T) {
 			name:      "precise decimal comparison",
 			condition: "valueNumber == 25.75",
 			signal: &vss.Signal{
-				ValueNumber: 25.75,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueNumber: 25.75,
+				},
 			},
 			expected: true,
 		},
@@ -534,8 +556,9 @@ func TestPrepareCondition_WithDecimalNumbers(t *testing.T) {
 			name:      "complex decimal condition",
 			condition: "valueNumber >= 0.5 && valueNumber <= 99.9",
 			signal: &vss.Signal{
-				ValueNumber: 50.25,
-				ValueString: "",
+				Data: vss.SignalData{
+					ValueNumber: 50.25,
+				},
 			},
 			expected: true,
 		},
@@ -571,14 +594,14 @@ func TestPrepareCondition_ServiceName(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:        "telemetry.signals service",
-			serviceName: triggersrepo.ServiceSignal,
+			name:        "signals.vss service",
+			serviceName: triggersrepo.ServiceSignalVSS,
 			condition:   "valueNumber > 10.0",
 			expectError: false,
 		},
 		{
-			name:        "telemetry.events service",
-			serviceName: triggersrepo.ServiceEvent,
+			name:        "events.behavior service",
+			serviceName: triggersrepo.ServiceBehaviorEvent,
 			condition:   "name == 'HarshBraking'",
 			expectError: false,
 		},
@@ -716,16 +739,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "name condition true",
 			condition: "name == 'HarshBraking'",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "HarshBraking",
-				DurationNs: 1000,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "HarshBraking",
+					DurationNs: 1000,
+					Metadata:   "{}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "HarshCornering",
-				DurationNs: 500,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "HarshCornering",
+					DurationNs: 500,
+					Metadata:   "{}",
+				},
 			},
 			expected:    true,
 			expectError: false,
@@ -734,16 +765,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "name condition false",
 			condition: "name == 'HarshBraking'",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "HarshCornering",
-				DurationNs: 1000,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "HarshCornering",
+					DurationNs: 1000,
+					Metadata:   "{}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "HarshBraking",
-				DurationNs: 500,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "HarshBraking",
+					DurationNs: 500,
+					Metadata:   "{}",
+				},
 			},
 			expected:    false,
 			expectError: false,
@@ -752,16 +791,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "source condition true",
 			condition: "source == '0x1234567890abcdef1234567890abcdef12345678'",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "HarshBraking",
-				DurationNs: 1000,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "HarshBraking",
+					DurationNs: 1000,
+					Metadata:   "{}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
-				Name:       "HarshBraking",
-				DurationNs: 500,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+				},
+				Data: vss.EventData{
+					Name:       "HarshBraking",
+					DurationNs: 500,
+					Metadata:   "{}",
+				},
 			},
 			expected:    true,
 			expectError: false,
@@ -770,16 +817,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "duration condition true",
 			condition: "durationNs > 500",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 1000,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 1000,
+					Metadata:   "{}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 300,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 300,
+					Metadata:   "{}",
+				},
 			},
 			expected:    true,
 			expectError: false,
@@ -788,16 +843,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "duration condition false",
 			condition: "durationNs > 500",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 300,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 300,
+					Metadata:   "{}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 1000,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 1000,
+					Metadata:   "{}",
+				},
 			},
 			expected:    false,
 			expectError: false,
@@ -806,16 +869,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "metadata condition true",
 			condition: "metadata.contains('emergency')",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "AlarmTriggered",
-				DurationNs: 1000,
-				Metadata:   "{\"type\": \"emergency\", \"level\": \"high\"}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "AlarmTriggered",
+					DurationNs: 1000,
+					Metadata:   "{\"type\": \"emergency\", \"level\": \"high\"}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 500,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 500,
+					Metadata:   "{}",
+				},
 			},
 			expected:    true,
 			expectError: false,
@@ -824,16 +895,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "metadata condition false",
 			condition: "metadata.contains('emergency')",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 1000,
-				Metadata:   "{\"type\": \"normal\"}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 1000,
+					Metadata:   "{\"type\": \"normal\"}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorClosed",
-				DurationNs: 500,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorClosed",
+					DurationNs: 500,
+					Metadata:   "{}",
+				},
 			},
 			expected:    false,
 			expectError: false,
@@ -842,16 +921,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "complex condition true",
 			condition: "name == 'DoorOpened' && source == '0x1234567890abcdef1234567890abcdef12345678' && durationNs > 500",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 1000,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 1000,
+					Metadata:   "{}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
-				Name:       "DoorClosed",
-				DurationNs: 300,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+				},
+				Data: vss.EventData{
+					Name:       "DoorClosed",
+					DurationNs: 300,
+					Metadata:   "{}",
+				},
 			},
 			expected:    true,
 			expectError: false,
@@ -860,16 +947,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "complex condition false - name fails",
 			condition: "name == 'DoorOpened' && source == '0x1234567890abcdef1234567890abcdef12345678' && durationNs > 500",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorClosed",
-				DurationNs: 1000,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorClosed",
+					DurationNs: 1000,
+					Metadata:   "{}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 500,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 500,
+					Metadata:   "{}",
+				},
 			},
 			expected:    false,
 			expectError: false,
@@ -878,16 +973,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "previous event comparison true",
 			condition: "name != previousName",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 1000,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 1000,
+					Metadata:   "{}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorClosed",
-				DurationNs: 500,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorClosed",
+					DurationNs: 500,
+					Metadata:   "{}",
+				},
 			},
 			expected:    true,
 			expectError: false,
@@ -896,16 +999,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "previous event comparison false",
 			condition: "name != previousName",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 1000,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 1000,
+					Metadata:   "{}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 500,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 500,
+					Metadata:   "{}",
+				},
 			},
 			expected:    false,
 			expectError: false,
@@ -914,16 +1025,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "duration comparison with previous true",
 			condition: "durationNs > previousDurationNs",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 1000,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 1000,
+					Metadata:   "{}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 500,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 500,
+					Metadata:   "{}",
+				},
 			},
 			expected:    true,
 			expectError: false,
@@ -932,16 +1051,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "duration comparison with previous false",
 			condition: "durationNs > previousDurationNs",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 300,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 300,
+					Metadata:   "{}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 1000,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 1000,
+					Metadata:   "{}",
+				},
 			},
 			expected:    false,
 			expectError: false,
@@ -950,16 +1077,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "simple bool true",
 			condition: "true",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 1000,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 1000,
+					Metadata:   "{}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorClosed",
-				DurationNs: 500,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorClosed",
+					DurationNs: 500,
+					Metadata:   "{}",
+				},
 			},
 			expected:    true,
 			expectError: false,
@@ -968,16 +1103,24 @@ func TestEvaluateEventCondition(t *testing.T) {
 			name:      "simple bool false",
 			condition: "false",
 			event: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorOpened",
-				DurationNs: 1000,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorOpened",
+					DurationNs: 1000,
+					Metadata:   "{}",
+				},
 			},
 			previousEvent: &vss.Event{
-				Source:     "0x1234567890abcdef1234567890abcdef12345678",
-				Name:       "DoorClosed",
-				DurationNs: 500,
-				Metadata:   "{}",
+				CloudEventHeader: cloudevent.CloudEventHeader{
+					Source: "0x1234567890abcdef1234567890abcdef12345678",
+				},
+				Data: vss.EventData{
+					Name:       "DoorClosed",
+					DurationNs: 500,
+					Metadata:   "{}",
+				},
 			},
 			expected:    false,
 			expectError: false,
@@ -1010,10 +1153,14 @@ func TestEvaluateEventCondition_WithNilEvent(t *testing.T) {
 
 	// Test with nil current event
 	previousEvent := &vss.Event{
-		Source:     "0x1234567890abcdef1234567890abcdef12345678",
-		Name:       "DoorClosed",
-		DurationNs: 500,
-		Metadata:   "{}",
+		CloudEventHeader: cloudevent.CloudEventHeader{
+			Source: "0x1234567890abcdef1234567890abcdef12345678",
+		},
+		Data: vss.EventData{
+			Name:       "DoorClosed",
+			DurationNs: 500,
+			Metadata:   "{}",
+		},
 	}
 
 	// This should not panic but may fail depending on implementation
@@ -1024,10 +1171,14 @@ func TestEvaluateEventCondition_WithNilEvent(t *testing.T) {
 
 	// Test with nil previous event
 	currentEvent := &vss.Event{
-		Source:     "0x1234567890abcdef1234567890abcdef12345678",
-		Name:       "DoorOpened",
-		DurationNs: 1000,
-		Metadata:   "{}",
+		CloudEventHeader: cloudevent.CloudEventHeader{
+			Source: "0x1234567890abcdef1234567890abcdef12345678",
+		},
+		Data: vss.EventData{
+			Name:       "DoorOpened",
+			DurationNs: 1000,
+			Metadata:   "{}",
+		},
 	}
 
 	_, err = EvaluateEventCondition(prg, currentEvent, nil)

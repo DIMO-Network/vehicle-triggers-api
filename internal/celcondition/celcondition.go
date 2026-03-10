@@ -19,9 +19,9 @@ const (
 
 func PrepareCondition(serviceName, celCondition string, valueType string) (cel.Program, error) {
 	switch serviceName {
-	case triggersrepo.ServiceSignal:
+	case triggersrepo.ServiceSignalVSS:
 		return PrepareSignalCondition(celCondition, valueType)
-	case triggersrepo.ServiceEvent:
+	case triggersrepo.ServiceBehaviorEvent, triggersrepo.ServiceSafetyEvent:
 		return PrepareEventCondition(celCondition)
 	default:
 		return nil, fmt.Errorf("unknown service name: %s", serviceName)
@@ -84,13 +84,13 @@ func EvaluateEventCondition(prg cel.Program, event *vss.Event, previousEvent *vs
 	}
 	vars := map[string]any{
 		"source":             event.Source,
-		"name":               event.Name,
-		"durationNs":         event.DurationNs,
-		"metadata":           event.Metadata,
+		"name":               event.Data.Name,
+		"durationNs":         event.Data.DurationNs,
+		"metadata":           event.Data.Metadata,
 		"previousSource":     previousEvent.Source,
-		"previousName":       previousEvent.Name,
-		"previousDurationNs": previousEvent.DurationNs,
-		"previousMetadata":   previousEvent.Metadata,
+		"previousName":       previousEvent.Data.Name,
+		"previousDurationNs": previousEvent.Data.DurationNs,
+		"previousMetadata":   previousEvent.Data.Metadata,
 	}
 
 	out, _, err := prg.Eval(vars)
@@ -230,27 +230,27 @@ func EvaluateSignalCondition(prg cel.Program, signal, previousSignal *vss.Signal
 		previousSignal = &vss.Signal{}
 	}
 	vars := map[string]any{
-		"valueNumber":         signal.ValueNumber,
-		"valueString":         signal.ValueString,
+		"valueNumber":         signal.Data.ValueNumber,
+		"valueString":         signal.Data.ValueString,
 		"source":              signal.Source,
-		"previousValueNumber": previousSignal.ValueNumber,
-		"previousValueString": previousSignal.ValueString,
+		"previousValueNumber": previousSignal.Data.ValueNumber,
+		"previousValueString": previousSignal.Data.ValueString,
 		"previousSource":      previousSignal.Source,
 	}
 	switch valueType {
 	case signals.NumberType:
-		vars["value"] = signal.ValueNumber
-		vars["previousValue"] = previousSignal.ValueNumber
+		vars["value"] = signal.Data.ValueNumber
+		vars["previousValue"] = previousSignal.Data.ValueNumber
 	case signals.StringType:
-		vars["value"] = signal.ValueString
-		vars["previousValue"] = previousSignal.ValueString
+		vars["value"] = signal.Data.ValueString
+		vars["previousValue"] = previousSignal.Data.ValueString
 	case signals.LocationType:
-		vars["value.Latitude"] = signal.ValueLocation.Latitude
-		vars["value.Longitude"] = signal.ValueLocation.Longitude
-		vars["value.HDOP"] = signal.ValueLocation.HDOP
-		vars["previousValue.Latitude"] = previousSignal.ValueLocation.Latitude
-		vars["previousValue.Longitude"] = previousSignal.ValueLocation.Longitude
-		vars["previousValue.HDOP"] = previousSignal.ValueLocation.HDOP
+		vars["value.Latitude"] = signal.Data.ValueLocation.Latitude
+		vars["value.Longitude"] = signal.Data.ValueLocation.Longitude
+		vars["value.HDOP"] = signal.Data.ValueLocation.HDOP
+		vars["previousValue.Latitude"] = previousSignal.Data.ValueLocation.Latitude
+		vars["previousValue.Longitude"] = previousSignal.Data.ValueLocation.Longitude
+		vars["previousValue.HDOP"] = previousSignal.Data.ValueLocation.HDOP
 	default:
 		return false, fmt.Errorf("unknown value type: %s", valueType)
 	}

@@ -60,7 +60,7 @@ To register a webhook, make a POST request to `/v1/webhooks` with the following 
 
 ```json
 {
-  "service": "telemetry.signals",
+  "service": "signals.vss",
   "metricName": "speed",
   "condition": "value > 55",
   "coolDownPeriod": 30,
@@ -74,7 +74,7 @@ To register a webhook, make a POST request to `/v1/webhooks` with the following 
 
 #### Required Fields
 
-- `service`: The subsystem producing the metric. Must be either "telemetry.signals" or "telemetry.events"
+- `service`: The subsystem producing the metric. Must be one of "signals.vss", "events.behavior", or "events.safety"
 - `metricName`: The fully qualified signal/event name to monitor (e.g., "speed", "HarshBraking")
 - `condition`: A CEL expression that determines when the webhook fires
 - `coolDownPeriod`: Minimum seconds between successive webhook calls
@@ -91,7 +91,7 @@ To register a webhook, make a POST request to `/v1/webhooks` with the following 
 
 CEL (Common Expression Language) conditions determine when webhooks fire. The API validates conditions during webhook creation and provides different variables based on the service type.
 
-#### Signal Conditions (telemetry.signals)
+#### Signal Conditions (signals.vss)
 
 For signal webhooks, these variables are available in CEL expressions:
 
@@ -172,7 +172,7 @@ geoDistance(lat1, lon1, lat2, lon2);
 "geoDistance(value.Latitude, value.Longitude, 51.5074, -0.1278) >= 50.0 && geoDistance(value.Latitude, value.Longitude, 51.5074, -0.1278) <= 100.0";
 ```
 
-#### Event Conditions (telemetry.events)
+#### Event Conditions (events.behavior / events.safety)
 
 For event webhooks, these variables are available:
 
@@ -256,9 +256,9 @@ Example of a signal webhook payload:
   "time": "2025-08-13T10:15:07.630545Z", // Timestamp of the cloudevent was created
   "type": "dimo.trigger", // Type of the cloudevent always dimo.trigger when sent from a webhook
   "datacontenttype": "application/json", // Content type of the data always application/json
-  "dataversion": "telemetry.signals/v1.0", // Versioning for the data field in the payload.
+  "dataversion": "signals.vss/v1.0", // Versioning for the data field in the payload.
   "data": {
-    "service": "telemetry.signals", // Service that sent the signal
+    "service": "signals.vss", // Service that sent the signal
     "metricName": "speed", // Name of the signal/event
     "webhookId": "1fab16e0-3a51-4118-bc3a-6b6d2fecfe13", // UUID of the webhook
     "webhookName": "Speed Alert", // Display    Name of the webhook

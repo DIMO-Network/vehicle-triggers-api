@@ -85,7 +85,7 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		return err
 	}
 	permissions := defaultPermissions
-	if trigger.Service == triggersrepo.ServiceSignal {
+	if trigger.Service == triggersrepo.ServiceSignalVSS {
 		signalDef, err := signals.GetSignalDefinition(trigger.MetricName)
 		if err != nil {
 			zerolog.Ctx(c.Context()).Error().Err(err).
@@ -159,7 +159,7 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromList(c *fiber.Ctx) 
 		return err
 	}
 	permissions := defaultPermissions
-	if trigger.Service == triggersrepo.ServiceSignal {
+	if trigger.Service == triggersrepo.ServiceSignalVSS {
 		signalDef, err := signals.GetSignalDefinition(trigger.MetricName)
 		if err != nil {
 			zerolog.Ctx(c.Context()).Error().Err(err).
@@ -299,7 +299,7 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 		return err
 	}
 	permissions := defaultPermissions
-	if trigger.Service == triggersrepo.ServiceSignal {
+	if trigger.Service == triggersrepo.ServiceSignalVSS {
 		signalDef, err := signals.GetSignalDefinition(trigger.MetricName)
 		if err != nil {
 			zerolog.Ctx(c.Context()).Error().Err(err).

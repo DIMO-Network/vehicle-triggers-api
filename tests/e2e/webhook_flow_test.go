@@ -62,7 +62,7 @@ func TestSignalWebhookFlow(t *testing.T) {
 
 	// Step 1: Create a webhook
 	webhookPayload := webhook.RegisterWebhookRequest{
-		Service:           triggersrepo.ServiceSignal,
+		Service:           triggersrepo.ServiceSignalVSS,
 		MetricName:        "speed",
 		Condition:         "valueNumber > 20 && valueNumber != previousValue",
 		CoolDownPeriod:    0,
@@ -151,16 +151,26 @@ func TestSignalWebhookFlow(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// Step 3: Send a signal to Kafka to trigger the webhook
-	signalPayload := vss.Signal{
-		Subject:      assetDid.String(),
-		Timestamp:    time.Now(),
-		Name:         "speed",
-		ValueNumber:  25.0, // Above the 20 threshold to trigger the webhook
-		ValueString:  "",
-		Source:       "test-source",
-		Producer:     "test-producer",
-		CloudEventID: "test-event-id",
-	}
+	signalPayload := vss.PackSignals(cloudevent.CloudEventHeader{
+		Subject:  assetDid.String(),
+		Source:   "test-source",
+		Producer: "test-producer",
+		ID:       "test-event-id",
+	}, []vss.Signal{
+		{
+			CloudEventHeader: cloudevent.CloudEventHeader{
+				Subject:  assetDid.String(),
+				Source:   "test-source",
+				Producer: "test-producer",
+			},
+			Data: vss.SignalData{
+				Timestamp:    time.Now(),
+				Name:         "speed",
+				ValueNumber:  25.0, // Above the 20 threshold to trigger the webhook
+				CloudEventID: "test-event-id",
+			},
+		},
+	})
 
 	err = tc.Kafka.PushJSONToTopic(settingsCopy.DeviceSignalsTopic, signalPayload)
 	require.NoError(t, err)
@@ -196,16 +206,26 @@ func TestSignalWebhookFlow(t *testing.T) {
 	webhookReceiver.ClearReceivedCalls()
 
 	// Step 5: Send a second signal to Kafka to trigger the webhook
-	signalPayload = vss.Signal{
-		Subject:      assetDid.String(),
-		Timestamp:    time.Now(),
-		Name:         "speed",
-		ValueNumber:  25.0, // Above the 20 threshold to trigger the webhook
-		ValueString:  "",
-		Source:       "test-source",
-		Producer:     "test-producer",
-		CloudEventID: "test-event-id",
-	}
+	signalPayload = vss.PackSignals(cloudevent.CloudEventHeader{
+		Subject:  assetDid.String(),
+		Source:   "test-source",
+		Producer: "test-producer",
+		ID:       "test-event-id",
+	}, []vss.Signal{
+		{
+			CloudEventHeader: cloudevent.CloudEventHeader{
+				Subject:  assetDid.String(),
+				Source:   "test-source",
+				Producer: "test-producer",
+			},
+			Data: vss.SignalData{
+				Timestamp:    time.Now(),
+				Name:         "speed",
+				ValueNumber:  25.0, // Above the 20 threshold to trigger the webhook
+				CloudEventID: "test-event-id",
+			},
+		},
+	})
 	if err := tc.Kafka.PushJSONToTopic(settingsCopy.DeviceSignalsTopic, signalPayload); err != nil {
 		t.Errorf("failed to push signal to Kafka: %v", err)
 	}
@@ -215,16 +235,26 @@ func TestSignalWebhookFlow(t *testing.T) {
 	require.False(t, received, "Webhook was unexpectedly called within timeout")
 	calls = webhookReceiver.GetReceivedCalls()
 	require.Len(t, calls, 0, "Expected exactly one webhook call")
-	signalPayload = vss.Signal{
-		Subject:      assetDid.String(),
-		Timestamp:    time.Now(),
-		Name:         "speed",
-		ValueNumber:  24.0, // Below the 20 threshold to trigger the webhook
-		ValueString:  "",
-		Source:       "test-source",
-		Producer:     "test-producer",
-		CloudEventID: "test-event-id",
-	}
+	signalPayload = vss.PackSignals(cloudevent.CloudEventHeader{
+		Subject:  assetDid.String(),
+		Source:   "test-source",
+		Producer: "test-producer",
+		ID:       "test-event-id",
+	}, []vss.Signal{
+		{
+			CloudEventHeader: cloudevent.CloudEventHeader{
+				Subject:  assetDid.String(),
+				Source:   "test-source",
+				Producer: "test-producer",
+			},
+			Data: vss.SignalData{
+				Timestamp:    time.Now(),
+				Name:         "speed",
+				ValueNumber:  24.0, // Below the 20 threshold to trigger the webhook
+				CloudEventID: "test-event-id",
+			},
+		},
+	})
 	if err := tc.Kafka.PushJSONToTopic(settingsCopy.DeviceSignalsTopic, signalPayload); err != nil {
 		t.Errorf("failed to push signal to Kafka: %v", err)
 	}
@@ -293,7 +323,7 @@ func TestSignalWebhookFlowLocation(t *testing.T) {
 
 	// Step 1: Create a webhook for location coordinates
 	webhookPayload := webhook.RegisterWebhookRequest{
-		Service:           triggersrepo.ServiceSignal,
+		Service:           triggersrepo.ServiceSignalVSS,
 		MetricName:        "currentLocationCoordinates",
 		Condition:         "geoDistance(value.Latitude, value.Longitude, 54.71061320000001, 25.239925999999997) < 0.7138406571965812",
 		CoolDownPeriod:    0,
@@ -383,21 +413,30 @@ func TestSignalWebhookFlowLocation(t *testing.T) {
 
 	// Step 3: Send a location signal to Kafka to trigger the webhook
 	// Using coordinates that are within the 0.7km radius of the target location (54.71061320000001, 25.239925999999997)
-	signalPayload := vss.Signal{
-		Subject:     assetDid.String(),
-		Timestamp:   time.Now(),
-		Name:        "currentLocationCoordinates",
-		ValueNumber: 0,
-		ValueString: "",
-		ValueLocation: vss.Location{
-			Latitude:  54.71061320000001,  // Same as target latitude
-			Longitude: 25.239925999999997, // Same as target longitude
-			HDOP:      1.0,                // Horizontal Dilution of Precision
+	signalPayload := vss.PackSignals(cloudevent.CloudEventHeader{
+		Subject:  assetDid.String(),
+		Source:   "test-source",
+		Producer: "test-producer",
+		ID:       "test-event-id",
+	}, []vss.Signal{
+		{
+			CloudEventHeader: cloudevent.CloudEventHeader{
+				Subject:  assetDid.String(),
+				Source:   "test-source",
+				Producer: "test-producer",
+			},
+			Data: vss.SignalData{
+				Timestamp: time.Now(),
+				Name:      "currentLocationCoordinates",
+				ValueLocation: vss.Location{
+					Latitude:  54.71061320000001,  // Same as target latitude
+					Longitude: 25.239925999999997, // Same as target longitude
+					HDOP:      1.0,                // Horizontal Dilution of Precision
+				},
+				CloudEventID: "test-event-id",
+			},
 		},
-		Source:       "test-source",
-		Producer:     "test-producer",
-		CloudEventID: "test-event-id",
-	}
+	})
 
 	err = tc.Kafka.PushJSONToTopic(settingsCopy.DeviceSignalsTopic, signalPayload)
 	require.NoError(t, err)
@@ -432,27 +471,36 @@ func TestSignalWebhookFlowLocation(t *testing.T) {
 	require.Equal(t, "vss.Location", signal["valueType"].(string))
 	// Verify the location value is a map with latitude, longitude, and HDOP
 	locationValue := signal["value"].(map[string]any)
-	require.Equal(t, 54.71061320000001, locationValue["Latitude"].(float64))
-	require.Equal(t, 25.239925999999997, locationValue["Longitude"].(float64))
-	require.Equal(t, 1.0, locationValue["HDOP"].(float64))
+	require.Equal(t, 54.71061320000001, locationValue["latitude"].(float64))
+	require.Equal(t, 25.239925999999997, locationValue["longitude"].(float64))
+	require.Equal(t, 1.0, locationValue["hdop"].(float64))
 	webhookReceiver.ClearReceivedCalls()
 
 	// Step 5: Send a location signal with coordinates outside the radius
-	signalPayload = vss.Signal{
-		Subject:     assetDid.String(),
-		Timestamp:   time.Now(),
-		Name:        "currentLocationCoordinates",
-		ValueNumber: 0,
-		ValueString: "",
-		ValueLocation: vss.Location{
-			Latitude:  55.0, // Far from target location (outside 0.7km radius)
-			Longitude: 26.0,
-			HDOP:      1.0,
+	signalPayload = vss.PackSignals(cloudevent.CloudEventHeader{
+		Subject:  assetDid.String(),
+		Source:   "test-source",
+		Producer: "test-producer",
+		ID:       "test-event-id",
+	}, []vss.Signal{
+		{
+			CloudEventHeader: cloudevent.CloudEventHeader{
+				Subject:  assetDid.String(),
+				Source:   "test-source",
+				Producer: "test-producer",
+			},
+			Data: vss.SignalData{
+				Timestamp: time.Now(),
+				Name:      "currentLocationCoordinates",
+				ValueLocation: vss.Location{
+					Latitude:  55.0, // Far from target location (outside 0.7km radius)
+					Longitude: 26.0,
+					HDOP:      1.0,
+				},
+				CloudEventID: "test-event-id",
+			},
 		},
-		Source:       "test-source",
-		Producer:     "test-producer",
-		CloudEventID: "test-event-id",
-	}
+	})
 	if err := tc.Kafka.PushJSONToTopic(settingsCopy.DeviceSignalsTopic, signalPayload); err != nil {
 		t.Errorf("failed to push signal to Kafka: %v", err)
 	}
@@ -501,8 +549,8 @@ func TestEventWebhookFlow(t *testing.T) {
 
 	// Step 1: Create a webhook
 	webhookPayload := webhook.RegisterWebhookRequest{
-		Service:           triggersrepo.ServiceEvent,
-		MetricName:        "HarshBraking",
+		Service:           triggersrepo.ServiceBehaviorEvent,
+		MetricName:        "harshBraking",
 		Condition:         "true",
 		CoolDownPeriod:    0,
 		Description:       "Alert when vehicle harsh braking occurs",
@@ -590,20 +638,28 @@ func TestEventWebhookFlow(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// Step 3: Send a signal to Kafka to trigger the webhook
-	eventPayload := []vss.Event{
+	eventCE := vss.PackEvents(cloudevent.CloudEventHeader{
+		Subject:  assetDid.String(),
+		Source:   "test-source",
+		Producer: "test-producer",
+		ID:       "test-event-id",
+	}, []vss.Event{
 		{
-			Subject:      assetDid.String(),
-			Timestamp:    time.Now(),
-			Name:         "HarshBraking",
-			Source:       "test-source",
-			Producer:     "test-producer",
-			CloudEventID: "test-event-id",
-			DurationNs:   1000000000,
-			Metadata:     `{"counter": 1}`,
+			CloudEventHeader: cloudevent.CloudEventHeader{
+				Subject:  assetDid.String(),
+				Source:   "test-source",
+				Producer: "test-producer",
+			},
+			Data: vss.EventData{
+				Timestamp:  time.Now(),
+				Name:       "behavior.harshBraking",
+				DurationNs: 1000000000,
+				Metadata:   `{"counter": 1}`,
+			},
 		},
-	}
+	})
 
-	err = tc.Kafka.PushJSONToTopic(settingsCopy.DeviceEventsTopic, eventPayload)
+	err = tc.Kafka.PushJSONToTopic(settingsCopy.DeviceEventsTopic, eventCE)
 	require.NoError(t, err)
 
 	// Step 4: Verify the webhook was called
@@ -631,7 +687,7 @@ func TestEventWebhookFlow(t *testing.T) {
 	data := webhookBodyData["data"].(map[string]any)
 	require.Contains(t, data, "event")
 	event := data["event"].(map[string]any)
-	require.Equal(t, "HarshBraking", event["name"].(string))
+	require.Equal(t, "behavior.harshBraking", event["name"].(string))
 	require.Equal(t, "test-source", event["source"].(string))
 	require.Equal(t, "test-producer", event["producer"].(string))
 	require.Equal(t, float64(1000000000), event["durationNs"].(float64))

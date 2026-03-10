@@ -9,9 +9,9 @@ import (
 // RegisterWebhookRequest represents the payload to create a webhook trigger.
 // It defines what to monitor, how often to notify, and where to send callbacks.
 type RegisterWebhookRequest struct {
-	// Service is the subsystem producing the metric (e.g. "telemetry.signals or telemetry.events").
+	// Service is the subsystem producing the metric (e.g. "signals.vss" or "events.behavior").
 	// This field can not be updated after the webhook is created.
-	Service string `json:"service" validate:"required" example:"telemetry.signals"`
+	Service string `json:"service" validate:"required" example:"signals.vss"`
 	// MetricName is the fully qualified event/signal to monitor.
 	// This field can not be updated after the webhook is created.
 	MetricName string `json:"metricName" validate:"required" example:"speed"`
@@ -105,7 +105,7 @@ type WebhookView struct {
 // This structure follows industry best practices and includes only essential information
 // while providing proper context and metadata for the triggered event.
 type WebhookPayload struct {
-	// Service identifies the subsystem that produced the signal (e.g., "telemetry.signals")
+	// Service identifies the subsystem that produced the signal (e.g., "signals.vss")
 	Service string `json:"service"`
 
 	// MetricName is the fully qualified signal/metric monitored by the webhook.

@@ -127,24 +127,28 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 			TokenID:         big.NewInt(12345),
 		}
 
-		// Create proper VSS signal data
 		testSignal := vss.Signal{
-			Subject:     vehicleDID.String(),
-			Timestamp:   time.Now().UTC(),
-			Name:        "speed",
-			ValueNumber: 25.0,
-			ValueString: "",
-			Source:      "test-source",
-			Producer:    "test-producer",
+			CloudEventHeader: cloudevent.CloudEventHeader{
+				Subject:  vehicleDID.String(),
+				Source:   "test-source",
+				Producer: "test-producer",
+			},
+			Data: vss.SignalData{
+				Timestamp:   time.Now().UTC(),
+				Name:        "speed",
+				ValueNumber: 25.0,
+			},
 		}
-
-		signalJSON, err := json.Marshal(testSignal)
+		signalCE := vss.PackSignals(cloudevent.CloudEventHeader{
+			Subject: vehicleDID.String(),
+			Source:  "test-source",
+		}, []vss.Signal{testSignal})
+		signalJSON, err := json.Marshal(signalCE)
 		require.NoError(t, err)
 
 		// Mock expectations - no webhooks found for this signal
-
 		mockCache.EXPECT().
-			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignal, "speed").
+			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignalVSS, "speed").
 			Return([]*webhookcache.Webhook{}).
 			Times(1)
 
@@ -175,25 +179,29 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 			TokenID:         big.NewInt(12345),
 		}
 
-		// Create proper VSS signal data
 		testSignal := vss.Signal{
-			Subject:     vehicleDID.String(),
-			Timestamp:   time.Now().UTC(),
-			Name:        "speed",
-			ValueNumber: 25.0,
-			ValueString: "",
-			Source:      "test-source",
-			Producer:    "test-producer",
+			CloudEventHeader: cloudevent.CloudEventHeader{
+				Subject:  vehicleDID.String(),
+				Source:   "test-source",
+				Producer: "test-producer",
+			},
+			Data: vss.SignalData{
+				Timestamp:   time.Now().UTC(),
+				Name:        "speed",
+				ValueNumber: 25.0,
+			},
 		}
-
-		signalJSON, err := json.Marshal(testSignal)
+		signalCE := vss.PackSignals(cloudevent.CloudEventHeader{
+			Subject: vehicleDID.String(),
+			Source:  "test-source",
+		}, []vss.Signal{testSignal})
+		signalJSON, err := json.Marshal(signalCE)
 		require.NoError(t, err)
 
-		// Create mock webhook and trigger
 		mockTrigger := &models.Trigger{
 			ID:           "test-trigger-id",
 			Status:       triggersrepo.StatusEnabled,
-			Service:      triggersrepo.ServiceSignal,
+			Service:      triggersrepo.ServiceSignalVSS,
 			MetricName:   "speed",
 			Condition:    "valueNumber > 20",
 			DisplayName:  "Speed Alert",
@@ -206,7 +214,7 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 
 		// Mock expectations
 		mockCache.EXPECT().
-			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignal, "speed").
+			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignalVSS, "speed").
 			Return([]*webhookcache.Webhook{mockWebhook}).
 			Times(1)
 
@@ -256,12 +264,20 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 			TokenID:         big.NewInt(12345),
 		}
 		testSignal := vss.Signal{
-			Subject:     vehicleDID.String(),
-			Timestamp:   time.Now().UTC(),
-			Name:        "speed",
-			ValueNumber: 25.0,
+			CloudEventHeader: cloudevent.CloudEventHeader{
+				Subject: vehicleDID.String(),
+			},
+			Data: vss.SignalData{
+				Timestamp:   time.Now().UTC(),
+				Name:        "speed",
+				ValueNumber: 25.0,
+			},
 		}
-		signalJSON, err := json.Marshal(testSignal)
+		signalCE := vss.PackSignals(cloudevent.CloudEventHeader{
+			Subject: vehicleDID.String(),
+			Source:  "test-source",
+		}, []vss.Signal{testSignal})
+		signalJSON, err := json.Marshal(signalCE)
 		require.NoError(t, err)
 
 		msg := message.NewMessage(uuid.New().String(), signalJSON)
@@ -288,26 +304,31 @@ func TestMetricListener_ProcessEventMessages(t *testing.T) {
 		listener := NewMetricsListener(mockCache, mockRepo, mockWebhookSender, mockTriggerEvaluator, createTestSettings())
 		ctx := context.Background()
 
-		// Create proper VSS event data
 		vehicleDID := cloudevent.ERC721DID{
 			ChainID:         137,
 			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
 			TokenID:         big.NewInt(12345),
 		}
 		testEvent := vss.Event{
-			Subject:    vehicleDID.String(),
-			Timestamp:  time.Now().UTC(),
-			Name:       "HarshBraking",
-			DurationNs: 1000000, // 1ms
+			CloudEventHeader: cloudevent.CloudEventHeader{
+				Subject: vehicleDID.String(),
+				Source:  "test-source",
+			},
+			Data: vss.EventData{
+				Name:       "behavior.harshBraking",
+				Timestamp:  time.Now().UTC(),
+				DurationNs: 1000000,
+			},
 		}
-
-		eventJSON, err := json.Marshal([]vss.Event{testEvent})
+		eventCE := vss.PackEvents(cloudevent.CloudEventHeader{
+			Subject: vehicleDID.String(),
+			Source:  "test-source",
+		}, []vss.Event{testEvent})
+		eventJSON, err := json.Marshal(eventCE)
 		require.NoError(t, err)
 
-		// Mock expectations - no webhooks found for this event
-
 		mockCache.EXPECT().
-			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceEvent, "HarshBraking").
+			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceBehaviorEvent, "harshBraking").
 			Return([]*webhookcache.Webhook{}).
 			Times(1)
 
@@ -332,28 +353,34 @@ func TestMetricListener_ProcessEventMessages(t *testing.T) {
 		listener := NewMetricsListener(mockCache, mockRepo, mockWebhookSender, mockTriggerEvaluator, createTestSettings())
 		ctx := context.Background()
 
-		// Create proper VSS event data
 		vehicleDID := cloudevent.ERC721DID{
 			ChainID:         137,
 			ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
 			TokenID:         big.NewInt(12345),
 		}
 		testEvent := vss.Event{
-			Subject:    vehicleDID.String(),
-			Timestamp:  time.Now().UTC(),
-			Name:       "HarshBraking",
-			DurationNs: 2000000, // 2ms - above threshold
+			CloudEventHeader: cloudevent.CloudEventHeader{
+				Subject: vehicleDID.String(),
+				Source:  "test-source",
+			},
+			Data: vss.EventData{
+				Name:       "behavior.harshBraking",
+				Timestamp:  time.Now().UTC(),
+				DurationNs: 2000000,
+			},
 		}
-
-		eventJSON, err := json.Marshal([]vss.Event{testEvent})
+		eventCE := vss.PackEvents(cloudevent.CloudEventHeader{
+			Subject: vehicleDID.String(),
+			Source:  "test-source",
+		}, []vss.Event{testEvent})
+		eventJSON, err := json.Marshal(eventCE)
 		require.NoError(t, err)
 
-		// Create mock webhook and trigger
 		mockTrigger := &models.Trigger{
 			ID:           "test-event-trigger-id",
 			Status:       triggersrepo.StatusEnabled,
-			Service:      triggersrepo.ServiceEvent,
-			MetricName:   "HarshBraking",
+			Service:      triggersrepo.ServiceBehaviorEvent,
+			MetricName:   "harshBraking",
 			Condition:    "durationNs > 1000000",
 			DisplayName:  "Harsh Braking Alert",
 			FailureCount: 0,
@@ -363,9 +390,8 @@ func TestMetricListener_ProcessEventMessages(t *testing.T) {
 			Trigger: mockTrigger,
 		}
 
-		// Mock expectations
 		mockCache.EXPECT().
-			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceEvent, "HarshBraking").
+			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceBehaviorEvent, "harshBraking").
 			Return([]*webhookcache.Webhook{mockWebhook}).
 			Times(1)
 
@@ -416,12 +442,21 @@ func TestMetricListener_ProcessEventMessages(t *testing.T) {
 			TokenID:         big.NewInt(12345),
 		}
 		testEvent := vss.Event{
-			Subject:    vehicleDID.String(),
-			Timestamp:  time.Now().UTC(),
-			Name:       "HarshBraking",
-			DurationNs: 1000000,
+			CloudEventHeader: cloudevent.CloudEventHeader{
+				Subject: vehicleDID.String(),
+				Source:  "test-source",
+			},
+			Data: vss.EventData{
+				Name:       "behavior.harshBraking",
+				Timestamp:  time.Now().UTC(),
+				DurationNs: 1000000,
+			},
 		}
-		eventJSON, err := json.Marshal([]vss.Event{testEvent})
+		eventCE := vss.PackEvents(cloudevent.CloudEventHeader{
+			Subject: vehicleDID.String(),
+			Source:  "test-source",
+		}, []vss.Event{testEvent})
+		eventJSON, err := json.Marshal(eventCE)
 		require.NoError(t, err)
 
 		msg := message.NewMessage(uuid.New().String(), eventJSON)
