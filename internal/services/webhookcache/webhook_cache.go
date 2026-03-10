@@ -128,7 +128,7 @@ func (wc *WebhookCache) fetchEventVehicleWebhooks(ctx context.Context) (map[stri
 				continue
 			}
 			valueType := ""
-			if webhook.Trigger.Service == triggersrepo.ServiceSignal {
+			if webhook.Trigger.Service == triggersrepo.ServiceSignalVSS {
 				// only signals have dynamic value types
 				signalDef, err := signals.GetSignalDefinition(webhook.Trigger.MetricName)
 				if err != nil {

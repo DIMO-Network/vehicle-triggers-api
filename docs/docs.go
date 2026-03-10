@@ -811,7 +811,7 @@ const docTemplate = `{
                 "service": {
                     "description": "Service is the subsystem producing the metric (e.g. \"telemetry.signals or telemetry.events\").\nThis field can not be updated after the webhook is created.",
                     "type": "string",
-                    "example": "telemetry.signals"
+                    "example": "signals.vss"
                 },
                 "status": {
                     "description": "Status sets the initial state for the webhook (e.g. \"enabled\" or \"Disabled\").",

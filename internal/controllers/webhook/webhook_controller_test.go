@@ -65,7 +65,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 		defer testServer.Close()
 
 		payload := RegisterWebhookRequest{
-			Service:           triggersrepo.ServiceSignal,
+			Service:           triggersrepo.ServiceSignalVSS,
 			MetricName:        "speed",
 			Condition:         "valueNumber > 55",
 			CoolDownPeriod:    30,
@@ -78,7 +78,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 
 		expectedTrigger := &models.Trigger{
 			ID:             "test-trigger-id",
-			Service:        triggersrepo.ServiceSignal,
+			Service:        triggersrepo.ServiceSignalVSS,
 			MetricName:     "speed",
 			Condition:      "valueNumber > 55",
 			TargetURI:      testServer.URL,
@@ -141,7 +141,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 		app.Post("/webhooks", controller.RegisterWebhook)
 
 		payload := RegisterWebhookRequest{
-			Service:           triggersrepo.ServiceSignal,
+			Service:           triggersrepo.ServiceSignalVSS,
 			MetricName:        "speed",
 			Condition:         "valueNumber > 55",
 			CoolDownPeriod:    30,
@@ -210,7 +210,7 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 		defer testServer.Close()
 
 		payload := RegisterWebhookRequest{
-			Service:           triggersrepo.ServiceSignal,
+			Service:           triggersrepo.ServiceSignalVSS,
 			MetricName:        "speed",
 			Condition:         "valueNumber > 55",
 			CoolDownPeriod:    30,
@@ -245,7 +245,7 @@ func TestWebhookController_ListWebhooks(t *testing.T) {
 		triggers := []*models.Trigger{
 			{
 				ID:             "trigger-1",
-				Service:        triggersrepo.ServiceSignal,
+				Service:        triggersrepo.ServiceSignalVSS,
 				MetricName:     "speed",
 				Condition:      "valueNumber > 55",
 				TargetURI:      "https://example.com/webhook",
@@ -319,7 +319,7 @@ func TestWebhookController_UpdateWebhook(t *testing.T) {
 		triggerID := uuid.New().String()
 		existingTrigger := &models.Trigger{
 			ID:             triggerID,
-			Service:        triggersrepo.ServiceSignal,
+			Service:        triggersrepo.ServiceSignalVSS,
 			MetricName:     "speed",
 			Condition:      "valueNumber > 55",
 			TargetURI:      "https://example.com/webhook",

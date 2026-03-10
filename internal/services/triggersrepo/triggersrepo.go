@@ -33,10 +33,12 @@ const (
 )
 
 const (
-	// ServiceSignal is the service name for signal webhooks.
-	ServiceSignal = "telemetry.signals"
-	// ServiceEvent is the service name for event webhooks.
-	ServiceEvent = "telemetry.events"
+	// ServiceSignalVSS is the service name for VSS signal webhooks (CEL conditions on continuous data).
+	ServiceSignalVSS = "signals.vss"
+	// ServiceBehaviorEvent is the service name for driving behavior event webhooks.
+	ServiceBehaviorEvent = "events.behavior"
+	// ServiceSafetyEvent is the service name for safety event webhooks.
+	ServiceSafetyEvent = "events.safety"
 )
 
 type Repository struct {

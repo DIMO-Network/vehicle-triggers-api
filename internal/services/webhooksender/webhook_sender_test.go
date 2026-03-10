@@ -345,7 +345,7 @@ func createTestPayload(webhookID string) *cloudevent.CloudEvent[webhook.WebhookP
 			SpecVersion:     "1.0",
 		},
 		Data: webhook.WebhookPayload{
-			Service:     "telemetry.signals",
+			Service:     "signals.vss",
 			MetricName:  "speed",
 			WebhookId:   webhookID,
 			WebhookName: "Test Webhook",

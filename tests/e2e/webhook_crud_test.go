@@ -67,7 +67,7 @@ func TestWebhookCRUDOperations(t *testing.T) {
 	var webhookID string
 	t.Run("Step 1: Create Webhook", func(t *testing.T) {
 		webhookPayload := webhook.RegisterWebhookRequest{
-			Service:           "telemetry.signals",
+			Service:           "signals.vss",
 			MetricName:        "speed",
 			Condition:         "valueNumber > 20",
 			CoolDownPeriod:    10,

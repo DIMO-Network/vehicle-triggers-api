@@ -66,8 +66,10 @@ func TestTriggerEvaluator_EvaluateSignalTrigger(t *testing.T) {
 		// Mock last log retrieval
 		lastLog := &models.TriggerLog{
 			SnapshotData: snapShotFromSignal(t, vss.Signal{
-				Timestamp:   signalData.Signal.Timestamp.Add(-time.Hour), // previous value 1 hour ago
-				ValueNumber: 59,
+				Data: vss.SignalData{
+					Timestamp:   signalData.Signal.Data.Timestamp.Add(-time.Hour), // previous value 1 hour ago
+					ValueNumber: 59,
+				},
 			}),
 			AssetDid:        signalData.VehicleDID.String(),
 			TriggerID:       trigger.ID,
@@ -176,8 +178,10 @@ func TestTriggerEvaluator_EvaluateSignalTrigger(t *testing.T) {
 		// Mock last log retrieval - recent trigger (cooldown not passed; GetLastLogForMetric not called)
 		lastLog := &models.TriggerLog{
 			SnapshotData: snapShotFromSignal(t, vss.Signal{
-				Timestamp:   signalData.Signal.Timestamp.Add(-time.Hour), // previous value 1 hour ago
-				ValueNumber: 59,
+				Data: vss.SignalData{
+					Timestamp:   signalData.Signal.Data.Timestamp.Add(-time.Hour), // previous value 1 hour ago
+					ValueNumber: 59,
+				},
 			}),
 			AssetDid:        signalData.VehicleDID.String(),
 			TriggerID:       trigger.ID,
@@ -221,8 +225,10 @@ func TestTriggerEvaluator_EvaluateSignalTrigger(t *testing.T) {
 		// Mock last log retrieval
 		lastLog := &models.TriggerLog{
 			SnapshotData: snapShotFromSignal(t, vss.Signal{
-				Timestamp:   signalData.Signal.Timestamp.Add(-time.Hour),
-				ValueNumber: 60, // value the same as current
+				Data: vss.SignalData{
+					Timestamp:   signalData.Signal.Data.Timestamp.Add(-time.Hour),
+					ValueNumber: 60, // value the same as current
+				},
 			}),
 			AssetDid:        signalData.VehicleDID.String(),
 			TriggerID:       trigger.ID,
@@ -384,12 +390,12 @@ func TestTransitionConditions(t *testing.T) {
 		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
 
 		trigger := &models.Trigger{
-			ID: "trigger-ignition-on", Service: "telemetry.signals", MetricName: "isIgnitionOn",
+			ID: "trigger-ignition-on", Service: "signals.vss", MetricName: "isIgnitionOn",
 			Condition: "valueNumber == 1 && valueNumber != previousValueNumber",
 			CooldownPeriod: 600, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
 		}
 		signalData := &SignalEvaluationData{
-			Signal:     vss.Signal{Timestamp: time.Now().UTC(), ValueNumber: 1},
+			Signal:     vss.Signal{Data: vss.SignalData{Timestamp: time.Now().UTC(), ValueNumber: 1}},
 			VehicleDID: vehicleDID,
 			Def:        numberDef,
 			RawData:    json.RawMessage(`{"valueNumber": 1}`),
@@ -402,7 +408,7 @@ func TestTransitionConditions(t *testing.T) {
 		ctx := context.Background()
 		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
 		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(&models.TriggerLog{LastTriggeredAt: time.Now().Add(-2 * time.Hour)}, nil).Times(1)
-		prevLog := &models.TriggerLog{SnapshotData: snapShotFromSignal(t, vss.Signal{ValueNumber: 0})}
+		prevLog := &models.TriggerLog{SnapshotData: snapShotFromSignal(t, vss.Signal{Data: vss.SignalData{ValueNumber: 0}})}
 		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "isIgnitionOn").Return(prevLog, nil).Times(1)
 
 		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
@@ -418,12 +424,12 @@ func TestTransitionConditions(t *testing.T) {
 		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
 
 		trigger := &models.Trigger{
-			ID: "trigger-ignition-on", Service: "telemetry.signals", MetricName: "isIgnitionOn",
+			ID: "trigger-ignition-on", Service: "signals.vss", MetricName: "isIgnitionOn",
 			Condition: "valueNumber == 1 && valueNumber != previousValueNumber",
 			CooldownPeriod: 600, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
 		}
 		signalData := &SignalEvaluationData{
-			Signal:     vss.Signal{Timestamp: time.Now().UTC(), ValueNumber: 1},
+			Signal:     vss.Signal{Data: vss.SignalData{Timestamp: time.Now().UTC(), ValueNumber: 1}},
 			VehicleDID: vehicleDID,
 			Def:        numberDef,
 			RawData:    json.RawMessage(`{"valueNumber": 1}`),
@@ -451,12 +457,12 @@ func TestTransitionConditions(t *testing.T) {
 		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
 
 		trigger := &models.Trigger{
-			ID: "trigger-ignition-off", Service: "telemetry.signals", MetricName: "isIgnitionOn",
+			ID: "trigger-ignition-off", Service: "signals.vss", MetricName: "isIgnitionOn",
 			Condition: "valueNumber == 0 && valueNumber != previousValueNumber",
 			CooldownPeriod: 600, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
 		}
 		signalData := &SignalEvaluationData{
-			Signal:     vss.Signal{Timestamp: time.Now().UTC(), ValueNumber: 0},
+			Signal:     vss.Signal{Data: vss.SignalData{Timestamp: time.Now().UTC(), ValueNumber: 0}},
 			VehicleDID: vehicleDID,
 			Def:        numberDef,
 			RawData:    json.RawMessage(`{"valueNumber": 0}`),
@@ -469,7 +475,7 @@ func TestTransitionConditions(t *testing.T) {
 		ctx := context.Background()
 		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
 		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(&models.TriggerLog{LastTriggeredAt: time.Now().Add(-2 * time.Hour)}, nil).Times(1)
-		prevLog := &models.TriggerLog{SnapshotData: snapShotFromSignal(t, vss.Signal{ValueNumber: 1})}
+		prevLog := &models.TriggerLog{SnapshotData: snapShotFromSignal(t, vss.Signal{Data: vss.SignalData{ValueNumber: 1}})}
 		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "isIgnitionOn").Return(prevLog, nil).Times(1)
 
 		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
@@ -485,12 +491,12 @@ func TestTransitionConditions(t *testing.T) {
 		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
 
 		trigger := &models.Trigger{
-			ID: "trigger-ignition-off", Service: "telemetry.signals", MetricName: "isIgnitionOn",
+			ID: "trigger-ignition-off", Service: "signals.vss", MetricName: "isIgnitionOn",
 			Condition: "valueNumber == 0 && valueNumber != previousValueNumber",
 			CooldownPeriod: 600, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
 		}
 		signalData := &SignalEvaluationData{
-			Signal:     vss.Signal{Timestamp: time.Now().UTC(), ValueNumber: 0},
+			Signal:     vss.Signal{Data: vss.SignalData{Timestamp: time.Now().UTC(), ValueNumber: 0}},
 			VehicleDID: vehicleDID,
 			Def:        numberDef,
 			RawData:    json.RawMessage(`{"valueNumber": 0}`),
@@ -519,12 +525,12 @@ func TestTransitionConditions(t *testing.T) {
 		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
 
 		trigger := &models.Trigger{
-			ID: "trigger-obd-unplugged", Service: "telemetry.signals", MetricName: "obdisPluggedin",
+			ID: "trigger-obd-unplugged", Service: "signals.vss", MetricName: "obdisPluggedin",
 			Condition: "valueNumber == 0 && valueNumber != previousValueNumber",
 			CooldownPeriod: 60, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
 		}
 		signalData := &SignalEvaluationData{
-			Signal:     vss.Signal{Timestamp: time.Now().UTC(), ValueNumber: 0},
+			Signal:     vss.Signal{Data: vss.SignalData{Timestamp: time.Now().UTC(), ValueNumber: 0}},
 			VehicleDID: vehicleDID,
 			Def:        numberDef,
 			RawData:    json.RawMessage(`{"valueNumber": 0}`),
@@ -537,7 +543,7 @@ func TestTransitionConditions(t *testing.T) {
 		ctx := context.Background()
 		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
 		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(&models.TriggerLog{LastTriggeredAt: time.Now().Add(-2 * time.Minute)}, nil).Times(1)
-		prevLog := &models.TriggerLog{SnapshotData: snapShotFromSignal(t, vss.Signal{ValueNumber: 1})}
+		prevLog := &models.TriggerLog{SnapshotData: snapShotFromSignal(t, vss.Signal{Data: vss.SignalData{ValueNumber: 1}})}
 		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "obdisPluggedin").Return(prevLog, nil).Times(1)
 
 		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
@@ -553,12 +559,12 @@ func TestTransitionConditions(t *testing.T) {
 		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
 
 		trigger := &models.Trigger{
-			ID: "trigger-obd-unplugged", Service: "telemetry.signals", MetricName: "obdisPluggedin",
+			ID: "trigger-obd-unplugged", Service: "signals.vss", MetricName: "obdisPluggedin",
 			Condition: "valueNumber == 0 && valueNumber != previousValueNumber",
 			CooldownPeriod: 60, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
 		}
 		signalData := &SignalEvaluationData{
-			Signal:     vss.Signal{Timestamp: time.Now().UTC(), ValueNumber: 0},
+			Signal:     vss.Signal{Data: vss.SignalData{Timestamp: time.Now().UTC(), ValueNumber: 0}},
 			VehicleDID: vehicleDID,
 			Def:        numberDef,
 			RawData:    json.RawMessage(`{"valueNumber": 0}`),
@@ -611,9 +617,11 @@ func TestTriggerEvaluator_EvaluateEventTrigger(t *testing.T) {
 		// Mock last log retrieval
 		lastLog := &models.TriggerLog{
 			SnapshotData: snapShotFromEvent(t, vss.Event{
-				Timestamp:  eventData.Event.Timestamp.Add(-time.Hour),
-				DurationNs: 5,
-				Name:       "ignition",
+				Data: vss.EventData{
+					Timestamp:  eventData.Event.Data.Timestamp.Add(-time.Hour),
+					DurationNs: 5,
+					Name:       "ignition",
+				},
 			}),
 			AssetDid:        eventData.VehicleDID.String(),
 			TriggerID:       trigger.ID,
@@ -696,9 +704,11 @@ func TestTriggerEvaluator_EvaluateEventTrigger(t *testing.T) {
 		// Mock last log retrieval - recent trigger
 		lastLog := &models.TriggerLog{
 			SnapshotData: snapShotFromEvent(t, vss.Event{
-				Timestamp:  eventData.Event.Timestamp.Add(-time.Hour),
-				DurationNs: 5,
-				Name:       "HarshBraking",
+				Data: vss.EventData{
+					Timestamp:  eventData.Event.Data.Timestamp.Add(-time.Hour),
+					DurationNs: 5,
+					Name:       "HarshBraking",
+				},
 			}),
 			AssetDid:        eventData.VehicleDID.String(),
 			TriggerID:       trigger.ID,
@@ -746,9 +756,11 @@ func TestTriggerEvaluator_EvaluateEventTrigger(t *testing.T) {
 		// Mock last log retrieval - same event type
 		lastLog := &models.TriggerLog{
 			SnapshotData: snapShotFromEvent(t, vss.Event{
-				Timestamp:  eventData.Event.Timestamp.Add(-time.Hour),
-				DurationNs: 15,
-				Name:       "HarshBraking",
+				Data: vss.EventData{
+					Timestamp:  eventData.Event.Data.Timestamp.Add(-time.Hour),
+					DurationNs: 15,
+					Name:       "HarshBraking",
+				},
 			}), // Same as current
 			AssetDid:        eventData.VehicleDID.String(),
 			TriggerID:       trigger.ID,
@@ -815,7 +827,7 @@ func TestTriggerEvaluator_EvaluateEventTrigger(t *testing.T) {
 func createTestTrigger() *models.Trigger {
 	return &models.Trigger{
 		ID:                      "test-trigger-id",
-		Service:                 "telemetry.signals",
+		Service:                 "signals.vss",
 		MetricName:              "speed",
 		Condition:               "valueNumber > 55",
 		TargetURI:               "https://example.com/webhook",
@@ -848,8 +860,10 @@ func snapShotFromEvent(t *testing.T, event vss.Event) []byte {
 func createTestSignalData() *SignalEvaluationData {
 	return &SignalEvaluationData{
 		Signal: vss.Signal{
-			Timestamp:   time.Now().UTC(),
-			ValueNumber: 60.0, // Higher than threshold in test condition
+			Data: vss.SignalData{
+				Timestamp:   time.Now().UTC(),
+				ValueNumber: 60.0, // Higher than threshold in test condition
+			},
 		},
 		VehicleDID: createTestAssetDID(),
 		Def: signals.SignalDefinition{
@@ -864,9 +878,11 @@ func createTestSignalData() *SignalEvaluationData {
 func createTestEventData() *EventEvaluationData {
 	return &EventEvaluationData{
 		Event: vss.Event{
-			Timestamp:  time.Now().UTC(),
-			DurationNs: 10,
-			Name:       "HarshBraking",
+			Data: vss.EventData{
+				Timestamp:  time.Now().UTC(),
+				DurationNs: 10,
+				Name:       "HarshBraking",
+			},
 		},
 		VehicleDID: createTestAssetDID(),
 		RawData:    json.RawMessage(`{"eventType": "HarshBraking", "timestamp": "2024-01-01T12:00:00Z", "durationNs": 10}`),
