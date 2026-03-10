@@ -142,19 +142,19 @@ func TestPrepareCondition(t *testing.T) {
 		},
 		{
 			name:        "Location type longitude",
-			condition:   "value.longitude > 10.0 && value.longitude != previousvalue.longitude",
+			condition:   "value.longitude > 10.0 && value.longitude != previousValue.longitude",
 			expectError: false,
 			valueType:   signals.LocationType,
 		},
 		{
 			name:        "Location type latitude",
-			condition:   "value.latitude > 10.0 && value.latitude != previousvalue.latitude",
+			condition:   "value.latitude > 10.0 && value.latitude != previousValue.latitude",
 			expectError: false,
 			valueType:   signals.LocationType,
 		},
 		{
 			name:        "Location type hdop",
-			condition:   "value.hdop > 10.0 && value.hdop != previousvalue.hdop",
+			condition:   "value.hdop > 10.0 && value.hdop != previousValue.hdop",
 			expectError: false,
 			valueType:   signals.LocationType,
 		},
@@ -166,7 +166,7 @@ func TestPrepareCondition(t *testing.T) {
 		},
 		{
 			name:        "geoDistance with previous location",
-			condition:   "geoDistance(value.latitude, value.longitude, previousvalue.latitude, previousvalue.longitude) > 5.0",
+			condition:   "geoDistance(value.latitude, value.longitude, previousValue.latitude, previousValue.longitude) > 5.0",
 			expectError: false,
 			valueType:   signals.LocationType,
 		},
@@ -433,7 +433,7 @@ func TestEvaluateCondition(t *testing.T) {
 		},
 		{
 			name:      "Location type distance",
-			condition: "geoDistance(value.latitude, value.longitude, previousvalue.latitude, previousvalue.longitude) > 10.0 && value.hdop != 0",
+			condition: "geoDistance(value.latitude, value.longitude, previousValue.latitude, previousValue.longitude) > 10.0 && value.hdop != 0",
 			signal: &vss.Signal{
 				Data: vss.SignalData{
 					ValueLocation: vss.Location{
@@ -449,7 +449,7 @@ func TestEvaluateCondition(t *testing.T) {
 		},
 		{
 			name:      "geoDistance with movement detection",
-			condition: "geoDistance(value.latitude, value.longitude, previousvalue.latitude, previousvalue.longitude) > 5.0",
+			condition: "geoDistance(value.latitude, value.longitude, previousValue.latitude, previousValue.longitude) > 5.0",
 			signal: &vss.Signal{
 				Data: vss.SignalData{
 					ValueLocation: vss.Location{

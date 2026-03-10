@@ -163,9 +163,9 @@ func PrepareSignalCondition(celCondition string, valueType string) (cel.Program,
 		cel.Variable("previousValueNumber", cel.DoubleType),
 		cel.Variable("previousValueString", cel.StringType),
 		cel.Variable("previousValue", cel.DynType),
-		cel.Variable("previousvalue.latitude", cel.DynType),
-		cel.Variable("previousvalue.longitude", cel.DynType),
-		cel.Variable("previousvalue.hdop", cel.DynType),
+		cel.Variable("previousValue.latitude", cel.DynType),
+		cel.Variable("previousValue.longitude", cel.DynType),
+		cel.Variable("previousValue.hdop", cel.DynType),
 		cel.Variable("previousSource", cel.StringType),
 		cel.CrossTypeNumericComparisons(true),
 	}
@@ -205,9 +205,9 @@ func PrepareSignalCondition(celCondition string, valueType string) (cel.Program,
 		vars["value.latitude"] = 0
 		vars["value.longitude"] = 0
 		vars["value.hdop"] = 0
-		vars["previousvalue.latitude"] = 0
-		vars["previousvalue.longitude"] = 0
-		vars["previousvalue.hdop"] = 0
+		vars["previousValue.latitude"] = 0
+		vars["previousValue.longitude"] = 0
+		vars["previousValue.hdop"] = 0
 	default:
 		return nil, fmt.Errorf("unknown value type: %s", valueType)
 	}
@@ -248,9 +248,9 @@ func EvaluateSignalCondition(prg cel.Program, signal, previousSignal *vss.Signal
 		vars["value.latitude"] = signal.Data.ValueLocation.Latitude
 		vars["value.longitude"] = signal.Data.ValueLocation.Longitude
 		vars["value.hdop"] = signal.Data.ValueLocation.HDOP
-		vars["previousvalue.latitude"] = previousSignal.Data.ValueLocation.Latitude
-		vars["previousvalue.longitude"] = previousSignal.Data.ValueLocation.Longitude
-		vars["previousvalue.hdop"] = previousSignal.Data.ValueLocation.HDOP
+		vars["previousValue.latitude"] = previousSignal.Data.ValueLocation.Latitude
+		vars["previousValue.longitude"] = previousSignal.Data.ValueLocation.Longitude
+		vars["previousValue.hdop"] = previousSignal.Data.ValueLocation.HDOP
 	default:
 		return false, fmt.Errorf("unknown value type: %s", valueType)
 	}
