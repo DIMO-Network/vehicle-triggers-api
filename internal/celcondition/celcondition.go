@@ -155,17 +155,17 @@ func PrepareSignalCondition(celCondition string, valueType string) (cel.Program,
 		cel.Variable("valueNumber", cel.DynType),
 		cel.Variable("valueString", cel.StringType),
 		cel.Variable("value", cel.DynType),
-		cel.Variable("value.Latitude", cel.DynType),
-		cel.Variable("value.Longitude", cel.DynType),
-		cel.Variable("value.HDOP", cel.DynType),
+		cel.Variable("value.latitude", cel.DynType),
+		cel.Variable("value.longitude", cel.DynType),
+		cel.Variable("value.hdop", cel.DynType),
 		geoDistanceOpt(),
 		cel.Variable("source", cel.DoubleType),
 		cel.Variable("previousValueNumber", cel.DoubleType),
 		cel.Variable("previousValueString", cel.StringType),
 		cel.Variable("previousValue", cel.DynType),
-		cel.Variable("previousValue.Latitude", cel.DynType),
-		cel.Variable("previousValue.Longitude", cel.DynType),
-		cel.Variable("previousValue.HDOP", cel.DynType),
+		cel.Variable("previousvalue.latitude", cel.DynType),
+		cel.Variable("previousvalue.longitude", cel.DynType),
+		cel.Variable("previousvalue.hdop", cel.DynType),
 		cel.Variable("previousSource", cel.StringType),
 		cel.CrossTypeNumericComparisons(true),
 	}
@@ -202,12 +202,12 @@ func PrepareSignalCondition(celCondition string, valueType string) (cel.Program,
 		vars["value"] = ""
 		vars["previousValue"] = ""
 	case signals.LocationType:
-		vars["value.Latitude"] = 0
-		vars["value.Longitude"] = 0
-		vars["value.HDOP"] = 0
-		vars["previousValue.Latitude"] = 0
-		vars["previousValue.Longitude"] = 0
-		vars["previousValue.HDOP"] = 0
+		vars["value.latitude"] = 0
+		vars["value.longitude"] = 0
+		vars["value.hdop"] = 0
+		vars["previousvalue.latitude"] = 0
+		vars["previousvalue.longitude"] = 0
+		vars["previousvalue.hdop"] = 0
 	default:
 		return nil, fmt.Errorf("unknown value type: %s", valueType)
 	}
@@ -245,12 +245,12 @@ func EvaluateSignalCondition(prg cel.Program, signal, previousSignal *vss.Signal
 		vars["value"] = signal.Data.ValueString
 		vars["previousValue"] = previousSignal.Data.ValueString
 	case signals.LocationType:
-		vars["value.Latitude"] = signal.Data.ValueLocation.Latitude
-		vars["value.Longitude"] = signal.Data.ValueLocation.Longitude
-		vars["value.HDOP"] = signal.Data.ValueLocation.HDOP
-		vars["previousValue.Latitude"] = previousSignal.Data.ValueLocation.Latitude
-		vars["previousValue.Longitude"] = previousSignal.Data.ValueLocation.Longitude
-		vars["previousValue.HDOP"] = previousSignal.Data.ValueLocation.HDOP
+		vars["value.latitude"] = signal.Data.ValueLocation.Latitude
+		vars["value.longitude"] = signal.Data.ValueLocation.Longitude
+		vars["value.hdop"] = signal.Data.ValueLocation.HDOP
+		vars["previousvalue.latitude"] = previousSignal.Data.ValueLocation.Latitude
+		vars["previousvalue.longitude"] = previousSignal.Data.ValueLocation.Longitude
+		vars["previousvalue.hdop"] = previousSignal.Data.ValueLocation.HDOP
 	default:
 		return false, fmt.Errorf("unknown value type: %s", valueType)
 	}

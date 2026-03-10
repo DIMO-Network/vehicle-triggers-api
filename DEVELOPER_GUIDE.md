@@ -182,12 +182,12 @@ previousValueString; // Previous string value
 previousSource; // Previous source
 
 // For location signals:
-value.Latitude;
-value.Longitude;
-value.HDOP;
-previousValue.Latitude;
-previousValue.Longitude;
-previousValue.HDOP;
+value.latitude;
+value.longitude;
+value.hdop;
+previousvalue.latitude;
+previousvalue.longitude;
+previousvalue.hdop;
 ```
 
 **Event Variables Available:**

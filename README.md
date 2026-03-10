@@ -102,12 +102,12 @@ For signal webhooks, these variables are available in CEL expressions:
 
 For location-type signals, additional variables are available:
 
-- `value.Latitude`: Current latitude coordinate
-- `value.Longitude`: Current longitude coordinate
-- `value.HDOP`: Current Horizontal Dilution of Precision
-- `previousValue.Latitude`: Previous latitude coordinate
-- `previousValue.Longitude`: Previous longitude coordinate
-- `previousValue.HDOP`: Previous Horizontal Dilution of Precision
+- `value.latitude`: Current latitude coordinate
+- `value.longitude`: Current longitude coordinate
+- `value.hdop`: Current Horizontal Dilution of Precision
+- `previousvalue.latitude`: Previous latitude coordinate
+- `previousvalue.longitude`: Previous longitude coordinate
+- `previousvalue.hdop`: Previous Horizontal Dilution of Precision
 
 **Examples:**
 
@@ -131,10 +131,10 @@ For location-type signals, additional variables are available:
 "valueString.contains('emergency')";
 
 // Location-based conditions
-"value.Latitude > 40.0 && value.Longitude < -70.0";
+"value.latitude > 40.0 && value.longitude < -70.0";
 
 // GPS accuracy check
-"value.HDOP < 5.0";
+"value.hdop < 5.0";
 ```
 
 #### Geographic Distance Function
@@ -160,16 +160,16 @@ geoDistance(lat1, lon1, lat2, lon2);
 
 ```javascript
 // Check if vehicle is within 10km of a specific location
-"geoDistance(value.Latitude, value.Longitude, 40.7128, -74.0060) < 10.0";
+"geoDistance(value.latitude, value.longitude, 40.7128, -74.0060) < 10.0";
 
 // Detect significant movement from previous location
-"geoDistance(value.Latitude, value.Longitude, previousValue.Latitude, previousValue.Longitude) > 5.0";
+"geoDistance(value.latitude, value.longitude, previousvalue.latitude, previousvalue.longitude) > 5.0";
 
 // Geofencing with accuracy check
-"geoDistance(value.Latitude, value.Longitude, 37.7749, -122.4194) <= 1.0 && value.HDOP < 5.0";
+"geoDistance(value.latitude, value.longitude, 37.7749, -122.4194) <= 1.0 && value.hdop < 5.0";
 
 // Distance range check (between 50km and 100km from a point)
-"geoDistance(value.Latitude, value.Longitude, 51.5074, -0.1278) >= 50.0 && geoDistance(value.Latitude, value.Longitude, 51.5074, -0.1278) <= 100.0";
+"geoDistance(value.latitude, value.longitude, 51.5074, -0.1278) >= 50.0 && geoDistance(value.latitude, value.longitude, 51.5074, -0.1278) <= 100.0";
 ```
 
 #### Event Conditions (events.behavior / events.safety)

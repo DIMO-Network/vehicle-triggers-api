@@ -142,37 +142,37 @@ func TestPrepareCondition(t *testing.T) {
 		},
 		{
 			name:        "Location type longitude",
-			condition:   "value.Longitude > 10.0 && value.Longitude != previousValue.Longitude",
+			condition:   "value.longitude > 10.0 && value.longitude != previousvalue.longitude",
 			expectError: false,
 			valueType:   signals.LocationType,
 		},
 		{
 			name:        "Location type latitude",
-			condition:   "value.Latitude > 10.0 && value.Latitude != previousValue.Latitude",
+			condition:   "value.latitude > 10.0 && value.latitude != previousvalue.latitude",
 			expectError: false,
 			valueType:   signals.LocationType,
 		},
 		{
 			name:        "Location type hdop",
-			condition:   "value.HDOP > 10.0 && value.HDOP != previousValue.HDOP",
+			condition:   "value.hdop > 10.0 && value.hdop != previousvalue.hdop",
 			expectError: false,
 			valueType:   signals.LocationType,
 		},
 		{
 			name:        "Location type distance",
-			condition:   "geoDistance(value.Latitude, value.Longitude, 10.0, 10.0) > 10.0",
+			condition:   "geoDistance(value.latitude, value.longitude, 10.0, 10.0) > 10.0",
 			expectError: false,
 			valueType:   signals.LocationType,
 		},
 		{
 			name:        "geoDistance with previous location",
-			condition:   "geoDistance(value.Latitude, value.Longitude, previousValue.Latitude, previousValue.Longitude) > 5.0",
+			condition:   "geoDistance(value.latitude, value.longitude, previousvalue.latitude, previousvalue.longitude) > 5.0",
 			expectError: false,
 			valueType:   signals.LocationType,
 		},
 		{
 			name:        "geoDistance combined with HDOP",
-			condition:   "geoDistance(value.Latitude, value.Longitude, 37.7749, -122.4194) <= 10.0 && value.HDOP < 5.0",
+			condition:   "geoDistance(value.latitude, value.longitude, 37.7749, -122.4194) <= 10.0 && value.hdop < 5.0",
 			expectError: false,
 			valueType:   signals.LocationType,
 		},
@@ -385,7 +385,7 @@ func TestEvaluateCondition(t *testing.T) {
 		},
 		{
 			name:      "Location type longitude",
-			condition: "value.Longitude > 10.0 ",
+			condition: "value.longitude > 10.0 ",
 			signal: &vss.Signal{
 				Data: vss.SignalData{
 					ValueLocation: vss.Location{
@@ -401,7 +401,7 @@ func TestEvaluateCondition(t *testing.T) {
 		},
 		{
 			name:      "Location type latitude",
-			condition: "value.Latitude > 10.0 ",
+			condition: "value.latitude > 10.0 ",
 			signal: &vss.Signal{
 				Data: vss.SignalData{
 					ValueLocation: vss.Location{
@@ -417,7 +417,7 @@ func TestEvaluateCondition(t *testing.T) {
 		},
 		{
 			name:      "Location type hdop",
-			condition: "value.HDOP > 10.0 ",
+			condition: "value.hdop > 10.0 ",
 			signal: &vss.Signal{
 				Data: vss.SignalData{
 					ValueLocation: vss.Location{
@@ -433,7 +433,7 @@ func TestEvaluateCondition(t *testing.T) {
 		},
 		{
 			name:      "Location type distance",
-			condition: "geoDistance(value.Latitude, value.Longitude, previousValue.Latitude, previousValue.Longitude) > 10.0 && value.HDOP != 0",
+			condition: "geoDistance(value.latitude, value.longitude, previousvalue.latitude, previousvalue.longitude) > 10.0 && value.hdop != 0",
 			signal: &vss.Signal{
 				Data: vss.SignalData{
 					ValueLocation: vss.Location{
@@ -449,7 +449,7 @@ func TestEvaluateCondition(t *testing.T) {
 		},
 		{
 			name:      "geoDistance with movement detection",
-			condition: "geoDistance(value.Latitude, value.Longitude, previousValue.Latitude, previousValue.Longitude) > 5.0",
+			condition: "geoDistance(value.latitude, value.longitude, previousvalue.latitude, previousvalue.longitude) > 5.0",
 			signal: &vss.Signal{
 				Data: vss.SignalData{
 					ValueLocation: vss.Location{
@@ -474,7 +474,7 @@ func TestEvaluateCondition(t *testing.T) {
 		},
 		{
 			name:      "geoDistance geofencing check",
-			condition: "geoDistance(value.Latitude, value.Longitude, 37.7749, -122.4194) <= 10.0 && value.HDOP < 5.0",
+			condition: "geoDistance(value.latitude, value.longitude, 37.7749, -122.4194) <= 10.0 && value.hdop < 5.0",
 			signal: &vss.Signal{
 				Data: vss.SignalData{
 					ValueLocation: vss.Location{

@@ -325,7 +325,7 @@ func TestSignalWebhookFlowLocation(t *testing.T) {
 	webhookPayload := webhook.RegisterWebhookRequest{
 		Service:           triggersrepo.ServiceSignalVSS,
 		MetricName:        "currentLocationCoordinates",
-		Condition:         "geoDistance(value.Latitude, value.Longitude, 54.71061320000001, 25.239925999999997) < 0.7138406571965812",
+		Condition:         "geoDistance(value.latitude, value.longitude, 54.71061320000001, 25.239925999999997) < 0.7138406571965812",
 		CoolDownPeriod:    0,
 		Description:       "Alert when vehicle is within 0.7km of target location",
 		TargetURL:         webhookReceiver.URL(),
