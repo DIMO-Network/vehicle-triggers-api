@@ -105,9 +105,9 @@ For location-type signals, additional variables are available:
 - `value.latitude`: Current latitude coordinate
 - `value.longitude`: Current longitude coordinate
 - `value.hdop`: Current Horizontal Dilution of Precision
-- `previousvalue.latitude`: Previous latitude coordinate
-- `previousvalue.longitude`: Previous longitude coordinate
-- `previousvalue.hdop`: Previous Horizontal Dilution of Precision
+- `previousValue.latitude`: Previous latitude coordinate
+- `previousValue.longitude`: Previous longitude coordinate
+- `previousValue.hdop`: Previous Horizontal Dilution of Precision
 
 **Examples:**
 
@@ -163,7 +163,7 @@ geoDistance(lat1, lon1, lat2, lon2);
 "geoDistance(value.latitude, value.longitude, 40.7128, -74.0060) < 10.0";
 
 // Detect significant movement from previous location
-"geoDistance(value.latitude, value.longitude, previousvalue.latitude, previousvalue.longitude) > 5.0";
+"geoDistance(value.latitude, value.longitude, previousValue.latitude, previousValue.longitude) > 5.0";
 
 // Geofencing with accuracy check
 "geoDistance(value.latitude, value.longitude, 37.7749, -122.4194) <= 1.0 && value.hdop < 5.0";
