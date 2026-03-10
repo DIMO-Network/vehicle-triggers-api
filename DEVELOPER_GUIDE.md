@@ -115,7 +115,7 @@ A **trigger** (also called a webhook) is a user-defined rule that monitors vehic
 **Key Fields:**
 
 - `id`: UUID of the webhook
-- `service`: Either `telemetry.signals` or `telemetry.events`
+- `service`: One of `signals.vss`, `events.behavior`, or `events.safety`
 - `metric_name`: The signal/event name to monitor (e.g., "speed", "HarshBraking")
 - `condition`: CEL expression that evaluates to true/false
 - `target_uri`: HTTPS endpoint to POST webhooks to
@@ -284,7 +284,7 @@ previousMetadata; // Previous metadata
 ┌─────────────────────────────────────────────────┐
 │ 3. Query webhook cache                          │
 │    webhookCache.GetWebhooks(vehicleDID,         │
-│                              "telemetry.signals",│
+│                              "signals.vss",       │
 │                              signalName)         │
 └───────────────┬─────────────────────────────────┘
                 ↓
@@ -364,8 +364,8 @@ Example:
 ```go
 {
   "did:erc721:137:0xbA...cF:12345": {
-    "telemetry.signals:speed": [webhook1, webhook2],
-    "telemetry.events:HarshBraking": [webhook3]
+    "signals.vss:speed": [webhook1, webhook2],
+    "events.behavior:HarshBraking": [webhook3]
   }
 }
 ```
@@ -515,7 +515,7 @@ type TriggerEvaluationResult struct {
 
 ```sql
 id                       uuid PRIMARY KEY
-service                  text NOT NULL  -- "telemetry.signals" or "telemetry.events"
+service                  text NOT NULL  -- "signals.vss", "events.behavior", or "events.safety"
 metric_name              text NOT NULL  -- Signal/event name
 condition                text NOT NULL  -- CEL expression
 target_uri               text NOT NULL  -- Webhook URL
@@ -756,7 +756,7 @@ The failure handling logic implements a circuit breaker pattern:
 curl -X POST http://localhost:8080/v1/webhooks \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
-    "service": "telemetry.signals",
+    "service": "signals.vss",
     "metricName": "speed",
     "condition": "value > 55",
     ...

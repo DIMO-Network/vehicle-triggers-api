@@ -191,7 +191,7 @@ func (m *MetricListener) createWebhookPayload(trigger *models.Trigger, assetDid 
 			Subject:         assetDid.String(),
 			Time:            time.Now().UTC(),
 			DataContentType: "application/json",
-			DataVersion:     "telemetry.signals/v1.0",
+			DataVersion:     trigger.Service + "/v1.0",
 			Type:            "dimo.trigger",
 			SpecVersion:     "1.0",
 		},

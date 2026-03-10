@@ -340,7 +340,7 @@ func createTestPayload(webhookID string) *cloudevent.CloudEvent[webhook.WebhookP
 			Subject:         assetDID.String(),
 			Time:            time.Now().UTC(),
 			DataContentType: "application/json",
-			DataVersion:     "telemetry.signals/v1.0",
+			DataVersion:     "signals.vss/v1.0",
 			Type:            "dimo.trigger",
 			SpecVersion:     "1.0",
 		},
