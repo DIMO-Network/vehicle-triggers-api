@@ -33,13 +33,21 @@ const (
 )
 
 const (
-	// ServiceSignalVSS is the service name for VSS signal webhooks (CEL conditions on continuous data).
-	ServiceSignalVSS = "signals.vss"
-	// ServiceBehaviorEvent is the service name for driving behavior event webhooks.
-	ServiceBehaviorEvent = "events.behavior"
-	// ServiceSafetyEvent is the service name for safety event webhooks.
-	ServiceSafetyEvent = "events.safety"
+	// ServiceSignal is the service name for signal webhooks. MetricName includes the schema prefix (e.g. "vss.speed", "vss.currentLocationCoordinates").
+	ServiceSignal = "signals"
+	// ServiceEvent is the service name for event webhooks. MetricName is the full event name (e.g. "behavior.harshBraking", "security.isEngineBlocked").
+	ServiceEvent = "events"
 )
+
+// IsSignalService returns true if service is a signal service.
+func IsSignalService(service string) bool {
+	return service == ServiceSignal
+}
+
+// IsEventService returns true if service is an event service.
+func IsEventService(service string) bool {
+	return service == ServiceEvent
+}
 
 type Repository struct {
 	db *sql.DB

@@ -17,15 +17,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 )
 
-var (
-	defaultPermissions = []string{
-		"privilege:GetNonLocationHistory",
-		"privilege:GetLocationHistory",
-	}
-)
+var defaultPermissions = signals.DefaultPermissions
 
 type IdentityClient interface {
 	GetSharedVehicles(ctx context.Context, developerLicense []byte) ([]cloudevent.ERC721DID, error)
@@ -85,17 +79,8 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		return err
 	}
 	permissions := defaultPermissions
-	if trigger.Service == triggersrepo.ServiceSignalVSS {
-		signalDef, err := signals.GetSignalDefinition(trigger.MetricName)
-		if err != nil {
-			zerolog.Ctx(c.Context()).Error().Err(err).
-				Str("signal_name", trigger.MetricName).
-				Str("asset_did", assetDid.String()).
-				Str("trigger_id", trigger.ID).
-				Msg("failed to get signal definition")
-			return fmt.Errorf("failed to get signal definition: %w", err)
-		}
-		permissions = signalDef.Permissions
+	if triggersrepo.IsSignalService(trigger.Service) {
+		permissions = signals.GetSignalDefinitionOrDefault(signals.BareSignalName(trigger.MetricName), signals.NumberType).Permissions
 	}
 
 	hasPerm, err := v.tokenExchangeClient.HasVehiclePermissions(c.Context(), assetDid, dl, permissions)
@@ -159,16 +144,8 @@ func (v *VehicleSubscriptionController) SubscribeVehiclesFromList(c *fiber.Ctx) 
 		return err
 	}
 	permissions := defaultPermissions
-	if trigger.Service == triggersrepo.ServiceSignalVSS {
-		signalDef, err := signals.GetSignalDefinition(trigger.MetricName)
-		if err != nil {
-			zerolog.Ctx(c.Context()).Error().Err(err).
-				Str("signal_name", trigger.MetricName).
-				Str("trigger_id", trigger.ID).
-				Msg("failed to get signal definition")
-			return err
-		}
-		permissions = signalDef.Permissions
+	if triggersrepo.IsSignalService(trigger.Service) {
+		permissions = signals.GetSignalDefinitionOrDefault(signals.BareSignalName(trigger.MetricName), signals.NumberType).Permissions
 	}
 
 	return v.subscribeMultipleVehiclesToWebhook(c, webhookID, dl, req.AssetDIDs, permissions)
@@ -299,16 +276,8 @@ func (v *VehicleSubscriptionController) SubscribeAllVehiclesToWebhook(c *fiber.C
 		return err
 	}
 	permissions := defaultPermissions
-	if trigger.Service == triggersrepo.ServiceSignalVSS {
-		signalDef, err := signals.GetSignalDefinition(trigger.MetricName)
-		if err != nil {
-			zerolog.Ctx(c.Context()).Error().Err(err).
-				Str("signal_name", trigger.MetricName).
-				Str("trigger_id", trigger.ID).
-				Msg("failed to get signal definition")
-			return err
-		}
-		permissions = signalDef.Permissions
+	if triggersrepo.IsSignalService(trigger.Service) {
+		permissions = signals.GetSignalDefinitionOrDefault(signals.BareSignalName(trigger.MetricName), signals.NumberType).Permissions
 	}
 
 	vehicles, err := v.identityClient.GetSharedVehicles(c.Context(), dl.Bytes())

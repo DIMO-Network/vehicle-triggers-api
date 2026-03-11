@@ -390,7 +390,7 @@ func TestTransitionConditions(t *testing.T) {
 		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
 
 		trigger := &models.Trigger{
-			ID: "trigger-ignition-on", Service: "signals.vss", MetricName: "isIgnitionOn",
+			ID: "trigger-ignition-on", Service: "signals", MetricName: "vss.isIgnitionOn",
 			Condition: "valueNumber == 1 && valueNumber != previousValueNumber",
 			CooldownPeriod: 600, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
 		}
@@ -409,7 +409,7 @@ func TestTransitionConditions(t *testing.T) {
 		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
 		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(&models.TriggerLog{LastTriggeredAt: time.Now().Add(-2 * time.Hour)}, nil).Times(1)
 		prevLog := &models.TriggerLog{SnapshotData: snapShotFromSignal(t, vss.Signal{Data: vss.SignalData{ValueNumber: 0}})}
-		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "isIgnitionOn").Return(prevLog, nil).Times(1)
+		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "vss.isIgnitionOn").Return(prevLog, nil).Times(1)
 
 		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
 		require.NoError(t, err)
@@ -424,7 +424,7 @@ func TestTransitionConditions(t *testing.T) {
 		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
 
 		trigger := &models.Trigger{
-			ID: "trigger-ignition-on", Service: "signals.vss", MetricName: "isIgnitionOn",
+			ID: "trigger-ignition-on", Service: "signals", MetricName: "vss.isIgnitionOn",
 			Condition: "valueNumber == 1 && valueNumber != previousValueNumber",
 			CooldownPeriod: 600, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
 		}
@@ -442,7 +442,7 @@ func TestTransitionConditions(t *testing.T) {
 		ctx := context.Background()
 		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
 		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(nil, sql.ErrNoRows).Times(1)
-		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "isIgnitionOn").Return(nil, nil).Times(1)
+		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "vss.isIgnitionOn").Return(nil, nil).Times(1)
 
 		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
 		require.NoError(t, err)
@@ -457,7 +457,7 @@ func TestTransitionConditions(t *testing.T) {
 		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
 
 		trigger := &models.Trigger{
-			ID: "trigger-ignition-off", Service: "signals.vss", MetricName: "isIgnitionOn",
+			ID: "trigger-ignition-off", Service: "signals", MetricName: "vss.isIgnitionOn",
 			Condition: "valueNumber == 0 && valueNumber != previousValueNumber",
 			CooldownPeriod: 600, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
 		}
@@ -476,7 +476,7 @@ func TestTransitionConditions(t *testing.T) {
 		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
 		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(&models.TriggerLog{LastTriggeredAt: time.Now().Add(-2 * time.Hour)}, nil).Times(1)
 		prevLog := &models.TriggerLog{SnapshotData: snapShotFromSignal(t, vss.Signal{Data: vss.SignalData{ValueNumber: 1}})}
-		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "isIgnitionOn").Return(prevLog, nil).Times(1)
+		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "vss.isIgnitionOn").Return(prevLog, nil).Times(1)
 
 		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
 		require.NoError(t, err)
@@ -491,7 +491,7 @@ func TestTransitionConditions(t *testing.T) {
 		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
 
 		trigger := &models.Trigger{
-			ID: "trigger-ignition-off", Service: "signals.vss", MetricName: "isIgnitionOn",
+			ID: "trigger-ignition-off", Service: "signals", MetricName: "vss.isIgnitionOn",
 			Condition: "valueNumber == 0 && valueNumber != previousValueNumber",
 			CooldownPeriod: 600, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
 		}
@@ -509,7 +509,7 @@ func TestTransitionConditions(t *testing.T) {
 		ctx := context.Background()
 		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
 		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(nil, sql.ErrNoRows).Times(1)
-		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "isIgnitionOn").Return(nil, nil).Times(1)
+		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "vss.isIgnitionOn").Return(nil, nil).Times(1)
 
 		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
 		require.NoError(t, err)
@@ -525,7 +525,7 @@ func TestTransitionConditions(t *testing.T) {
 		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
 
 		trigger := &models.Trigger{
-			ID: "trigger-obd-unplugged", Service: "signals.vss", MetricName: "obdisPluggedin",
+			ID: "trigger-obd-unplugged", Service: "signals", MetricName: "vss.obdisPluggedin",
 			Condition: "valueNumber == 0 && valueNumber != previousValueNumber",
 			CooldownPeriod: 60, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
 		}
@@ -544,7 +544,7 @@ func TestTransitionConditions(t *testing.T) {
 		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
 		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(&models.TriggerLog{LastTriggeredAt: time.Now().Add(-2 * time.Minute)}, nil).Times(1)
 		prevLog := &models.TriggerLog{SnapshotData: snapShotFromSignal(t, vss.Signal{Data: vss.SignalData{ValueNumber: 1}})}
-		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "obdisPluggedin").Return(prevLog, nil).Times(1)
+		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "vss.obdisPluggedin").Return(prevLog, nil).Times(1)
 
 		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
 		require.NoError(t, err)
@@ -559,7 +559,7 @@ func TestTransitionConditions(t *testing.T) {
 		evaluator := NewTriggerEvaluator(mockRepo, mockTokenClient)
 
 		trigger := &models.Trigger{
-			ID: "trigger-obd-unplugged", Service: "signals.vss", MetricName: "obdisPluggedin",
+			ID: "trigger-obd-unplugged", Service: "signals", MetricName: "vss.obdisPluggedin",
 			Condition: "valueNumber == 0 && valueNumber != previousValueNumber",
 			CooldownPeriod: 60, DeveloperLicenseAddress: common.HexToAddress("0x1234567890abcdef").Bytes(),
 		}
@@ -577,7 +577,7 @@ func TestTransitionConditions(t *testing.T) {
 		ctx := context.Background()
 		mockTokenClient.EXPECT().HasVehiclePermissions(ctx, vehicleDID, gomock.Any(), perm).Return(true, nil).Times(1)
 		mockRepo.EXPECT().GetLastLogValue(ctx, trigger.ID, vehicleDID).Return(nil, sql.ErrNoRows).Times(1)
-		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "obdisPluggedin").Return(nil, nil).Times(1)
+		mockRepo.EXPECT().GetLastLogForMetric(ctx, vehicleDID, "vss.obdisPluggedin").Return(nil, nil).Times(1)
 
 		result, err := evaluator.EvaluateSignalTrigger(ctx, trigger, program, signalData)
 		require.NoError(t, err)
@@ -827,8 +827,8 @@ func TestTriggerEvaluator_EvaluateEventTrigger(t *testing.T) {
 func createTestTrigger() *models.Trigger {
 	return &models.Trigger{
 		ID:                      "test-trigger-id",
-		Service:                 "signals.vss",
-		MetricName:              "speed",
+		Service:                 "signals",
+		MetricName:              "vss.speed",
 		Condition:               "valueNumber > 55",
 		TargetURI:               "https://example.com/webhook",
 		Status:                  "enabled",

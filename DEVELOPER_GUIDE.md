@@ -115,8 +115,10 @@ A **trigger** (also called a webhook) is a user-defined rule that monitors vehic
 **Key Fields:**
 
 - `id`: UUID of the webhook
-- `service`: One of `signals.vss`, `events.behavior`, or `events.safety`
-- `metric_name`: The signal/event name to monitor (e.g., "speed", "HarshBraking")
+- `service`: The subsystem producing the metric:
+  - `"signals"` — metricName uses schema prefix, e.g. `"vss.speed"`
+  - `"events"` — metricName is the full event name, e.g. `"behavior.harshBraking"`
+- `metric_name`: The signal/event name to monitor (e.g., `"vss.speed"`, `"behavior.harshBraking"`)
 - `condition`: CEL expression that evaluates to true/false
 - `target_uri`: HTTPS endpoint to POST webhooks to
 - `cooldown_period`: Minimum seconds between successive webhook calls
@@ -185,9 +187,9 @@ previousSource; // Previous source
 value.latitude;
 value.longitude;
 value.hdop;
-previousvalue.latitude;
-previousvalue.longitude;
-previousvalue.hdop;
+previousValue.latitude;
+previousValue.longitude;
+previousValue.hdop;
 ```
 
 **Event Variables Available:**
@@ -284,8 +286,8 @@ previousMetadata; // Previous metadata
 ┌─────────────────────────────────────────────────┐
 │ 3. Query webhook cache                          │
 │    webhookCache.GetWebhooks(vehicleDID,         │
-│                              "signals.vss",       │
-│                              signalName)         │
+│                              "signals",           │
+│                              "vss."+signalName)  │
 └───────────────┬─────────────────────────────────┘
                 ↓
          ┌──────┴──────┐
@@ -364,8 +366,8 @@ Example:
 ```go
 {
   "did:erc721:137:0xbA...cF:12345": {
-    "signals.vss:speed": [webhook1, webhook2],
-    "events.behavior:HarshBraking": [webhook3]
+    "signals:vss.speed": [webhook1, webhook2],
+    "events:behavior.harshBraking": [webhook3]
   }
 }
 ```
@@ -515,7 +517,7 @@ type TriggerEvaluationResult struct {
 
 ```sql
 id                       uuid PRIMARY KEY
-service                  text NOT NULL  -- "signals.vss", "events.behavior", or "events.safety"
+service                  text NOT NULL  -- "signals" or "events"
 metric_name              text NOT NULL  -- Signal/event name
 condition                text NOT NULL  -- CEL expression
 target_uri               text NOT NULL  -- Webhook URL
@@ -756,8 +758,8 @@ The failure handling logic implements a circuit breaker pattern:
 curl -X POST http://localhost:8080/v1/webhooks \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
-    "service": "signals.vss",
-    "metricName": "speed",
+    "service": "signals",
+    "metricName": "vss.speed",
     "condition": "value > 55",
     ...
   }'

@@ -76,8 +76,8 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 			Return(&models.Trigger{
 				ID:                      webhookID,
 				DeveloperLicenseAddress: devLicense.Bytes(),
-				Service:                 triggersrepo.ServiceSignalVSS,
-				MetricName:              "speed",
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              "vss.speed",
 			}, nil).
 			Times(1)
 
@@ -138,7 +138,7 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 			Return(&models.Trigger{
 				ID:                      webhookID,
 				DeveloperLicenseAddress: devLicense.Bytes(),
-				Service:                 triggersrepo.ServiceSignalVSS,
+				Service:                 triggersrepo.ServiceSignal,
 				MetricName:              vss.FieldCurrentLocationCoordinates,
 			}, nil).
 			Times(1)
@@ -299,8 +299,8 @@ func TestVehicleSubscriptionController_AssignVehicleToWebhook(t *testing.T) {
 			Return(&models.Trigger{
 				ID:                      webhookID,
 				DeveloperLicenseAddress: devLicense.Bytes(),
-				Service:                 triggersrepo.ServiceBehaviorEvent,
-				MetricName:              "HarshBraking",
+				Service:                 triggersrepo.ServiceEvent,
+				MetricName:              "behavior.harshBraking",
 			}, nil).
 			Times(1)
 
@@ -358,8 +358,8 @@ func TestVehicleSubscriptionController_SubscribeVehiclesFromList(t *testing.T) {
 			Return(&models.Trigger{
 				ID:                      webhookID,
 				DeveloperLicenseAddress: devLicense.Bytes(),
-				Service:                 triggersrepo.ServiceSignalVSS,
-				MetricName:              "speed",
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              "vss.speed",
 			}, nil).
 			Times(1)
 
@@ -450,8 +450,8 @@ func TestVehicleSubscriptionController_RemoveVehicleFromWebhook(t *testing.T) {
 			Return(&models.Trigger{
 				ID:                      webhookID,
 				DeveloperLicenseAddress: devLicense.Bytes(),
-				Service:                 triggersrepo.ServiceSignalVSS,
-				MetricName:              "speed",
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              "vss.speed",
 			}, nil).
 			Times(1)
 
@@ -511,8 +511,8 @@ func TestVehicleSubscriptionController_SubscribeAllVehiclesToWebhook(t *testing.
 			Return(&models.Trigger{
 				ID:                      webhookID,
 				DeveloperLicenseAddress: devLicense.Bytes(),
-				Service:                 triggersrepo.ServiceBehaviorEvent,
-				MetricName:              "name",
+				Service:                 triggersrepo.ServiceEvent,
+				MetricName:              "behavior.harshBraking",
 			}, nil).
 			Times(1)
 
@@ -578,8 +578,8 @@ func TestVehicleSubscriptionController_SubscribeAllVehiclesToWebhook(t *testing.
 			Return(&models.Trigger{
 				ID:                      webhookID,
 				DeveloperLicenseAddress: devLicense.Bytes(),
-				Service:                 triggersrepo.ServiceSignalVSS,
-				MetricName:              "speed",
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              "vss.speed",
 			}, nil).
 			Times(1)
 
@@ -617,8 +617,8 @@ func TestVehicleSubscriptionController_UnsubscribeAllVehiclesFromWebhook(t *test
 			Return(&models.Trigger{
 				ID:                      webhookID,
 				DeveloperLicenseAddress: devLicense.Bytes(),
-				Service:                 triggersrepo.ServiceSignalVSS,
-				MetricName:              "speed",
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              "vss.speed",
 			}, nil).
 			Times(1)
 
@@ -737,8 +737,8 @@ func TestVehicleSubscriptionController_ListVehiclesForWebhook(t *testing.T) {
 			Return(&models.Trigger{
 				ID:                      webhookID,
 				DeveloperLicenseAddress: devLicense.Bytes(),
-				Service:                 triggersrepo.ServiceSignalVSS,
-				MetricName:              "speed",
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              "vss.speed",
 			}, nil).
 			Times(1)
 

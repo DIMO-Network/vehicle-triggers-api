@@ -67,8 +67,8 @@ func TestWebhookCRUDOperations(t *testing.T) {
 	var webhookID string
 	t.Run("Step 1: Create Webhook", func(t *testing.T) {
 		webhookPayload := webhook.RegisterWebhookRequest{
-			Service:           "signals.vss",
-			MetricName:        "speed",
+			Service:           "signals",
+			MetricName:        "vss.speed",
 			Condition:         "valueNumber > 20",
 			CoolDownPeriod:    10,
 			Description:       "Alert when vehicle speed exceeds 20 kph",

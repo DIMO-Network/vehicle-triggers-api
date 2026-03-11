@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/model-garage/pkg/vss"
@@ -53,16 +52,7 @@ func (m *MetricListener) processSingleEvent(ctx context.Context, event vss.Event
 		return fmt.Errorf("failed to decode ERC721DID: %w", err)
 	}
 
-	// Extract category from dotted name: "behavior.harshBraking" → service "events.behavior", metric "harshBraking"
-	parts := strings.SplitN(event.Data.Name, ".", 2)
-	service := triggersrepo.ServiceBehaviorEvent // default
-	metricName := event.Data.Name
-	if len(parts) == 2 {
-		service = "events." + parts[0]
-		metricName = parts[1]
-	}
-
-	webhooks := m.webhookCache.GetWebhooks(eventEval.VehicleDID.String(), service, metricName)
+	webhooks := m.webhookCache.GetWebhooks(eventEval.VehicleDID.String(), triggersrepo.ServiceEvent, event.Data.Name)
 	if len(webhooks) == 0 {
 		return nil
 	}

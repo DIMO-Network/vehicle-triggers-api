@@ -32,8 +32,8 @@ func TestCreateTrigger(t *testing.T) {
 	ctx := context.Background()
 
 	baseReq := CreateTriggerRequest{
-		Service:                 "Telemetry",
-		MetricName:              "speed",
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
 		Status:                  StatusEnabled,
@@ -141,8 +141,8 @@ func TestGetTriggersByDeveloperLicense(t *testing.T) {
 	ctx := context.Background()
 
 	baseReq := CreateTriggerRequest{
-		Service:                 "Telemetry",
-		MetricName:              "speed",
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
 		Status:                  StatusEnabled,
@@ -273,8 +273,8 @@ func TestGetTriggerByIDAndDeveloperLicense(t *testing.T) {
 	ctx := context.Background()
 
 	baseReq := CreateTriggerRequest{
-		Service:                 "Telemetry",
-		MetricName:              "speed",
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
 		Status:                  StatusEnabled,
@@ -419,8 +419,8 @@ func TestUpdateTrigger(t *testing.T) {
 	ctx := context.Background()
 
 	baseReq := CreateTriggerRequest{
-		Service:                 "Telemetry",
-		MetricName:              "speed",
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
 		Status:                  StatusEnabled,
@@ -530,8 +530,8 @@ func TestDeleteTrigger(t *testing.T) {
 	ctx := context.Background()
 
 	baseReq := CreateTriggerRequest{
-		Service:                 "Telemetry",
-		MetricName:              "speed",
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
 		Status:                  StatusEnabled,
@@ -724,8 +724,8 @@ func TestCreateVehicleSubscription(t *testing.T) {
 	ctx := context.Background()
 
 	baseReq := CreateTriggerRequest{
-		Service:                 "Telemetry",
-		MetricName:              "speed",
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
 		Status:                  StatusEnabled,
@@ -917,8 +917,8 @@ func TestGetVehicleSubscriptionsByTriggerID(t *testing.T) {
 	ctx := context.Background()
 
 	baseReq := CreateTriggerRequest{
-		Service:                 "Telemetry",
-		MetricName:              "speed",
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
 		Status:                  StatusEnabled,
@@ -1004,8 +1004,8 @@ func TestGetVehicleSubscriptionsByVehicleAndDeveloperLicense(t *testing.T) {
 	ctx := context.Background()
 
 	baseReq := CreateTriggerRequest{
-		Service:                 "Telemetry",
-		MetricName:              "speed",
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
 		Status:                  StatusEnabled,
@@ -1239,8 +1239,8 @@ func TestDeleteVehicleSubscription(t *testing.T) {
 	ctx := context.Background()
 
 	baseReq := CreateTriggerRequest{
-		Service:                 "Telemetry",
-		MetricName:              "speed",
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
 		Status:                  StatusEnabled,
@@ -1430,8 +1430,8 @@ func TestDeleteAllVehicleSubscriptionsForTrigger(t *testing.T) {
 	ctx := context.Background()
 
 	baseReq := CreateTriggerRequest{
-		Service:                 "Telemetry",
-		MetricName:              "speed",
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
 		Status:                  StatusEnabled,
@@ -1690,8 +1690,8 @@ func TestRepository_IncrementTriggerFailureCount(t *testing.T) {
 // Helper function
 func createTestTriggerWithFailures(t *testing.T, repo *Repository, ctx context.Context, failureCount int, status string) *models.Trigger {
 	req := CreateTriggerRequest{
-		Service:                 "Telemetry",
-		MetricName:              "speed",
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
 		Status:                  status,
@@ -1726,8 +1726,8 @@ func TestCreateTriggerLog(t *testing.T) {
 
 	// Create a test trigger first
 	baseReq := CreateTriggerRequest{
-		Service:                 "Telemetry",
-		MetricName:              "speed",
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
 		Condition:               "valueNumber > 20",
 		TargetURI:               "https://example.com/webhook",
 		Status:                  StatusEnabled,
@@ -1927,4 +1927,18 @@ func randAssetDID(t *testing.T) cloudevent.ERC721DID {
 		ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
 		TokenID:         new(big.Int).SetBytes(tokenID),
 	}
+}
+
+func TestIsSignalService(t *testing.T) {
+	assert.True(t, IsSignalService(ServiceSignal))
+	assert.False(t, IsSignalService(ServiceEvent))
+	assert.False(t, IsSignalService("signals.vss"))
+	assert.False(t, IsSignalService("unknown"))
+}
+
+func TestIsEventService(t *testing.T) {
+	assert.True(t, IsEventService(ServiceEvent))
+	assert.False(t, IsEventService(ServiceSignal))
+	assert.False(t, IsEventService("events.behavior"))
+	assert.False(t, IsEventService("unknown"))
 }

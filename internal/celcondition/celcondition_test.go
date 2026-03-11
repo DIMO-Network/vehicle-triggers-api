@@ -594,15 +594,15 @@ func TestPrepareCondition_ServiceName(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:        "signals.vss service",
-			serviceName: triggersrepo.ServiceSignalVSS,
+			name:        "signals service",
+			serviceName: triggersrepo.ServiceSignal,
 			condition:   "valueNumber > 10.0",
 			expectError: false,
 		},
 		{
-			name:        "events.behavior service",
-			serviceName: triggersrepo.ServiceBehaviorEvent,
-			condition:   "name == 'HarshBraking'",
+			name:        "events service",
+			serviceName: triggersrepo.ServiceEvent,
+			condition:   "name == 'behavior.harshBraking'",
 			expectError: false,
 		},
 		{

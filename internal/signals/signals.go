@@ -34,6 +34,32 @@ var privilegeMap = map[string]string{
 	"VEHICLE_APPROXIMATE_LOCATION": "privilege:GetApproximateLocation",
 }
 
+// VSSPrefix is the schema prefix for VSS signals. When service is "signals",
+// the metricName is stored as "vss.<signalName>" (e.g. "vss.speed").
+const VSSPrefix = "vss."
+
+// BareSignalName strips the schema prefix (e.g. "vss.") from a metric name,
+// returning the raw signal name used in the schema lookup.
+func BareSignalName(metricName string) string {
+	return strings.TrimPrefix(metricName, VSSPrefix)
+}
+
+// DefaultPermissions is used for unknown signals (and events) when no schema definition exists.
+var DefaultPermissions = []string{
+	"privilege:GetNonLocationHistory",
+	"privilege:GetLocationHistory",
+}
+
+// DefaultDefinition returns a signal definition for an unknown signal name, e.g. when the signal
+// is not in the schema. valueType should be NumberType, StringType, or LocationType.
+func DefaultDefinition(name, valueType string) SignalDefinition {
+	return SignalDefinition{
+		Name:        name,
+		ValueType:  valueType,
+		Permissions: DefaultPermissions,
+	}
+}
+
 // SignalDefinition describes a telemetry signal available for use with webhooks.
 type SignalDefinition struct {
 	// Name is the JSON-safe name of the signal.
@@ -61,6 +87,16 @@ func GetSignalDefinition(name string) (SignalDefinition, error) {
 		}
 	}
 	return signal, nil
+}
+
+// GetSignalDefinitionOrDefault returns the signal definition if found in the schema,
+// otherwise a default definition with the given valueType and default permissions.
+func GetSignalDefinitionOrDefault(name, valueType string) SignalDefinition {
+	def, err := GetSignalDefinition(name)
+	if err == nil {
+		return def
+	}
+	return DefaultDefinition(name, valueType)
 }
 
 // GetAllSignalDefinitions returns a copy of the signal definitions.

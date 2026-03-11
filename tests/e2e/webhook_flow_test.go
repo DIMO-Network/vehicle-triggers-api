@@ -62,8 +62,8 @@ func TestSignalWebhookFlow(t *testing.T) {
 
 	// Step 1: Create a webhook
 	webhookPayload := webhook.RegisterWebhookRequest{
-		Service:           triggersrepo.ServiceSignalVSS,
-		MetricName:        "speed",
+		Service:           triggersrepo.ServiceSignal,
+		MetricName:        "vss.speed",
 		Condition:         "valueNumber > 20 && valueNumber != previousValue",
 		CoolDownPeriod:    0,
 		Description:       "Alert when vehicle speed exceeds 20 kph",
@@ -323,8 +323,8 @@ func TestSignalWebhookFlowLocation(t *testing.T) {
 
 	// Step 1: Create a webhook for location coordinates
 	webhookPayload := webhook.RegisterWebhookRequest{
-		Service:           triggersrepo.ServiceSignalVSS,
-		MetricName:        "currentLocationCoordinates",
+		Service:           triggersrepo.ServiceSignal,
+		MetricName:        "vss.currentLocationCoordinates",
 		Condition:         "geoDistance(value.latitude, value.longitude, 54.71061320000001, 25.239925999999997) < 0.7138406571965812",
 		CoolDownPeriod:    0,
 		Description:       "Alert when vehicle is within 0.7km of target location",
@@ -549,8 +549,8 @@ func TestEventWebhookFlow(t *testing.T) {
 
 	// Step 1: Create a webhook
 	webhookPayload := webhook.RegisterWebhookRequest{
-		Service:           triggersrepo.ServiceBehaviorEvent,
-		MetricName:        "harshBraking",
+		Service:           triggersrepo.ServiceEvent,
+		MetricName:        "behavior.harshBraking",
 		Condition:         "true",
 		CoolDownPeriod:    0,
 		Description:       "Alert when vehicle harsh braking occurs",

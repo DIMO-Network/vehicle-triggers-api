@@ -89,17 +89,11 @@ func validateTargetURL(targetURL string) error {
 }
 
 func validateServiceAndMetricNameAndCondition(serviceName string, metricName string, condition string) error {
-	switch serviceName {
-	case triggersrepo.ServiceSignalVSS:
-		signalDef, err := signals.GetSignalDefinition(metricName)
-		if err != nil {
-			return richerrors.Error{
-				ExternalMsg: fmt.Sprintf("Unknown signal name: '%s'", metricName),
-				Code:        fiber.StatusBadRequest,
-			}
-		}
-		return validateCondition(serviceName, condition, signalDef.ValueType)
-	case triggersrepo.ServiceBehaviorEvent, triggersrepo.ServiceSafetyEvent:
+	switch {
+	case triggersrepo.IsSignalService(serviceName):
+		valueType := signals.GetSignalDefinitionOrDefault(signals.BareSignalName(metricName), signals.NumberType).ValueType
+		return validateCondition(serviceName, condition, valueType)
+	case triggersrepo.IsEventService(serviceName):
 		return validateCondition(serviceName, condition, "")
 	default:
 		return richerrors.Error{

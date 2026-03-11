@@ -804,14 +804,14 @@ const docTemplate = `{
                     "example": "Speed Alert"
                 },
                 "metricName": {
-                    "description": "MetricName is the fully qualified event/signal to monitor.\nThis field can not be updated after the webhook is created.",
+                    "description": "MetricName is the fully qualified event/signal to monitor (e.g. \"vss.speed\" for signals, \"behavior.harshBraking\" for events).\nThis field can not be updated after the webhook is created.",
                     "type": "string",
-                    "example": "speed"
+                    "example": "vss.speed"
                 },
                 "service": {
-                    "description": "Service is the subsystem producing the metric (e.g. \"signals.vss\" or \"events.behavior\").\nThis field can not be updated after the webhook is created.",
+                    "description": "Service is the subsystem producing the metric: \"signals\" or \"events\".\nThis field can not be updated after the webhook is created.",
                     "type": "string",
-                    "example": "signals.vss"
+                    "example": "signals"
                 },
                 "status": {
                     "description": "Status sets the initial state for the webhook (e.g. \"enabled\" or \"Disabled\").",
@@ -946,7 +946,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "service": {
-                    "description": "Service is the subsystem producing the metric (e.g. \"vehicles\").",
+                    "description": "Service is the subsystem producing the metric: \"signals\" or \"events\".",
                     "type": "string"
                 },
                 "status": {

@@ -60,8 +60,8 @@ To register a webhook, make a POST request to `/v1/webhooks` with the following 
 
 ```json
 {
-  "service": "signals.vss",
-  "metricName": "speed",
+  "service": "signals",
+  "metricName": "vss.speed",
   "condition": "value > 55",
   "coolDownPeriod": 30,
   "description": "Alert when vehicle speed exceeds 55 mph",
@@ -74,8 +74,10 @@ To register a webhook, make a POST request to `/v1/webhooks` with the following 
 
 #### Required Fields
 
-- `service`: The subsystem producing the metric. Must be one of "signals.vss", "events.behavior", or "events.safety"
-- `metricName`: The fully qualified signal/event name to monitor (e.g., "speed", "HarshBraking")
+- `service`: The subsystem producing the metric:
+  - `"signals"` — metricName uses schema prefix, e.g. `"vss.speed"`
+  - `"events"` — metricName is the full event name, e.g. `"behavior.harshBraking"`
+- `metricName`: The signal/event name to monitor (e.g., `"vss.speed"`, `"behavior.harshBraking"`)
 - `condition`: A CEL expression that determines when the webhook fires
 - `coolDownPeriod`: Minimum seconds between successive webhook calls
 - `targetURL`: HTTPS endpoint that will receive webhook notifications
@@ -91,7 +93,7 @@ To register a webhook, make a POST request to `/v1/webhooks` with the following 
 
 CEL (Common Expression Language) conditions determine when webhooks fire. The API validates conditions during webhook creation and provides different variables based on the service type.
 
-#### Signal Conditions (signals.vss)
+#### Signal Conditions (signals)
 
 For signal webhooks, these variables are available in CEL expressions:
 
@@ -172,7 +174,7 @@ geoDistance(lat1, lon1, lat2, lon2);
 "geoDistance(value.latitude, value.longitude, 51.5074, -0.1278) >= 50.0 && geoDistance(value.latitude, value.longitude, 51.5074, -0.1278) <= 100.0";
 ```
 
-#### Event Conditions (events.behavior / events.safety)
+#### Event Conditions (events)
 
 For event webhooks, these variables are available:
 
@@ -256,10 +258,10 @@ Example of a signal webhook payload:
   "time": "2025-08-13T10:15:07.630545Z", // Timestamp of the cloudevent was created
   "type": "dimo.trigger", // Type of the cloudevent always dimo.trigger when sent from a webhook
   "datacontenttype": "application/json", // Content type of the data always application/json
-  "dataversion": "signals.vss/v1.0", // Versioning for the data field in the payload.
+  "dataversion": "signals/v1.0", // Versioning for the data field in the payload.
   "data": {
-    "service": "signals.vss", // Service that sent the signal
-    "metricName": "speed", // Name of the signal/event
+    "service": "signals", // Service that sent the signal
+    "metricName": "vss.speed", // Name of the signal/event
     "webhookId": "1fab16e0-3a51-4118-bc3a-6b6d2fecfe13", // UUID of the webhook
     "webhookName": "Speed Alert", // Display    Name of the webhook
     "assetDID": "did:erc721:137:0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF:12345", // DID of the vehicle

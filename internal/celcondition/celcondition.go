@@ -18,10 +18,10 @@ const (
 )
 
 func PrepareCondition(serviceName, celCondition string, valueType string) (cel.Program, error) {
-	switch serviceName {
-	case triggersrepo.ServiceSignalVSS:
+	switch {
+	case triggersrepo.IsSignalService(serviceName):
 		return PrepareSignalCondition(celCondition, valueType)
-	case triggersrepo.ServiceBehaviorEvent, triggersrepo.ServiceSafetyEvent:
+	case triggersrepo.IsEventService(serviceName):
 		return PrepareEventCondition(celCondition)
 	default:
 		return nil, fmt.Errorf("unknown service name: %s", serviceName)

@@ -46,16 +46,19 @@ func (m *MetricListener) processSignalMessage(msg *message.Message) error {
 	return errs
 }
 
-func (m *MetricListener) processSingleSignal(ctx context.Context, sig vss.Signal, vehicleDID cloudevent.ERC721DID, rawPayload json.RawMessage) error {
-	signalDef, err := signals.GetSignalDefinition(sig.Data.Name)
-	if err != nil {
-		zerolog.Ctx(ctx).Error().Err(err).
-			Str("signal_name", sig.Data.Name).
-			Str("asset_did", vehicleDID.String()).
-			Str("subject", sig.Subject).
-			Msg("failed to get signal definition")
-		return fmt.Errorf("failed to get signal definition: %w", err)
+// inferSignalValueType returns the value type for payload/CEL when the signal is not in the schema.
+func inferSignalValueType(sig vss.Signal) string {
+	if sig.Data.ValueLocation != (vss.Location{}) {
+		return signals.LocationType
 	}
+	if sig.Data.ValueString != "" {
+		return signals.StringType
+	}
+	return signals.NumberType
+}
+
+func (m *MetricListener) processSingleSignal(ctx context.Context, sig vss.Signal, vehicleDID cloudevent.ERC721DID, rawPayload json.RawMessage) error {
+	signalDef := signals.GetSignalDefinitionOrDefault(sig.Data.Name, inferSignalValueType(sig))
 
 	sigAndRaw := triggerevaluator.SignalEvaluationData{
 		Signal:     sig,
@@ -64,7 +67,7 @@ func (m *MetricListener) processSingleSignal(ctx context.Context, sig vss.Signal
 		RawData:    rawPayload,
 	}
 
-	webhooks := m.webhookCache.GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignalVSS, sig.Data.Name)
+	webhooks := m.webhookCache.GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignal, signals.VSSPrefix+sig.Data.Name)
 	if len(webhooks) == 0 {
 		return nil
 	}

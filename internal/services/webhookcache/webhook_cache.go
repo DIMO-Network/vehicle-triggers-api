@@ -55,7 +55,7 @@ func NewWebhookCache(repo Repository, settings *config.Settings) *WebhookCache {
 
 // PopulateCache builds the cache from the database
 func (wc *WebhookCache) PopulateCache(ctx context.Context) error {
-	webhooks, err := wc.fetchEventVehicleWebhooks(ctx)
+	webhooks, err := wc.fetchVehicleWebhooks(ctx)
 	if err != nil {
 		if errors.Is(err, errNoWebhookConfig) {
 			webhooks = make(map[string]map[string][]*Webhook)
@@ -106,7 +106,7 @@ func (wc *WebhookCache) Update(newData map[string]map[string][]*Webhook) {
 	wc.lastRefresh = time.Now()
 }
 
-func (wc *WebhookCache) fetchEventVehicleWebhooks(ctx context.Context) (map[string]map[string][]*Webhook, error) {
+func (wc *WebhookCache) fetchVehicleWebhooks(ctx context.Context) (map[string]map[string][]*Webhook, error) {
 	subs, err := wc.repo.InternalGetAllVehicleSubscriptions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all vehicle subscriptions: %w", err)
@@ -128,18 +128,8 @@ func (wc *WebhookCache) fetchEventVehicleWebhooks(ctx context.Context) (map[stri
 				continue
 			}
 			valueType := ""
-			if webhook.Trigger.Service == triggersrepo.ServiceSignalVSS {
-				// only signals have dynamic value types
-				signalDef, err := signals.GetSignalDefinition(webhook.Trigger.MetricName)
-				if err != nil {
-					logger.Error().Err(err).
-						Str("trigger_id", webhook.Trigger.ID).
-						Str("signal_name", webhook.Trigger.MetricName).
-						Str("asset_did", sub.AssetDid).
-						Msg("failed to get signal definition")
-					continue
-				}
-				valueType = signalDef.ValueType
+			if triggersrepo.IsSignalService(webhook.Trigger.Service) {
+				valueType = signals.GetSignalDefinitionOrDefault(signals.BareSignalName(webhook.Trigger.MetricName), signals.NumberType).ValueType
 			}
 			webhook.Program, err = celcondition.PrepareCondition(webhook.Trigger.Service, webhook.Trigger.Condition, valueType)
 			if err != nil {

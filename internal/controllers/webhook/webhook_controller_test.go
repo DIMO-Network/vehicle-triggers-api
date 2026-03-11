@@ -65,8 +65,8 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 		defer testServer.Close()
 
 		payload := RegisterWebhookRequest{
-			Service:           triggersrepo.ServiceSignalVSS,
-			MetricName:        "speed",
+			Service:           triggersrepo.ServiceSignal,
+			MetricName:        "vss.speed",
 			Condition:         "valueNumber > 55",
 			CoolDownPeriod:    30,
 			Description:       "Speed alert webhook",
@@ -78,8 +78,8 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 
 		expectedTrigger := &models.Trigger{
 			ID:             "test-trigger-id",
-			Service:        triggersrepo.ServiceSignalVSS,
-			MetricName:     "speed",
+			Service:        triggersrepo.ServiceSignal,
+			MetricName:     "vss.speed",
 			Condition:      "valueNumber > 55",
 			TargetURI:      testServer.URL,
 			Status:         "enabled",
@@ -141,8 +141,8 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 		app.Post("/webhooks", controller.RegisterWebhook)
 
 		payload := RegisterWebhookRequest{
-			Service:           triggersrepo.ServiceSignalVSS,
-			MetricName:        "speed",
+			Service:           triggersrepo.ServiceSignal,
+			MetricName:        "vss.speed",
 			Condition:         "valueNumber > 55",
 			CoolDownPeriod:    30,
 			TargetURL:         "http://example.com", // Invalid: not HTTPS
@@ -210,8 +210,8 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 		defer testServer.Close()
 
 		payload := RegisterWebhookRequest{
-			Service:           triggersrepo.ServiceSignalVSS,
-			MetricName:        "speed",
+			Service:           triggersrepo.ServiceSignal,
+			MetricName:        "vss.speed",
 			Condition:         "valueNumber > 55",
 			CoolDownPeriod:    30,
 			TargetURL:         testServer.URL,
@@ -245,8 +245,8 @@ func TestWebhookController_ListWebhooks(t *testing.T) {
 		triggers := []*models.Trigger{
 			{
 				ID:             "trigger-1",
-				Service:        triggersrepo.ServiceSignalVSS,
-				MetricName:     "speed",
+				Service:        triggersrepo.ServiceSignal,
+				MetricName:     "vss.speed",
 				Condition:      "valueNumber > 55",
 				TargetURI:      "https://example.com/webhook",
 				Status:         "enabled",
@@ -275,7 +275,7 @@ func TestWebhookController_ListWebhooks(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, webhooks, 1)
 		assert.Equal(t, "trigger-1", webhooks[0].ID)
-		assert.Equal(t, "speed", webhooks[0].MetricName)
+		assert.Equal(t, "vss.speed", webhooks[0].MetricName)
 	})
 
 	t.Run("empty list", func(t *testing.T) {
@@ -319,8 +319,8 @@ func TestWebhookController_UpdateWebhook(t *testing.T) {
 		triggerID := uuid.New().String()
 		existingTrigger := &models.Trigger{
 			ID:             triggerID,
-			Service:        triggersrepo.ServiceSignalVSS,
-			MetricName:     "speed",
+			Service:        triggersrepo.ServiceSignal,
+			MetricName:     "vss.speed",
 			Condition:      "valueNumber > 55",
 			TargetURI:      "https://example.com/webhook",
 			Status:         "enabled",

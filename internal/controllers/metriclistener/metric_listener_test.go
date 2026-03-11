@@ -148,7 +148,7 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 
 		// Mock expectations - no webhooks found for this signal
 		mockCache.EXPECT().
-			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignalVSS, "speed").
+			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignal, "vss.speed").
 			Return([]*webhookcache.Webhook{}).
 			Times(1)
 
@@ -201,8 +201,8 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 		mockTrigger := &models.Trigger{
 			ID:           "test-trigger-id",
 			Status:       triggersrepo.StatusEnabled,
-			Service:      triggersrepo.ServiceSignalVSS,
-			MetricName:   "speed",
+			Service:      triggersrepo.ServiceSignal,
+			MetricName:   "vss.speed",
 			Condition:    "valueNumber > 20",
 			DisplayName:  "Speed Alert",
 			FailureCount: 0,
@@ -212,9 +212,9 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 			Trigger: mockTrigger,
 		}
 
-		// Mock expectations
+		// Mock expectations - webhook found for this signal
 		mockCache.EXPECT().
-			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignalVSS, "speed").
+			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignal, "vss.speed").
 			Return([]*webhookcache.Webhook{mockWebhook}).
 			Times(1)
 
@@ -328,7 +328,7 @@ func TestMetricListener_ProcessEventMessages(t *testing.T) {
 		require.NoError(t, err)
 
 		mockCache.EXPECT().
-			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceBehaviorEvent, "harshBraking").
+			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceEvent, "behavior.harshBraking").
 			Return([]*webhookcache.Webhook{}).
 			Times(1)
 
@@ -379,8 +379,8 @@ func TestMetricListener_ProcessEventMessages(t *testing.T) {
 		mockTrigger := &models.Trigger{
 			ID:           "test-event-trigger-id",
 			Status:       triggersrepo.StatusEnabled,
-			Service:      triggersrepo.ServiceBehaviorEvent,
-			MetricName:   "harshBraking",
+			Service:      triggersrepo.ServiceEvent,
+			MetricName:   "behavior.harshBraking",
 			Condition:    "durationNs > 1000000",
 			DisplayName:  "Harsh Braking Alert",
 			FailureCount: 0,
@@ -391,7 +391,7 @@ func TestMetricListener_ProcessEventMessages(t *testing.T) {
 		}
 
 		mockCache.EXPECT().
-			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceBehaviorEvent, "harshBraking").
+			GetWebhooks(vehicleDID.String(), triggersrepo.ServiceEvent, "behavior.harshBraking").
 			Return([]*webhookcache.Webhook{mockWebhook}).
 			Times(1)
 

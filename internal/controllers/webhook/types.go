@@ -9,12 +9,12 @@ import (
 // RegisterWebhookRequest represents the payload to create a webhook trigger.
 // It defines what to monitor, how often to notify, and where to send callbacks.
 type RegisterWebhookRequest struct {
-	// Service is the subsystem producing the metric (e.g. "signals.vss" or "events.behavior").
+	// Service is the subsystem producing the metric: "signals" or "events".
 	// This field can not be updated after the webhook is created.
-	Service string `json:"service" validate:"required" example:"signals.vss"`
-	// MetricName is the fully qualified event/signal to monitor.
+	Service string `json:"service" validate:"required" example:"signals"`
+	// MetricName is the fully qualified event/signal to monitor (e.g. "vss.speed" for signals, "behavior.harshBraking" for events).
 	// This field can not be updated after the webhook is created.
-	MetricName string `json:"metricName" validate:"required" example:"speed"`
+	MetricName string `json:"metricName" validate:"required" example:"vss.speed"`
 	// Condition is a CEL expression evaluated against the metric to decide when to fire.
 	Condition string `json:"condition" validate:"required" example:"valueNumber > 55"`
 	// CoolDownPeriod is the minimum number of seconds between successive firings.
@@ -77,7 +77,7 @@ type GenericResponse struct {
 type WebhookView struct {
 	// ID is the unique identifier of the webhook.
 	ID string `json:"id"`
-	// Service is the subsystem producing the metric (e.g. "vehicles").
+	// Service is the subsystem producing the metric: "signals" or "events".
 	Service string `json:"service"`
 	// MetricName is the fully qualified signal/metric monitored by the webhook.
 	MetricName string `json:"metricName"`
@@ -105,7 +105,7 @@ type WebhookView struct {
 // This structure follows industry best practices and includes only essential information
 // while providing proper context and metadata for the triggered event.
 type WebhookPayload struct {
-	// Service identifies the subsystem that produced the signal (e.g., "signals.vss")
+	// Service identifies the subsystem that produced the signal (e.g., "signals")
 	Service string `json:"service"`
 
 	// MetricName is the fully qualified signal/metric monitored by the webhook.
