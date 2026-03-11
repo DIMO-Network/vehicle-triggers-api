@@ -150,10 +150,7 @@ func (t *TriggerEvaluator) EvaluateSignalTrigger(ctx context.Context, trigger *m
 // Returns: shouldFire, permissionDenied, cooldownActive, error
 func (t *TriggerEvaluator) EvaluateEventTrigger(ctx context.Context, trigger *models.Trigger, program cel.Program, ev *EventEvaluationData) (*TriggerEvaluationResult, error) {
 	// Check permissions for events (use standard permissions)
-	hasPerm, err := t.tokenClient.HasVehiclePermissions(ctx, ev.VehicleDID, common.BytesToAddress(trigger.DeveloperLicenseAddress), []string{
-		"privilege:GetNonLocationHistory",
-		"privilege:GetLocationHistory",
-	})
+	hasPerm, err := t.tokenClient.HasVehiclePermissions(ctx, ev.VehicleDID, common.BytesToAddress(trigger.DeveloperLicenseAddress), signals.DefaultPermissions)
 	if err != nil {
 		return nil, richerrors.Error{
 			Code:        http.StatusInternalServerError,
