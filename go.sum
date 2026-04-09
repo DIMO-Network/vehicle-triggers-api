@@ -68,8 +68,8 @@ github.com/DATA-DOG/go-sqlmock v1.4.1 h1:ThlnYciV1iM/V0OSF/dtkqWb6xo5qITT1TJBG1M
 github.com/DATA-DOG/go-sqlmock v1.4.1/go.mod h1:f/Ixk793poVmq4qj/V1dPUg2JEAKC73Q5eFN3EC/SaM=
 github.com/DIMO-Network/cloudevent v0.2.6 h1:4J2S5aDou+80Kgdh8KK4t8A9C7Leb424Z6dlDuWjA/c=
 github.com/DIMO-Network/cloudevent v0.2.6/go.mod h1:I/9NcpMozV5Fw194WimhbkAsJtKVZf5UKYJ9hgc8Cdg=
-github.com/DIMO-Network/model-garage v1.0.6 h1:XMw3Hzlbu/dOBDY1hPK8cveINIJ/7lGBneMj9aHnft0=
-github.com/DIMO-Network/model-garage v1.0.6/go.mod h1:nvr0Ibiuu7Q7PC/hIfdZF6lPxCmq9eztQmbxUaNyus8=
+github.com/DIMO-Network/model-garage v1.0.9 h1:MqEC/maSaImduOLEqYbIbLovgKEgzNuTn/R8wpJkARc=
+github.com/DIMO-Network/model-garage v1.0.9/go.mod h1:nvr0Ibiuu7Q7PC/hIfdZF6lPxCmq9eztQmbxUaNyus8=
 github.com/DIMO-Network/server-garage v0.0.5 h1:CrXmmqoQVrPxEr37NvAe4Or7+ig1kKjyOprbzq5eALM=
 github.com/DIMO-Network/server-garage v0.0.5/go.mod h1:LGqJHcu9hC+B6BUyGFUmqWBHFfYfPkNVCHmBWeMrYxQ=
 github.com/DIMO-Network/shared v1.0.7 h1:LfSgsqJ6R7EUyfo2GTfuhrCpoDcweJqe7eVOa4j7Xbo=
