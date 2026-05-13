@@ -146,33 +146,24 @@ func (wc *WebhookCache) fetchVehicleWebhooks(ctx context.Context) (map[string]ma
 		Msg("loaded vehicle subscriptions")
 	logMemStats(logger, "after_load_subs")
 
-	// There will be many more vehicle subscriptions than triggers,
-	// so we can share the same trigger object to reduce memory usage and database calls
-	uniqueTriggers := make(map[string]*Webhook)
+	// Collect unique trigger IDs first; many subscriptions share triggers.
+	uniqueTriggerIDs := make(map[string]struct{}, len(subs))
+	for _, sub := range subs {
+		uniqueTriggerIDs[sub.TriggerID] = struct{}{}
+	}
+
+	// Fetch + CEL-compile each unique trigger in parallel. Each compile is
+	// CPU-bound (~5ms) and the loop is hot on startup (~10k triggers => 50s
+	// serial). Parallelising across GOMAXPROCS workers brings build_elapsed
+	// well under the kubelet liveness deadline.
+	triggerFetchStart := time.Now()
+	uniqueTriggers := wc.compileTriggersParallel(ctx, uniqueTriggerIDs)
 
 	newData := make(map[string]map[string][]*Webhook)
-	triggerFetchStart := time.Now()
-	triggerFetches := 0
 	for _, sub := range subs {
 		webhook, ok := uniqueTriggers[sub.TriggerID]
 		if !ok {
-			webhook = &Webhook{}
-			triggerFetches++
-			webhook.Trigger, err = wc.repo.InternalGetTriggerByID(ctx, sub.TriggerID)
-			if err != nil {
-				logger.Error().Err(err).Msg("failed to get trigger by id for webhook cache")
-				continue
-			}
-			valueType := ""
-			if triggersrepo.IsSignalService(webhook.Trigger.Service) {
-				valueType = signals.GetSignalDefinitionOrDefault(signals.BareSignalName(webhook.Trigger.MetricName), signals.NumberType).ValueType
-			}
-			webhook.Program, err = celcondition.PrepareCondition(webhook.Trigger.Service, webhook.Trigger.Condition, valueType)
-			if err != nil {
-				logger.Error().Err(err).Str("trigger_id", webhook.Trigger.ID).Msg("failed to prepare condition")
-				continue
-			}
-			uniqueTriggers[sub.TriggerID] = webhook
+			continue
 		}
 		if webhook.Trigger.Status != triggersrepo.StatusEnabled {
 			continue
@@ -187,7 +178,7 @@ func (wc *WebhookCache) fetchVehicleWebhooks(ctx context.Context) (map[string]ma
 	}
 	logger.Info().
 		Int("sub_count", len(subs)).
-		Int("unique_trigger_fetches", triggerFetches).
+		Int("unique_trigger_ids", len(uniqueTriggerIDs)).
 		Int("unique_trigger_cache", len(uniqueTriggers)).
 		Int("asset_count", len(newData)).
 		Dur("build_elapsed", time.Since(triggerFetchStart)).
@@ -202,4 +193,65 @@ func (wc *WebhookCache) fetchVehicleWebhooks(ctx context.Context) (map[string]ma
 
 func webhookKey(service, metricName string) string {
 	return service + ":" + metricName
+}
+
+// compileTriggersParallel fetches and CEL-compiles each unique trigger in
+// parallel. Concurrency is capped at GOMAXPROCS to avoid exhausting the DB
+// connection pool. Triggers that fail to fetch or compile are logged and
+// skipped, mirroring the previous behaviour of the serial loop.
+func (wc *WebhookCache) compileTriggersParallel(ctx context.Context, triggerIDs map[string]struct{}) map[string]*Webhook {
+	logger := zerolog.Ctx(ctx)
+
+	workers := runtime.GOMAXPROCS(0)
+	if workers < 1 {
+		workers = 1
+	}
+
+	type result struct {
+		id      string
+		webhook *Webhook
+	}
+
+	ids := make(chan string, len(triggerIDs))
+	for id := range triggerIDs {
+		ids <- id
+	}
+	close(ids)
+
+	results := make(chan result, len(triggerIDs))
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for w := 0; w < workers; w++ {
+		go func() {
+			defer wg.Done()
+			for id := range ids {
+				trigger, err := wc.repo.InternalGetTriggerByID(ctx, id)
+				if err != nil {
+					logger.Error().Err(err).Str("trigger_id", id).Msg("failed to get trigger by id for webhook cache")
+					continue
+				}
+				valueType := ""
+				if triggersrepo.IsSignalService(trigger.Service) {
+					valueType = signals.GetSignalDefinitionOrDefault(signals.BareSignalName(trigger.MetricName), signals.NumberType).ValueType
+				}
+				program, err := celcondition.PrepareCondition(trigger.Service, trigger.Condition, valueType)
+				if err != nil {
+					logger.Error().Err(err).Str("trigger_id", trigger.ID).Msg("failed to prepare condition")
+					continue
+				}
+				results <- result{id: id, webhook: &Webhook{Trigger: trigger, Program: program}}
+			}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	out := make(map[string]*Webhook, len(triggerIDs))
+	for r := range results {
+		out[r.id] = r.webhook
+	}
+	return out
 }
