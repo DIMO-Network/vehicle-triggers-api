@@ -29,6 +29,12 @@ type Settings struct {
 	MaxInFlight int `env:"MAX_IN_FLIGHT" envDefault:"50"`
 	// CacheDebounceTime wait time betweeen to successive cache refreshes
 	CacheDebounceTime time.Duration `env:"CACHE_DEBOUNCE_TIME"`
+	// CacheBuildWorkers caps the parallelism of the per-trigger fetch+CEL
+	// compile loop in webhookcache.PopulateCache. Each worker takes one DB
+	// roundtrip plus one CEL compile at a time, so it doubles as a DB
+	// connection-pool guard. Defaults to 2 because the prod pod is pinned
+	// to ~1 CPU; raise it on multi-core nodes.
+	CacheBuildWorkers int `env:"CACHE_BUILD_WORKERS" envDefault:"2"`
 
 	DB db.Settings `envPrefix:"DB_"`
 }
