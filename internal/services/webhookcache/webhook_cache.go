@@ -20,7 +20,10 @@ import (
 
 var errNoWebhookConfig = errors.New("no webhook configurations found in the database")
 
-const defaultCacheDebounceTime = 5 * time.Second
+const (
+	defaultCacheDebounceTime = 5 * time.Second
+	defaultCacheBuildWorkers = 2
+)
 
 type Webhook struct {
 	Trigger *models.Trigger
@@ -34,12 +37,13 @@ type Repository interface {
 
 // WebhookCache is an in-memory map: assetDID -> signal name -> []*models.Trigger.
 type WebhookCache struct {
-	mu          sync.RWMutex
-	webhooks    map[string]map[string][]*Webhook
-	repo        Repository
-	lastRefresh time.Time // last time the cache was refreshed
-	schedule    atomic.Bool
-	debounce    time.Duration
+	mu            sync.RWMutex
+	webhooks      map[string]map[string][]*Webhook
+	repo          Repository
+	lastRefresh   time.Time // last time the cache was refreshed
+	schedule      atomic.Bool
+	debounce      time.Duration
+	buildWorkers  int
 }
 
 func NewWebhookCache(repo Repository, settings *config.Settings) *WebhookCache {
@@ -47,10 +51,15 @@ func NewWebhookCache(repo Repository, settings *config.Settings) *WebhookCache {
 	if debounce == 0 {
 		debounce = defaultCacheDebounceTime
 	}
+	workers := settings.CacheBuildWorkers
+	if workers < 1 {
+		workers = defaultCacheBuildWorkers
+	}
 	return &WebhookCache{
-		webhooks: make(map[string]map[string][]*Webhook),
-		repo:     repo,
-		debounce: debounce,
+		webhooks:     make(map[string]map[string][]*Webhook),
+		repo:         repo,
+		debounce:     debounce,
+		buildWorkers: workers,
 	}
 }
 
@@ -196,15 +205,16 @@ func webhookKey(service, metricName string) string {
 }
 
 // compileTriggersParallel fetches and CEL-compiles each unique trigger in
-// parallel. Concurrency is capped at GOMAXPROCS to avoid exhausting the DB
-// connection pool. Triggers that fail to fetch or compile are logged and
-// skipped, mirroring the previous behaviour of the serial loop.
+// parallel. Worker count comes from CACHE_BUILD_WORKERS so prod can tune it
+// against its CPU limit and DB connection pool. Triggers that fail to fetch
+// or compile are logged and skipped, mirroring the previous behaviour of
+// the serial loop.
 func (wc *WebhookCache) compileTriggersParallel(ctx context.Context, triggerIDs map[string]struct{}) map[string]*Webhook {
 	logger := zerolog.Ctx(ctx)
 
-	workers := runtime.GOMAXPROCS(0)
+	workers := wc.buildWorkers
 	if workers < 1 {
-		workers = 1
+		workers = defaultCacheBuildWorkers
 	}
 
 	type result struct {

@@ -154,9 +154,13 @@ func startWebhookCache(ctx context.Context, settings *config.Settings, tokenExch
 	}
 
 	logger := zerolog.Ctx(ctx)
-	// Periodically refresh the cache so new/updated webhooks show up without a restart
+	// Periodically refresh the cache so new/updated webhooks show up without
+	// a restart. Each refresh re-scans the full subscriptions table and
+	// recompiles every trigger's CEL program, so the interval is set
+	// conservatively; subscription writes go through the API which already
+	// nudges the cache via ScheduleRefresh.
 	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
+		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
 			webhookCache.ScheduleRefresh(ctx)
