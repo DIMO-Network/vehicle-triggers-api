@@ -182,6 +182,7 @@ func createSignalConsumer(ctx context.Context, settings *config.Settings, tokenE
 		GroupID:         "vehicle-triggers",
 		MaxInFlight:     int64(settings.MaxInFlight),
 		Processor:       vehicleProcessor.ProcessSignalMessages,
+		Name:            "signals",
 	}
 
 	consumer, err := kafka.NewConsumer(consumerConfig)
@@ -206,6 +207,7 @@ func createEventConsumer(ctx context.Context, settings *config.Settings, tokenEx
 		GroupID:         "vehicle-triggers",
 		MaxInFlight:     int64(settings.MaxInFlight),
 		Processor:       vehicleProcessor.ProcessEventMessages,
+		Name:            "events",
 	}
 
 	consumer, err := kafka.NewConsumer(consumerConfig)
