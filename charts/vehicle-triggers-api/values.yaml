@@ -2,7 +2,7 @@ replicaCount: 1
 image:
   repository: dimozone/vehicle-triggers-api
   pullPolicy: IfNotPresent
-  tag: '7980394'
+  tag: 9c17273
 imagePullSecrets: []
 command:
   - /app
