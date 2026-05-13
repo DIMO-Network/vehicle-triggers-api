@@ -2,6 +2,7 @@ package celcondition
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
@@ -17,6 +18,51 @@ const (
 	InterruptCheckFrequency = 1000
 )
 
+// cel.NewEnv allocates several MB per call (type checker, registry,
+// declarations). We previously built a fresh env per trigger compile, which
+// blew the heap when populating the cache. Envs are immutable after
+// construction and safe to share across goroutines, so we build one per
+// schema (signal / event) and reuse it for every Compile/Program call.
+var (
+	signalEnv     = sync.OnceValues(buildSignalEnv)
+	eventEnvOnce  = sync.OnceValues(buildEventEnv)
+)
+
+func buildSignalEnv() (*cel.Env, error) {
+	return cel.NewEnv(
+		cel.Variable("valueNumber", cel.DynType),
+		cel.Variable("valueString", cel.StringType),
+		cel.Variable("value", cel.DynType),
+		cel.Variable("value.latitude", cel.DynType),
+		cel.Variable("value.longitude", cel.DynType),
+		cel.Variable("value.hdop", cel.DynType),
+		geoDistanceOpt(),
+		cel.Variable("source", cel.DoubleType),
+		cel.Variable("previousValueNumber", cel.DoubleType),
+		cel.Variable("previousValueString", cel.StringType),
+		cel.Variable("previousValue", cel.DynType),
+		cel.Variable("previousValue.latitude", cel.DynType),
+		cel.Variable("previousValue.longitude", cel.DynType),
+		cel.Variable("previousValue.hdop", cel.DynType),
+		cel.Variable("previousSource", cel.StringType),
+		cel.CrossTypeNumericComparisons(true),
+	)
+}
+
+func buildEventEnv() (*cel.Env, error) {
+	return cel.NewEnv(
+		cel.Variable("source", cel.StringType),
+		cel.Variable("name", cel.StringType),
+		cel.Variable("durationNs", cel.DynType),
+		cel.Variable("metadata", cel.StringType),
+		cel.Variable("previousSource", cel.StringType),
+		cel.Variable("previousName", cel.StringType),
+		cel.Variable("previousDurationNs", cel.DynType),
+		cel.Variable("previousMetadata", cel.StringType),
+		cel.CrossTypeNumericComparisons(true),
+	)
+}
+
 func PrepareCondition(serviceName, celCondition string, valueType string) (cel.Program, error) {
 	switch {
 	case triggersrepo.IsSignalService(serviceName):
@@ -29,22 +75,9 @@ func PrepareCondition(serviceName, celCondition string, valueType string) (cel.P
 }
 
 func PrepareEventCondition(celCondition string) (cel.Program, error) {
-
-	opts := []cel.EnvOption{
-		cel.Variable("source", cel.StringType),
-		cel.Variable("name", cel.StringType),
-		cel.Variable("durationNs", cel.DynType),
-		cel.Variable("metadata", cel.StringType),
-		cel.Variable("previousSource", cel.StringType),
-		cel.Variable("previousName", cel.StringType),
-		cel.Variable("previousDurationNs", cel.DynType),
-		cel.Variable("previousMetadata", cel.StringType),
-		cel.CrossTypeNumericComparisons(true),
-	}
-
-	env, err := cel.NewEnv(opts...)
+	env, err := eventEnvOnce()
 	if err != nil {
-		return nil, fmt.Errorf("failed to compile CEL expression: %w", err)
+		return nil, fmt.Errorf("failed to build event CEL env: %w", err)
 	}
 	ast, issues := env.Compile(celCondition)
 	if issues != nil && issues.Err() != nil {
@@ -151,28 +184,9 @@ func geoDistanceOpt() cel.EnvOption {
 }
 
 func PrepareSignalCondition(celCondition string, valueType string) (cel.Program, error) {
-	opts := []cel.EnvOption{
-		cel.Variable("valueNumber", cel.DynType),
-		cel.Variable("valueString", cel.StringType),
-		cel.Variable("value", cel.DynType),
-		cel.Variable("value.latitude", cel.DynType),
-		cel.Variable("value.longitude", cel.DynType),
-		cel.Variable("value.hdop", cel.DynType),
-		geoDistanceOpt(),
-		cel.Variable("source", cel.DoubleType),
-		cel.Variable("previousValueNumber", cel.DoubleType),
-		cel.Variable("previousValueString", cel.StringType),
-		cel.Variable("previousValue", cel.DynType),
-		cel.Variable("previousValue.latitude", cel.DynType),
-		cel.Variable("previousValue.longitude", cel.DynType),
-		cel.Variable("previousValue.hdop", cel.DynType),
-		cel.Variable("previousSource", cel.StringType),
-		cel.CrossTypeNumericComparisons(true),
-	}
-
-	env, err := cel.NewEnv(opts...)
+	env, err := signalEnv()
 	if err != nil {
-		return nil, fmt.Errorf("failed to compile CEL expression: %w", err)
+		return nil, fmt.Errorf("failed to build signal CEL env: %w", err)
 	}
 	ast, issues := env.Compile(celCondition)
 	if issues != nil && issues.Err() != nil {
