@@ -63,7 +63,7 @@ func NewConsumer(cfg *Config) (*Consumer, error) {
 func (c *Consumer) Start(ctx context.Context) error {
 	messages, err := c.subscriber.Subscribe(ctx, c.topic)
 	if err != nil {
-		return fmt.Errorf("could not subscribe to topic: %s", c.topic)
+		return fmt.Errorf("could not subscribe to topic %q: %w", c.topic, err)
 	}
 	if c.Processor == nil {
 		return fmt.Errorf("processor function is nil")
