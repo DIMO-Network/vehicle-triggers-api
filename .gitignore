@@ -31,6 +31,7 @@ __debug_bin*
 /vehicle-triggers-api
 /nats-testpublisher
 /triggers-bench
+/triggers-state
 
 CLAUDE.md
 

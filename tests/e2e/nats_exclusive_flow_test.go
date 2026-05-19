@@ -17,6 +17,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/app"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerstate"
 	"github.com/DIMO-Network/vehicle-triggers-api/tests"
 	"github.com/ethereum/go-ethereum/common"
 	nc "github.com/nats-io/nats.go"
@@ -169,4 +170,22 @@ func TestNATSExclusiveFlow(t *testing.T) {
 	require.NotEmpty(t, auditPayload, "audit stream did not capture the fire")
 	data := auditPayload["data"].(map[string]any)
 	require.Equal(t, "vss.speed", data["metricName"].(string))
+
+	// Verify trigger state KV captured the fire so other replicas would honor
+	// the cooldown without reading Postgres.
+	require.Eventually(t, func() bool {
+		kv, err := js.KeyValue(t.Context(), settingsCopy.NATS.TriggerStateBucket)
+		if err != nil {
+			return false
+		}
+		entry, err := kv.Get(t.Context(), triggerstate.Key(webhookID, assetDid))
+		if err != nil {
+			return false
+		}
+		var rec triggerstate.Record
+		if err := json.Unmarshal(entry.Value(), &rec); err != nil {
+			return false
+		}
+		return !rec.LastFiredAt.IsZero() && rec.TriggerID == webhookID && rec.AssetDID == assetDid.String()
+	}, 5*time.Second, 100*time.Millisecond, "trigger state KV missing fire record")
 }

@@ -38,10 +38,19 @@ type EventEvaluationData struct {
 	RawData    json.RawMessage
 }
 
+// StateStore lets the evaluator look up the most recent fire for a trigger +
+// vehicle without hitting Postgres. Optional - when nil, the evaluator falls
+// back to the trigger_logs table. See internal/services/triggerstate for the
+// production NATS KV backend.
+type StateStore interface {
+	LastFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID) (time.Time, bool, error)
+}
+
 // TriggerEvaluator handles trigger condition evaluation and related logic
 type TriggerEvaluator struct {
 	repo        TriggerRepo
 	tokenClient TokenExchangeClient
+	state       StateStore
 }
 
 type TriggerEvaluationResult struct {
@@ -59,6 +68,14 @@ type TokenExchangeClient interface {
 // NewTriggerEvaluator creates a new TriggerEvaluator
 func NewTriggerEvaluator(r TriggerRepo, t TokenExchangeClient) *TriggerEvaluator {
 	return &TriggerEvaluator{repo: r, tokenClient: t}
+}
+
+// WithStateStore returns a copy of the evaluator that consults state for the
+// cooldown check before falling through to the trigger_logs table.
+func (t *TriggerEvaluator) WithStateStore(s StateStore) *TriggerEvaluator {
+	cp := *t
+	cp.state = s
+	return &cp
 }
 
 // EvaluateSignalTrigger evaluates a signal trigger and returns whether it should fire return true if it should fire, false if not.
@@ -79,8 +96,8 @@ func (t *TriggerEvaluator) EvaluateSignalTrigger(ctx context.Context, trigger *m
 		}, nil
 	}
 
-	// Get last trigger log for cooldown (per-trigger)
-	lastTrigger, err := t.getLastLogValue(ctx, trigger.ID, signal.VehicleDID)
+	// Cooldown check via KV (when wired) with DB fallback for misses/errors.
+	lastFiredAt, err := t.lookupLastFire(ctx, trigger.ID, signal.VehicleDID)
 	if err != nil {
 		return nil, richerrors.Error{
 			Code:        http.StatusInternalServerError,
@@ -90,7 +107,7 @@ func (t *TriggerEvaluator) EvaluateSignalTrigger(ctx context.Context, trigger *m
 	}
 
 	// Check cooldown
-	cooldownPassed, err := t.checkCooldown(trigger, lastTrigger.LastTriggeredAt)
+	cooldownPassed, err := t.checkCooldown(trigger, lastFiredAt)
 	if err != nil {
 		return nil, richerrors.Error{
 			Code:        http.StatusInternalServerError,
@@ -165,7 +182,9 @@ func (t *TriggerEvaluator) EvaluateEventTrigger(ctx context.Context, trigger *mo
 		}, nil
 	}
 
-	// Get last trigger log for cooldown and condition evaluation
+	// Get last trigger log for cooldown and condition evaluation. Events
+	// still need the snapshot for previous-event CEL evaluation, so we keep
+	// the DB read here.
 	lastTrigger, err := t.getLastLogValue(ctx, trigger.ID, ev.VehicleDID)
 	if err != nil {
 		return nil, richerrors.Error{
@@ -228,6 +247,27 @@ func (e *TriggerEvaluator) checkCooldown(t *models.Trigger, lastTriggeredAt time
 	}
 	cooldown := time.Duration(t.CooldownPeriod) * time.Second
 	return time.Since(lastTriggeredAt) >= cooldown, nil
+}
+
+// lookupLastFire returns the last fire timestamp for (trigger, vehicle).
+// Consults the configured KV state store first when present and falls back
+// to the trigger_logs table on miss or KV error. Used only by the signal
+// path; the event path keeps reading the full TriggerLog because it also
+// needs the snapshot body for previous-event CEL evaluation.
+func (t *TriggerEvaluator) lookupLastFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID) (time.Time, error) {
+	if t.state != nil {
+		when, ok, err := t.state.LastFire(ctx, triggerID, vehicleDID)
+		if err == nil && ok {
+			return when, nil
+		}
+		// Miss or error: fall through to DB so a NATS outage can't suppress
+		// cooldowns.
+	}
+	last, err := t.getLastLogValue(ctx, triggerID, vehicleDID)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return last.LastTriggeredAt, nil
 }
 
 // getLastLogValue retrieves the last trigger log for a given trigger and vehicle

@@ -19,6 +19,7 @@ import (
 	vtnats "github.com/DIMO-Network/vehicle-triggers-api/internal/nats"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerstate"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhooksender"
 	"github.com/IBM/sarama"
@@ -82,7 +83,14 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		}
 		if settings.NATS.PrimaryMode() {
 			bridge = natsClient
-			natsListener = buildListener(settings, tokenExchangeCache, repo, webhookCache).WithAuditor(natsClient)
+			stateKV, err := natsClient.TriggerState(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to open trigger-state bucket: %w", err)
+			}
+			stateStore := triggerstate.New(stateKV)
+			natsListener = buildListenerWithState(settings, tokenExchangeCache, repo, webhookCache, stateStore).
+				WithAuditor(natsClient).
+				WithStateRecorder(stateStore)
 			natsSigCons, err = natsClient.EnsureConsumer(ctx, vtnats.ConsumerSpec{
 				Stream:         settings.NATS.SignalsStream,
 				Durable:        settings.NATS.SignalsDurable,
@@ -264,9 +272,19 @@ func startWebhookCache(ctx context.Context, settings *config.Settings, tokenExch
 // never constructed, so the bridge variant is only used in the transitional
 // NATS_MODE=primary mode.
 func buildListener(settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache) *metriclistener.MetricListener {
+	return buildListenerWithState(settings, tokenExchangeCache, repo, webhookCache, nil)
+}
+
+// buildListenerWithState builds a listener whose evaluator consults the
+// supplied state store for cooldown. Pass nil for state to fall back to the
+// trigger_logs table on every check.
+func buildListenerWithState(settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, state triggerevaluator.StateStore) *metriclistener.MetricListener {
 	webhookSender := webhooksender.NewWebhookSender(nil)
-	triggerEvaluator := triggerevaluator.NewTriggerEvaluator(repo, tokenExchangeCache)
-	return metriclistener.NewMetricsListener(webhookCache, repo, webhookSender, triggerEvaluator, settings)
+	evaluator := triggerevaluator.NewTriggerEvaluator(repo, tokenExchangeCache)
+	if state != nil {
+		evaluator = evaluator.WithStateStore(state)
+	}
+	return metriclistener.NewMetricsListener(webhookCache, repo, webhookSender, evaluator, settings)
 }
 
 func createSignalConsumer(_ context.Context, settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, bridge metriclistener.NATSBridge) (*kafka.Consumer, error) {

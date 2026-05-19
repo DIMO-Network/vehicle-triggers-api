@@ -42,6 +42,13 @@ type AuditPublisher interface {
 	PublishTriggerFired(ctx context.Context, devLicense string, record []byte) error
 }
 
+// StateRecorder writes the fire timestamp for a (trigger, vehicle) to the
+// distributed state store. Errors are logged and swallowed - the DB-backed
+// trigger_logs row remains the durable record.
+type StateRecorder interface {
+	RecordFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID, at time.Time) error
+}
+
 type TriggerRepo interface {
 	CreateTriggerLog(ctx context.Context, triggerLog *models.TriggerLog) error
 	DeleteVehicleSubscription(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (int64, error)
@@ -84,6 +91,10 @@ type MetricListener struct {
 	// auditor, when non-nil, publishes a per-fire record to the audit stream
 	// after a successful webhook delivery. Best-effort, async.
 	auditor AuditPublisher
+
+	// state, when non-nil, records the fire timestamp in the distributed
+	// state store so other replicas see the cooldown immediately.
+	state StateRecorder
 }
 
 // WithBridge returns a copy of the listener wired to publish parsed
@@ -101,6 +112,14 @@ func (m *MetricListener) WithBridge(b NATSBridge) *MetricListener {
 func (m *MetricListener) WithAuditor(a AuditPublisher) *MetricListener {
 	cp := *m
 	cp.auditor = a
+	return &cp
+}
+
+// WithStateRecorder returns a copy of the listener wired to write per-fire
+// state to the distributed KV bucket after successful webhook delivery.
+func (m *MetricListener) WithStateRecorder(s StateRecorder) *MetricListener {
+	cp := *m
+	cp.state = s
 	return &cp
 }
 
@@ -210,8 +229,21 @@ func (m *MetricListener) handleTriggeredWebhook(ctx context.Context, trigger *mo
 	}
 
 	m.publishAudit(ctx, trigger, payload)
+	m.recordState(ctx, trigger, payload)
 
 	return nil
+}
+
+// recordState writes the fire to the distributed state store so other
+// replicas honor the cooldown immediately. Errors are logged - the DB log
+// remains authoritative.
+func (m *MetricListener) recordState(ctx context.Context, trigger *models.Trigger, payload *cloudevent.CloudEvent[webhook.WebhookPayload]) {
+	if m.state == nil {
+		return
+	}
+	if err := m.state.RecordFire(ctx, trigger.ID, payload.Data.AssetDID, time.Now().UTC()); err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Str("triggerId", trigger.ID).Msg("state recorder: write failed")
+	}
 }
 
 // publishAudit emits a record to the trigger-fired audit stream. Runs in a
