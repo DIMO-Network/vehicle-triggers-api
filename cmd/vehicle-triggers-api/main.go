@@ -23,6 +23,8 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/migrations"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
+	vtnats "github.com/DIMO-Network/vehicle-triggers-api/internal/nats"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -93,10 +95,43 @@ func main() {
 	RunConsumer(runnerCtx, runnerGroup, &logger, servers.SignalConsumer)
 	RunConsumer(runnerCtx, runnerGroup, &logger, servers.EventConsumer)
 
+	if servers.NATSSignalConsumer != nil {
+		RunNATSConsumer(runnerCtx, runnerGroup, &logger, "nats-signals", servers.NATSClient, servers.NATSSignalConsumer, servers.NATSListener.HandleSignalPayload, settings.MaxInFlight)
+	}
+	if servers.NATSEventConsumer != nil {
+		RunNATSConsumer(runnerCtx, runnerGroup, &logger, "nats-events", servers.NATSClient, servers.NATSEventConsumer, servers.NATSListener.HandleEventPayload, settings.MaxInFlight)
+	}
+	if servers.NATSClient != nil {
+		client := servers.NATSClient
+		runnerGroup.Go(func() error {
+			<-runnerCtx.Done()
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := client.Shutdown(shutdownCtx); err != nil {
+				return fmt.Errorf("nats shutdown: %w", err)
+			}
+			return nil
+		})
+	}
+
 	if err := runnerGroup.Wait(); err != nil {
 		logger.Fatal().Err(err).Msg("Server failed.")
 	}
 	logger.Info().Msg("Server stopped.")
+}
+
+// RunNATSConsumer runs a JetStream pull loop in its own goroutine, dispatching
+// payloads to handler with MaxInFlight workers.
+func RunNATSConsumer(ctx context.Context, group *errgroup.Group, logger *zerolog.Logger, name string, client *vtnats.Client, cons jetstream.Consumer, handler vtnats.PayloadHandler, maxInFlight int) {
+	group.Go(func() error {
+		logger.Info().Str("consumer", name).Msg("nats pull loop: enter")
+		err := client.PullLoop(ctx, cons, maxInFlight, handler)
+		logger.Info().Str("consumer", name).Err(err).Msg("nats pull loop: exit")
+		if err != nil && !errors.Is(err, context.Canceled) {
+			return fmt.Errorf("nats pull loop %q: %w", name, err)
+		}
+		return nil
+	})
 }
 
 // RunConsumer starts the Kafka consumer in a single goroutine. Stop is

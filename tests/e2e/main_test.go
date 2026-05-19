@@ -47,6 +47,7 @@ func TestMain(m *testing.M) {
 
 func GetTestServices(t *testing.T) *TestServices {
 	t.Helper()
+	tests.SkipIfNoDocker(t)
 	srvcLock.Lock()
 	globalTestContainer.Do(func() {
 		logger := zerolog.New(os.Stdout).Level(zerolog.WarnLevel)

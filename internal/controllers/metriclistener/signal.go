@@ -20,9 +20,21 @@ import (
 )
 
 func (m *MetricListener) processSignalMessage(msg *message.Message) error {
+	return m.HandleSignalPayload(msg.Context(), msg.Payload)
+}
+
+// HandleSignalPayload parses a SignalCloudEvent and either republishes it via
+// the bridge or evaluates triggers against each unpacked signal. Shared by
+// the Kafka and NATS entry points.
+func (m *MetricListener) HandleSignalPayload(ctx context.Context, payload []byte) error {
 	var signalCE vss.SignalCloudEvent
-	if err := json.Unmarshal(msg.Payload, &signalCE); err != nil {
+	if err := json.Unmarshal(payload, &signalCE); err != nil {
 		return fmt.Errorf("failed to parse signal CloudEvent: %w", err)
+	}
+
+	if m.bridge != nil {
+		_, err := m.bridge.PublishSignals(ctx, signalCE)
+		return err
 	}
 
 	sigs := vss.UnpackSignals(signalCE)
@@ -39,7 +51,7 @@ func (m *MetricListener) processSignalMessage(msg *message.Message) error {
 			errs = errors.Join(errs, fmt.Errorf("failed to marshal signal: %w", err))
 			continue
 		}
-		if err := m.processSingleSignal(msg.Context(), sig, vehicleDID, sigData); err != nil {
+		if err := m.processSingleSignal(ctx, sig, vehicleDID, sigData); err != nil {
 			errs = errors.Join(errs, err)
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DIMO-Network/cloudevent"
+	"github.com/DIMO-Network/model-garage/pkg/vss"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
@@ -22,6 +23,15 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/semaphore"
 )
+
+// NATSBridge republishes parsed CloudEvents onto NATS subjects derived from
+// the inner signal/event name. Set on the listener when running in
+// NATS-primary ingest mode so Kafka consumers stop evaluating and instead
+// hand traffic to NATS consumers.
+type NATSBridge interface {
+	PublishSignals(ctx context.Context, ce vss.SignalCloudEvent) (int, error)
+	PublishEvents(ctx context.Context, ce vss.EventCloudEvent) (int, error)
+}
 
 type TriggerRepo interface {
 	CreateTriggerLog(ctx context.Context, triggerLog *models.TriggerLog) error
@@ -56,6 +66,20 @@ type MetricListener struct {
 	webhookSender    WebhookSender
 	triggerEvaluator TriggerEvaluator
 	maxFailureCount  int
+
+	// bridge, when non-nil, makes the listener republish parsed CloudEvents
+	// to NATS instead of evaluating them. Used to put Kafka consumers in
+	// bridge-only mode while NATS consumers own evaluation.
+	bridge NATSBridge
+}
+
+// WithBridge returns a copy of the listener wired to publish parsed
+// CloudEvents to NATS in place of evaluation. Callers use this for the Kafka
+// consumers when NATS is the primary evaluation path.
+func (m *MetricListener) WithBridge(b NATSBridge) *MetricListener {
+	cp := *m
+	cp.bridge = b
+	return &cp
 }
 
 // NewMetricsListener creates a new MetrticListener.

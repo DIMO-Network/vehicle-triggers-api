@@ -16,6 +16,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/metriclistener"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
+	vtnats "github.com/DIMO-Network/vehicle-triggers-api/internal/nats"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
@@ -24,6 +25,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/redirect"
 	"github.com/gofiber/swagger"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 )
 
@@ -31,6 +33,16 @@ type Servers struct {
 	Application    *fiber.App
 	SignalConsumer *kafka.Consumer
 	EventConsumer  *kafka.Consumer
+
+	// NATSClient is non-nil when NATSSettings.Enabled(). main owns shutdown.
+	NATSClient *vtnats.Client
+	// NATSSignalConsumer / NATSEventConsumer are non-nil when NATS owns the
+	// evaluation path (NATSSettings.PrimaryMode()).
+	NATSSignalConsumer jetstream.Consumer
+	NATSEventConsumer  jetstream.Consumer
+	// NATSListener is the listener used to dispatch messages pulled off the
+	// NATS consumers.
+	NATSListener *metriclistener.MetricListener
 }
 
 func CreateServers(ctx context.Context, settings *config.Settings, logger zerolog.Logger) (*Servers, error) {
@@ -50,12 +62,62 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		return nil, fmt.Errorf("failed to start webhook cache: %w", err)
 	}
 
-	signalConsumer, err := createSignalConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache)
+	var (
+		natsClient   *vtnats.Client
+		natsListener *metriclistener.MetricListener
+		natsSigCons  jetstream.Consumer
+		natsEvtCons  jetstream.Consumer
+		bridge       metriclistener.NATSBridge
+	)
+	if settings.NATS.Enabled() {
+		natsClient, err = vtnats.Connect(ctx, settings.NATS, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to nats: %w", err)
+		}
+		if err := natsClient.EnsureStreams(ctx); err != nil {
+			return nil, fmt.Errorf("failed to ensure nats streams: %w", err)
+		}
+		if err := natsClient.EnsureBuckets(ctx); err != nil {
+			return nil, fmt.Errorf("failed to ensure nats buckets: %w", err)
+		}
+		if settings.NATS.PrimaryMode() {
+			bridge = natsClient
+			natsListener = buildListener(settings, tokenExchangeCache, repo, webhookCache)
+			natsSigCons, err = natsClient.EnsureConsumer(ctx, vtnats.ConsumerSpec{
+				Stream:         settings.NATS.SignalsStream,
+				Durable:        settings.NATS.SignalsDurable,
+				FilterSubjects: []string{vtnats.AllSignalsFilter()},
+				DeliverPolicy:  jetstream.DeliverAllPolicy,
+				AckWait:        settings.NATS.AckWait,
+				MaxDeliver:     settings.NATS.MaxDeliver,
+				MaxAckPending:  settings.NATS.MaxAckPending,
+				Description:    "vehicle-triggers signals evaluator",
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to ensure signals consumer: %w", err)
+			}
+			natsEvtCons, err = natsClient.EnsureConsumer(ctx, vtnats.ConsumerSpec{
+				Stream:         settings.NATS.EventsStream,
+				Durable:        settings.NATS.EventsDurable,
+				FilterSubjects: []string{vtnats.AllEventsFilter()},
+				DeliverPolicy:  jetstream.DeliverAllPolicy,
+				AckWait:        settings.NATS.AckWait,
+				MaxDeliver:     settings.NATS.MaxDeliver,
+				MaxAckPending:  settings.NATS.MaxAckPending,
+				Description:    "vehicle-triggers events evaluator",
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to ensure events consumer: %w", err)
+			}
+		}
+	}
+
+	signalConsumer, err := createSignalConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache, bridge)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create signal consumer: %w", err)
 	}
 
-	eventConsumer, err := createEventConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache)
+	eventConsumer, err := createEventConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache, bridge)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create event consumer: %w", err)
 	}
@@ -70,9 +132,13 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		return nil, fmt.Errorf("failed to create fiber app: %w", err)
 	}
 	return &Servers{
-		Application:    app,
-		SignalConsumer: signalConsumer,
-		EventConsumer:  eventConsumer,
+		Application:        app,
+		SignalConsumer:     signalConsumer,
+		EventConsumer:      eventConsumer,
+		NATSClient:         natsClient,
+		NATSSignalConsumer: natsSigCons,
+		NATSEventConsumer:  natsEvtCons,
+		NATSListener:       natsListener,
 	}, nil
 }
 
@@ -172,20 +238,29 @@ func startWebhookCache(ctx context.Context, settings *config.Settings, tokenExch
 	return webhookCache, nil
 }
 
-func createSignalConsumer(ctx context.Context, settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache) (*kafka.Consumer, error) {
+// buildListener wires a MetricListener with shared services. Used by both
+// the Kafka and NATS sides; the Kafka path optionally wraps it with a bridge.
+func buildListener(settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache) *metriclistener.MetricListener {
+	webhookSender := webhooksender.NewWebhookSender(nil)
+	triggerEvaluator := triggerevaluator.NewTriggerEvaluator(repo, tokenExchangeCache)
+	return metriclistener.NewMetricsListener(webhookCache, repo, webhookSender, triggerEvaluator, settings)
+}
+
+func createSignalConsumer(_ context.Context, settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, bridge metriclistener.NATSBridge) (*kafka.Consumer, error) {
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-	webhookSender := webhooksender.NewWebhookSender(nil)
-	triggerEvaluator := triggerevaluator.NewTriggerEvaluator(repo, tokenExchangeCache)
-	vehicleProcessor := metriclistener.NewMetricsListener(webhookCache, repo, webhookSender, triggerEvaluator, settings)
+	listener := buildListener(settings, tokenExchangeCache, repo, webhookCache)
+	if bridge != nil {
+		listener = listener.WithBridge(bridge)
+	}
 	consumerConfig := &kafka.Config{
 		ClusterConfig:   clusterConfig,
 		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
 		Topic:           settings.DeviceSignalsTopic,
 		GroupID:         "vehicle-triggers",
 		MaxInFlight:     int64(settings.MaxInFlight),
-		Processor:       vehicleProcessor.ProcessSignalMessages,
+		Processor:       listener.ProcessSignalMessages,
 		Name:            "signals",
 	}
 
@@ -197,20 +272,21 @@ func createSignalConsumer(ctx context.Context, settings *config.Settings, tokenE
 	return consumer, nil
 }
 
-func createEventConsumer(ctx context.Context, settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache) (*kafka.Consumer, error) {
+func createEventConsumer(_ context.Context, settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, bridge metriclistener.NATSBridge) (*kafka.Consumer, error) {
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-	webhookSender := webhooksender.NewWebhookSender(nil)
-	triggerEvaluator := triggerevaluator.NewTriggerEvaluator(repo, tokenExchangeCache)
-	vehicleProcessor := metriclistener.NewMetricsListener(webhookCache, repo, webhookSender, triggerEvaluator, settings)
+	listener := buildListener(settings, tokenExchangeCache, repo, webhookCache)
+	if bridge != nil {
+		listener = listener.WithBridge(bridge)
+	}
 	consumerConfig := &kafka.Config{
 		ClusterConfig:   clusterConfig,
 		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
 		Topic:           settings.DeviceEventsTopic,
 		GroupID:         "vehicle-triggers",
 		MaxInFlight:     int64(settings.MaxInFlight),
-		Processor:       vehicleProcessor.ProcessEventMessages,
+		Processor:       listener.ProcessEventMessages,
 		Name:            "events",
 	}
 

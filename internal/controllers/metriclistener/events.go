@@ -19,9 +19,21 @@ import (
 )
 
 func (m *MetricListener) processEventMessage(msg *message.Message) error {
+	return m.HandleEventPayload(msg.Context(), msg.Payload)
+}
+
+// HandleEventPayload parses an EventCloudEvent and either republishes it via
+// the bridge or evaluates triggers against each unpacked event. Shared by
+// the Kafka and NATS entry points.
+func (m *MetricListener) HandleEventPayload(ctx context.Context, payload []byte) error {
 	var eventCE vss.EventCloudEvent
-	if err := json.Unmarshal(msg.Payload, &eventCE); err != nil {
+	if err := json.Unmarshal(payload, &eventCE); err != nil {
 		return fmt.Errorf("failed to parse event CloudEvent: %w", err)
+	}
+
+	if m.bridge != nil {
+		_, err := m.bridge.PublishEvents(ctx, eventCE)
+		return err
 	}
 
 	events := vss.UnpackEvents(eventCE)
@@ -33,7 +45,7 @@ func (m *MetricListener) processEventMessage(msg *message.Message) error {
 			errs = errors.Join(errs, fmt.Errorf("failed to marshal event: %w", err))
 			continue
 		}
-		if err := m.processSingleEvent(msg.Context(), event, eventData); err != nil {
+		if err := m.processSingleEvent(ctx, event, eventData); err != nil {
 			errs = errors.Join(errs, err)
 		}
 	}

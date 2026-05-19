@@ -28,5 +28,9 @@ settings.yaml
 __debug_bin*
 *.code-workspace
 .history/
-vehicle-triggers-api
+/vehicle-triggers-api
+/nats-testpublisher
+/triggers-bench
+
+CLAUDE.md
 

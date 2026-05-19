@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"database/sql"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,6 +14,26 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
+
+// SkipIfNoDocker skips the test when neither DOCKER_HOST nor a known local
+// Docker socket is reachable. Lets unit-style runs (CI without Docker, dev
+// laptops without Docker Desktop running) avoid testcontainers panics.
+func SkipIfNoDocker(t *testing.T) {
+	t.Helper()
+	if os.Getenv("DOCKER_HOST") != "" {
+		return
+	}
+	for _, sock := range []string{
+		"/var/run/docker.sock",
+		os.ExpandEnv("$HOME/.docker/run/docker.sock"),
+		os.ExpandEnv("$HOME/.colima/default/docker.sock"),
+	} {
+		if _, err := os.Stat(sock); err == nil {
+			return
+		}
+	}
+	t.Skip("docker not available; set DOCKER_HOST or start Docker to run this test")
+}
 
 type TestContainer struct {
 	container testcontainers.Container
@@ -43,6 +64,7 @@ func (tc *TestContainer) Close() {
 }
 
 func SetupTestContainer(t *testing.T) *TestContainer {
+	SkipIfNoDocker(t)
 	globalTestContainer.onceSetup.Do(func() {
 		ctx := context.Background()
 		var err error

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/DIMO-Network/vehicle-triggers-api/tests"
 	"github.com/IBM/sarama"
 	"github.com/testcontainers/testcontainers-go/modules/kafka"
 )
@@ -20,6 +21,7 @@ type mockKafkaServer struct {
 
 func setupMockKafkaServer(t *testing.T) *mockKafkaServer {
 	t.Helper()
+	tests.SkipIfNoDocker(t)
 
 	ctx := context.Background()
 
