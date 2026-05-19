@@ -82,7 +82,7 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		}
 		if settings.NATS.PrimaryMode() {
 			bridge = natsClient
-			natsListener = buildListener(settings, tokenExchangeCache, repo, webhookCache)
+			natsListener = buildListener(settings, tokenExchangeCache, repo, webhookCache).WithAuditor(natsClient)
 			natsSigCons, err = natsClient.EnsureConsumer(ctx, vtnats.ConsumerSpec{
 				Stream:         settings.NATS.SignalsStream,
 				Durable:        settings.NATS.SignalsDurable,
@@ -112,14 +112,20 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		}
 	}
 
-	signalConsumer, err := createSignalConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache, bridge)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create signal consumer: %w", err)
-	}
+	var (
+		signalConsumer *kafka.Consumer
+		eventConsumer  *kafka.Consumer
+	)
+	if !settings.NATS.KafkaDisabled() {
+		signalConsumer, err = createSignalConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache, bridge)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create signal consumer: %w", err)
+		}
 
-	eventConsumer, err := createEventConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache, bridge)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create event consumer: %w", err)
+		eventConsumer, err = createEventConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache, bridge)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create event consumer: %w", err)
+		}
 	}
 
 	identityClient, err := identity.New(settings, logger)
@@ -253,6 +259,10 @@ func startWebhookCache(ctx context.Context, settings *config.Settings, tokenExch
 
 // buildListener wires a MetricListener with shared services. Used by both
 // the Kafka and NATS sides; the Kafka path optionally wraps it with a bridge.
+//
+// Deprecated handling: when NATS_MODE=exclusive the Kafka-side listener is
+// never constructed, so the bridge variant is only used in the transitional
+// NATS_MODE=primary mode.
 func buildListener(settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache) *metriclistener.MetricListener {
 	webhookSender := webhooksender.NewWebhookSender(nil)
 	triggerEvaluator := triggerevaluator.NewTriggerEvaluator(repo, tokenExchangeCache)

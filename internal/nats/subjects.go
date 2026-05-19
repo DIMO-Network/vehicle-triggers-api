@@ -24,7 +24,18 @@ const (
 	SignalSubjectPrefix = "dimo.signals"
 	EventSubjectPrefix  = "dimo.events"
 	AuditSubjectPrefix  = "dimo.trigger.fired"
+	DLQSubjectPrefix    = "dimo.dlq"
 )
+
+// DLQSubject returns the dead-letter subject for an original subject. We
+// preserve the rest of the hierarchy so DLQ entries can be filtered by their
+// original signal/event name.
+func DLQSubject(original string) string {
+	return DLQSubjectPrefix + "." + original
+}
+
+// AllDLQFilter returns the wildcard subject matching every DLQ entry.
+func AllDLQFilter() string { return DLQSubjectPrefix + ".>" }
 
 // SignalSubject builds the publish subject for a signal.
 // Shape: dimo.signals.<signalName>

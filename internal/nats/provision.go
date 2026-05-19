@@ -7,8 +7,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// EnsureStreams creates-or-updates the three streams the service uses:
-// DIMO_SIGNALS, DIMO_EVENTS, DIMO_TRIGGER_AUDIT. Idempotent.
+// EnsureStreams creates-or-updates the four streams the service uses:
+// DIMO_SIGNALS, DIMO_EVENTS, DIMO_TRIGGER_AUDIT, DIMO_TRIGGER_DLQ. Idempotent.
 func (c *Client) EnsureStreams(ctx context.Context) error {
 	streams := []jetstream.StreamConfig{
 		{
@@ -40,6 +40,16 @@ func (c *Client) EnsureStreams(ctx context.Context) error {
 			MaxAge:      c.cfg.AuditMaxAge,
 			Replicas:    c.cfg.StreamReplicas,
 			Description: "Trigger fire audit log for billing",
+		},
+		{
+			Name:        c.cfg.DLQStream,
+			Subjects:    []string{c.cfg.DLQSubject},
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			Storage:     jetstream.FileStorage,
+			MaxAge:      c.cfg.DLQMaxAge,
+			Replicas:    c.cfg.StreamReplicas,
+			Description: "Poison messages that exceeded MaxDeliver retries",
 		},
 	}
 	for _, s := range streams {

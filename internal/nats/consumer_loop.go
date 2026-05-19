@@ -69,12 +69,28 @@ func (c *Client) PullLoop(ctx context.Context, cons jetstream.Consumer, maxInFli
 			defer sem.Release(1)
 			meta, _ := m.Metadata()
 			stream := ""
+			var numDelivered uint64
 			if meta != nil {
 				stream = meta.Stream
+				numDelivered = meta.NumDelivered
 			}
 			payload := m.Data()
 			if err := handler(ctx, payload); err != nil {
-				log.Error().Err(err).Str("subject", m.Subject()).Msg("handler failed; nak")
+				// Last attempt? Park it in the DLQ and terminally fail so the
+				// stream doesn't keep redelivering forever or silently drop
+				// after MaxDeliver expires.
+				if c.cfg.MaxDeliver > 0 && numDelivered >= uint64(c.cfg.MaxDeliver) {
+					if dlqErr := c.publishDLQ(m, err); dlqErr != nil {
+						log.Error().Err(dlqErr).Str("subject", m.Subject()).Msg("dlq publish failed; falling back to nak")
+						_ = m.NakWithDelay(0)
+						MetricsConsume(stream, "nak")
+						return
+					}
+					_ = m.Term()
+					MetricsConsume(stream, "dlq")
+					return
+				}
+				log.Error().Err(err).Str("subject", m.Subject()).Uint64("attempt", numDelivered).Msg("handler failed; nak")
 				_ = m.NakWithDelay(0)
 				MetricsConsume(stream, "nak")
 				return

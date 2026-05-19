@@ -92,8 +92,12 @@ func main() {
 	}
 	logger.Info().Str("port", strconv.Itoa(settings.Port)).Msgf("Starting web server")
 	runFiberWithLogging(runnerCtx, runnerGroup, &logger, servers.Application, net.JoinHostPort("0.0.0.0", strconv.Itoa(settings.Port)))
-	RunConsumer(runnerCtx, runnerGroup, &logger, servers.SignalConsumer)
-	RunConsumer(runnerCtx, runnerGroup, &logger, servers.EventConsumer)
+	if servers.SignalConsumer != nil {
+		RunConsumer(runnerCtx, runnerGroup, &logger, servers.SignalConsumer)
+	}
+	if servers.EventConsumer != nil {
+		RunConsumer(runnerCtx, runnerGroup, &logger, servers.EventConsumer)
+	}
 
 	if servers.NATSSignalConsumer != nil {
 		RunNATSConsumer(runnerCtx, runnerGroup, &logger, "nats-signals", servers.NATSClient, servers.NATSSignalConsumer, servers.NATSListener.HandleSignalPayload, settings.MaxInFlight)

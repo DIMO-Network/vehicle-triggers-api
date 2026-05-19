@@ -44,12 +44,15 @@ type Settings struct {
 // NATSSettings holds NATS JetStream wiring.
 //
 // Mode controls ingest topology:
-//   - off     (default): Kafka consumers evaluate triggers, NATS unused.
-//   - primary:           Kafka consumers parse + republish to NATS without
-//                        evaluating; NATS consumers do the evaluation and
-//                        webhook dispatch. This lets DIS keep producing to
-//                        Kafka while the service runs entirely on NATS
-//                        internally, avoiding double-fires.
+//   - off       (default): Kafka consumers evaluate triggers, NATS unused.
+//   - primary:             Kafka consumers parse + republish to NATS without
+//                          evaluating; NATS consumers do the evaluation and
+//                          webhook dispatch. Transitional mode used while DIS
+//                          still publishes to Kafka but the service runs
+//                          evaluation on NATS, avoiding double-fires.
+//   - exclusive:           NATS only. Kafka consumers are not created, and
+//                          KAFKA_* env vars become optional. Target state
+//                          once DIS publishes directly to JetStream.
 //
 // When Mode != off the service refuses to start if a NATS connection cannot
 // be established.
@@ -63,9 +66,11 @@ type NATSSettings struct {
 	SignalsStream  string `env:"SIGNALS_STREAM" envDefault:"DIMO_SIGNALS"`
 	EventsStream   string `env:"EVENTS_STREAM" envDefault:"DIMO_EVENTS"`
 	AuditStream    string `env:"AUDIT_STREAM" envDefault:"DIMO_TRIGGER_AUDIT"`
+	DLQStream      string `env:"DLQ_STREAM" envDefault:"DIMO_TRIGGER_DLQ"`
 	SignalsSubject string `env:"SIGNALS_SUBJECT" envDefault:"dimo.signals.>"`
 	EventsSubject  string `env:"EVENTS_SUBJECT" envDefault:"dimo.events.>"`
 	AuditSubject   string `env:"AUDIT_SUBJECT" envDefault:"dimo.trigger.fired.>"`
+	DLQSubject     string `env:"DLQ_SUBJECT" envDefault:"dimo.dlq.>"`
 
 	SignalsDurable string `env:"SIGNALS_DURABLE" envDefault:"triggers-signals"`
 	EventsDurable  string `env:"EVENTS_DURABLE" envDefault:"triggers-events"`
@@ -74,6 +79,7 @@ type NATSSettings struct {
 	SignalsMaxAge          time.Duration `env:"SIGNALS_MAX_AGE" envDefault:"24h"`
 	EventsMaxAge           time.Duration `env:"EVENTS_MAX_AGE" envDefault:"24h"`
 	AuditMaxAge            time.Duration `env:"AUDIT_MAX_AGE" envDefault:"2160h"` // 90d
+	DLQMaxAge              time.Duration `env:"DLQ_MAX_AGE" envDefault:"168h"`    // 7d
 	FetchBatch             int           `env:"FETCH_BATCH" envDefault:"100"`
 	AckWait                time.Duration `env:"ACK_WAIT" envDefault:"45s"`
 	MaxDeliver             int           `env:"MAX_DELIVER" envDefault:"5"`
@@ -92,6 +98,10 @@ type NATSSettings struct {
 // Enabled reports whether any NATS wiring should run.
 func (n NATSSettings) Enabled() bool { return n.Mode != "" && n.Mode != "off" }
 
-// PrimaryMode reports whether NATS owns the evaluation path (Kafka becomes a
-// bridge that only republishes parsed payloads to NATS).
-func (n NATSSettings) PrimaryMode() bool { return n.Mode == "primary" }
+// PrimaryMode reports whether NATS owns the evaluation path. True for both
+// "primary" (Kafka bridges into NATS) and "exclusive" (no Kafka at all).
+func (n NATSSettings) PrimaryMode() bool { return n.Mode == "primary" || n.Mode == "exclusive" }
+
+// KafkaDisabled reports whether the Kafka consumers should be skipped
+// entirely. True only in exclusive mode.
+func (n NATSSettings) KafkaDisabled() bool { return n.Mode == "exclusive" }

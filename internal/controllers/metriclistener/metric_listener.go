@@ -8,6 +8,7 @@ import (
 
 	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/model-garage/pkg/vss"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
@@ -31,6 +32,14 @@ import (
 type NATSBridge interface {
 	PublishSignals(ctx context.Context, ce vss.SignalCloudEvent) (int, error)
 	PublishEvents(ctx context.Context, ce vss.EventCloudEvent) (int, error)
+}
+
+// AuditPublisher emits a record to the trigger-fired audit stream for every
+// successful webhook delivery. Used by downstream billing/usage aggregation.
+// Implementations should be non-blocking; the caller invokes them in a
+// background goroutine and ignores errors.
+type AuditPublisher interface {
+	PublishTriggerFired(ctx context.Context, devLicense string, record []byte) error
 }
 
 type TriggerRepo interface {
@@ -71,6 +80,10 @@ type MetricListener struct {
 	// to NATS instead of evaluating them. Used to put Kafka consumers in
 	// bridge-only mode while NATS consumers own evaluation.
 	bridge NATSBridge
+
+	// auditor, when non-nil, publishes a per-fire record to the audit stream
+	// after a successful webhook delivery. Best-effort, async.
+	auditor AuditPublisher
 }
 
 // WithBridge returns a copy of the listener wired to publish parsed
@@ -79,6 +92,15 @@ type MetricListener struct {
 func (m *MetricListener) WithBridge(b NATSBridge) *MetricListener {
 	cp := *m
 	cp.bridge = b
+	return &cp
+}
+
+// WithAuditor returns a copy of the listener wired to publish trigger-fired
+// audit records. Use this on the NATS-side listener so audit traffic flows
+// only from the evaluation path, not from any transient bridge.
+func (m *MetricListener) WithAuditor(a AuditPublisher) *MetricListener {
+	cp := *m
+	cp.auditor = a
 	return &cp
 }
 
@@ -187,7 +209,35 @@ func (m *MetricListener) handleTriggeredWebhook(ctx context.Context, trigger *mo
 		return fmt.Errorf("failed to log webhook trigger: %w", err)
 	}
 
+	m.publishAudit(ctx, trigger, payload)
+
 	return nil
+}
+
+// publishAudit emits a record to the trigger-fired audit stream. Runs in a
+// detached goroutine and swallows errors - audit loss must never block
+// webhook delivery. Skipped silently when no auditor is configured.
+func (m *MetricListener) publishAudit(ctx context.Context, trigger *models.Trigger, payload *cloudevent.CloudEvent[webhook.WebhookPayload]) {
+	if m.auditor == nil {
+		return
+	}
+	devLicense := common.BytesToAddress(trigger.DeveloperLicenseAddress).Hex()
+	record, err := json.Marshal(payload)
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Str("triggerId", trigger.ID).Msg("audit: marshal failed")
+		return
+	}
+	auditor := m.auditor
+	go func() {
+		// Detach from request ctx so a slow audit publish or cancelled
+		// upstream consumer can't drop the record. Hard cap so a wedged
+		// NATS server can't leak goroutines forever.
+		bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := auditor.PublishTriggerFired(bgCtx, devLicense, record); err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Str("triggerId", trigger.ID).Msg("audit publish failed")
+		}
+	}()
 }
 
 func (m *MetricListener) logWebhookTrigger(ctx context.Context, payload *cloudevent.CloudEvent[webhook.WebhookPayload], metricData json.RawMessage) error {

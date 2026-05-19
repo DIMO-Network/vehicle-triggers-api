@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/DIMO-Network/model-garage/pkg/vss"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 // PublishSignals unpacks the multi-signal CloudEvent into one publish per
@@ -69,4 +71,47 @@ func (c *Client) PublishEvents(ctx context.Context, ce vss.EventCloudEvent) (int
 		ok++
 	}
 	return ok, firstErr
+}
+
+// publishDLQ writes a poison message to the DLQ stream, preserving the
+// original subject hierarchy under dimo.dlq.* and stamping headers with
+// failure context (final error, deliver count, original stream). Best-effort:
+// returns an error if the publish fails so the caller can fall back to nak.
+func (c *Client) publishDLQ(m jetstream.Msg, handlerErr error) error {
+	meta, _ := m.Metadata()
+	headers := nats.Header{}
+	for k, vs := range m.Headers() {
+		headers[k] = vs
+	}
+	headers.Set("X-Original-Subject", m.Subject())
+	headers.Set("X-Failure-Reason", handlerErr.Error())
+	if meta != nil {
+		headers.Set("X-Original-Stream", meta.Stream)
+		headers.Set("X-Delivered-Count", fmt.Sprintf("%d", meta.NumDelivered))
+	}
+	dlq := &nats.Msg{
+		Subject: DLQSubject(m.Subject()),
+		Data:    m.Data(),
+		Header:  headers,
+	}
+	if _, err := c.JS.PublishMsg(context.Background(), dlq); err != nil {
+		MetricsPublish(c.cfg.DLQStream, "error")
+		return fmt.Errorf("dlq publish %q: %w", dlq.Subject, err)
+	}
+	MetricsPublish(c.cfg.DLQStream, "ok")
+	return nil
+}
+
+// PublishTriggerFired writes a per-fire audit record to the audit stream
+// keyed on developer license. Uses async publish so a stalled audit stream
+// can't backpressure the evaluation path; the in-flight ceiling is governed
+// by NATS_PUBLISH_ASYNC_MAX_PENDING.
+func (c *Client) PublishTriggerFired(ctx context.Context, devLicense string, record []byte) error {
+	subject := AuditSubject(devLicense)
+	if _, err := c.JS.PublishAsync(subject, record); err != nil {
+		MetricsPublish(c.cfg.AuditStream, "error")
+		return fmt.Errorf("audit publish %q: %w", subject, err)
+	}
+	MetricsPublish(c.cfg.AuditStream, "ok")
+	return nil
 }

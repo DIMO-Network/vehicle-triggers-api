@@ -47,17 +47,22 @@ env:
   CACHE_DEBOUNCE_TIME: 5s
   TOKEN_EXCHANGE_CACHE_EXPIRATION: 15m
   TOKEN_EXCHANGE_CACHE_CLEANUP_INTERVAL: 5m
-  # NATS JetStream ingest. MODE=off (default) leaves the service on the
-  # Kafka path. Set MODE=primary to move evaluation onto JetStream.
+  # NATS JetStream ingest. Modes:
+  #   off       - Kafka does everything, NATS unused (default).
+  #   primary   - Kafka consumers bridge into NATS, NATS does evaluation.
+  #   exclusive - NATS only. Kafka consumers are skipped; KAFKA_BROKERS can
+  #               be empty. Target state.
   NATS_MODE: off
   NATS_URL: nats://nats-dev.dimo-platform.svc.cluster.local:4222
   NATS_NAME: vehicle-triggers-api
   NATS_SIGNALS_STREAM: DIMO_SIGNALS
   NATS_EVENTS_STREAM: DIMO_EVENTS
   NATS_AUDIT_STREAM: DIMO_TRIGGER_AUDIT
+  NATS_DLQ_STREAM: DIMO_TRIGGER_DLQ
   NATS_SIGNALS_SUBJECT: dimo.signals.>
   NATS_EVENTS_SUBJECT: dimo.events.>
   NATS_AUDIT_SUBJECT: dimo.trigger.fired.>
+  NATS_DLQ_SUBJECT: dimo.dlq.>
   NATS_SIGNALS_DURABLE: triggers-signals
   NATS_EVENTS_DURABLE: triggers-events
   NATS_STREAM_REPLICAS: '3'
@@ -66,6 +71,7 @@ env:
   NATS_MAX_ACK_PENDING: '5000'
   NATS_FETCH_BATCH: '100'
   NATS_PUBLISH_ASYNC_MAX_PENDING: '4000'
+  NATS_DLQ_MAX_AGE: 168h
 service:
   type: ClusterIP
   ports:
