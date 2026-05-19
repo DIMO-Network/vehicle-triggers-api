@@ -49,6 +49,9 @@ func TestNATSSignalFlow(t *testing.T) {
 	settingsCopy.NATS.SignalsStream = "TEST_SIGNALS_" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.EventsStream = "TEST_EVENTS_" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.AuditStream = "TEST_AUDIT_" + devAddress.Hex()[2:10]
+	settingsCopy.NATS.SignalsSubject = "dimo.signals.>"
+	settingsCopy.NATS.EventsSubject = "dimo.events.>"
+	settingsCopy.NATS.AuditSubject = "dimo.trigger.fired.>"
 	settingsCopy.NATS.SignalsDurable = "test-sig-" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.EventsDurable = "test-evt-" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.WebhooksBucket = "tb_wh_" + devAddress.Hex()[2:10]
@@ -60,7 +63,7 @@ func TestNATSSignalFlow(t *testing.T) {
 	settingsCopy.NATS.EventsMaxAge = time.Minute
 	settingsCopy.NATS.AuditMaxAge = time.Minute
 	settingsCopy.NATS.AckWait = 5 * time.Second
-	settingsCopy.NATS.MaxDeliver = 3
+	settingsCopy.NATS.MaxDeliver = 10 // must exceed DefaultBackOff length
 	settingsCopy.NATS.MaxAckPending = 1000
 	settingsCopy.NATS.FetchBatch = 50
 	settingsCopy.NATS.TriggerStateTTL = time.Minute

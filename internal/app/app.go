@@ -127,7 +127,7 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		return nil, fmt.Errorf("failed to create identity client: %w", err)
 	}
 
-	app, err := CreateFiberApp(logger, repo, webhookCache, tokenExchangeAPI, identityClient, settings)
+	app, err := CreateFiberApp(logger, repo, webhookCache, tokenExchangeAPI, identityClient, settings, natsClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create fiber app: %w", err)
 	}
@@ -147,7 +147,8 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 	webhookCache *webhookcache.WebhookCache,
 	tokenExchangeClient *tokenexchange.Client,
 	identityClient *identity.Client,
-	settings *config.Settings) (*fiber.App, error) {
+	settings *config.Settings,
+	natsClient *vtnats.Client) (*fiber.App, error) {
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
@@ -181,9 +182,21 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 	vehicleSubscriptionController := webhook.NewVehicleSubscriptionController(repo, identityClient, tokenExchangeClient, webhookCache)
 
 	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
+		body := fiber.Map{
 			"data": "Server is up and running",
-		})
+		}
+		if natsClient != nil {
+			natsHealthy := natsClient.Healthy()
+			body["nats"] = map[string]any{
+				"enabled": true,
+				"healthy": natsHealthy,
+				"mode":    settings.NATS.Mode,
+			}
+			if !natsHealthy {
+				return c.Status(fiber.StatusServiceUnavailable).JSON(body)
+			}
+		}
+		return c.JSON(body)
 	})
 
 	jwtMiddleware := auth.Middleware(settings)

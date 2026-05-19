@@ -47,6 +47,11 @@ func (c *Client) EnsureConsumer(ctx context.Context, spec ConsumerSpec) (jetstre
 	if len(spec.BackOff) == 0 {
 		spec.BackOff = DefaultBackOff
 	}
+	// JetStream requires MaxDeliver > len(BackOff). Trim the ladder so a low
+	// MaxDeliver configured via env doesn't crash startup.
+	if len(spec.BackOff) >= spec.MaxDeliver {
+		spec.BackOff = spec.BackOff[:spec.MaxDeliver-1]
+	}
 
 	cfg := jetstream.ConsumerConfig{
 		Durable:        spec.Durable,

@@ -103,3 +103,13 @@ func (c *Client) Shutdown(ctx context.Context) error {
 
 // Config returns the settings the client was constructed with.
 func (c *Client) Config() config.NATSSettings { return c.cfg }
+
+// Healthy reports whether the underlying NATS connection is currently
+// connected. Reconnect-in-flight returns false so /health surfaces transient
+// disconnects to liveness probes.
+func (c *Client) Healthy() bool {
+	if c == nil || c.Conn == nil {
+		return false
+	}
+	return c.Conn.Status() == nats.CONNECTED
+}

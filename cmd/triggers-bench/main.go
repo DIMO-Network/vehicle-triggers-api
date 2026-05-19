@@ -47,7 +47,10 @@ type config struct {
 	Duration time.Duration
 	Vehicles int
 	Signals  []string
-	Workers  int
+	Workers    int
+	Publishers int
+	Replicas   int
+	Async      bool
 
 	StreamName string
 	Subject    string
@@ -66,6 +69,9 @@ func parseConfig() (*config, error) {
 	flag.IntVar(&cfg.Vehicles, "vehicles", 10000, "Number of synthetic vehicle token IDs")
 	flag.StringVar(&sigList, "signals", "speed,fuelLevel,odometer,batteryVoltage", "Comma-separated signal names")
 	flag.IntVar(&cfg.Workers, "consumers", 1, "Concurrent NATS pull loops")
+	flag.IntVar(&cfg.Publishers, "publishers", 1, "Concurrent publisher goroutines (each gets rate/N)")
+	flag.IntVar(&cfg.Replicas, "replicas", 1, "Stream replication factor (1, 3, 5...)")
+	flag.BoolVar(&cfg.Async, "async", false, "Use PublishAsync instead of sync Publish for higher throughput")
 	flag.StringVar(&cfg.StreamName, "stream", "BENCH_SIGNALS", "JetStream stream name (created/updated)")
 	flag.StringVar(&cfg.Subject, "subject", "bench.signals.>", "Stream subject")
 	flag.StringVar(&cfg.ConsumerN, "consumer-name", "bench-cons", "Durable consumer name (random suffix appended)")
@@ -120,7 +126,7 @@ func run(cfg *config) error {
 	}
 	defer conn.Drain() //nolint:errcheck // benchmark teardown, best-effort
 
-	js, err := jetstream.New(conn)
+	js, err := jetstream.New(conn, jetstream.WithPublishAsyncMaxPending(50_000))
 	if err != nil {
 		return fmt.Errorf("jetstream: %w", err)
 	}
@@ -132,6 +138,7 @@ func run(cfg *config) error {
 		Discard:   jetstream.DiscardOld,
 		Storage:   jetstream.FileStorage,
 		MaxAge:    10 * time.Minute,
+		Replicas:  cfg.Replicas,
 	}); err != nil {
 		return fmt.Errorf("ensure stream: %w", err)
 	}
@@ -199,8 +206,29 @@ func run(cfg *config) error {
 	defer pubCancel()
 
 	start := time.Now()
-	if err := runPublisher(pubCtx, js, cfg, pubSamples, &publishedOK, &publishedErr); err != nil {
-		return err
+	var pubWG sync.WaitGroup
+	pubCount := cfg.Publishers
+	if pubCount < 1 {
+		pubCount = 1
+	}
+	perPubRate := cfg.Rate / float64(pubCount)
+	for i := 0; i < pubCount; i++ {
+		pubWG.Add(1)
+		go func() {
+			defer pubWG.Done()
+			runPublisher(pubCtx, js, cfg, perPubRate, pubSamples, &publishedOK, &publishedErr)
+		}()
+	}
+	pubWG.Wait()
+	if cfg.Async {
+		// Wait for all async acks to land so we measure to-server-ack, not
+		// just to-network. Bounded by a hard ceiling so a stuck server
+		// doesn't hang the bench.
+		select {
+		case <-js.PublishAsyncComplete():
+		case <-time.After(30 * time.Second):
+			fmt.Fprintln(os.Stderr, "[bench] async publish drain timed out")
+		}
 	}
 	pubElapsed := time.Since(start)
 
@@ -228,21 +256,38 @@ func run(cfg *config) error {
 	return nil
 }
 
-func runPublisher(ctx context.Context, js jetstream.JetStream, cfg *config, samples *samples, ok, errs *uint64) error {
+func runPublisher(ctx context.Context, js jetstream.JetStream, cfg *config, rate float64, samples *samples, ok, errs *uint64) {
 	contract := common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF")
-	interval := time.Duration(float64(time.Second) / cfg.Rate)
+	interval := time.Duration(float64(time.Second) / rate)
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return
 		case <-t.C:
 			tokenID := rand.IntN(cfg.Vehicles) + 1
 			signal := cfg.Signals[rand.IntN(len(cfg.Signals))]
 			payload := buildPayload(cfg, contract, tokenID, signal)
 			subject := strings.Replace(cfg.Subject, ".>", "."+signal, 1)
 			t0 := time.Now()
+			if cfg.Async {
+				future, err := js.PublishAsync(subject, payload)
+				if err != nil {
+					atomic.AddUint64(errs, 1)
+					continue
+				}
+				atomic.AddUint64(ok, 1)
+				go func() {
+					select {
+					case <-future.Ok():
+						samples.add(time.Since(t0))
+					case <-future.Err():
+						atomic.AddUint64(errs, 1)
+					}
+				}()
+				continue
+			}
 			_, err := js.Publish(ctx, subject, payload)
 			lat := time.Since(t0)
 			if err != nil {
@@ -372,7 +417,7 @@ func report(cfg *config, pubElapsed time.Duration, ok, errs, consumed *uint64, p
 	throughput := float64(pubCount) / pubElapsed.Seconds()
 	fmt.Println()
 	fmt.Println("=== triggers-bench results ===")
-	fmt.Printf("target rate           : %.0f msg/s for %s\n", cfg.Rate, cfg.Duration)
+	fmt.Printf("target rate           : %.0f msg/s for %s (publishers=%d, replicas=%d, async=%v)\n", cfg.Rate, cfg.Duration, cfg.Publishers, cfg.Replicas, cfg.Async)
 	fmt.Printf("publisher elapsed     : %s\n", pubElapsed)
 	fmt.Printf("published ok / err    : %d / %d\n", pubCount, errCount)
 	fmt.Printf("publish throughput    : %.1f msg/s\n", throughput)

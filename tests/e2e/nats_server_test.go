@@ -21,7 +21,10 @@ func setupMockNATSServer(t *testing.T) *mockNATSServer {
 	tests.SkipIfNoDocker(t)
 
 	ctx := context.Background()
-	container, err := nats.Run(ctx, "nats:2.11-alpine", nats.WithArgument("jetstream", ""))
+	// The default Run command already includes "-js" so we don't need to pass
+	// extra args. Passing them via WithArgument/CmdArgs replaces the default
+	// command and we'd lose JetStream.
+	container, err := nats.Run(ctx, "nats:2.11-alpine")
 	if err != nil {
 		t.Fatalf("Failed to start NATS container: %v", err)
 	}
