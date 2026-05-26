@@ -48,6 +48,12 @@ spec:
               name: {{ include "vehicle-triggers-api.fullname" . }}-config
           - secretRef:
               name: {{ include "vehicle-triggers-api.fullname" . }}-secret
+          {{- if .Values.nats.credsEnabled }}
+          volumeMounts:
+          - name: nats-creds
+            mountPath: {{ .Values.nats.credsMountPath }}
+            readOnly: true
+          {{- end }}
           ports:
 {{ toYaml .Values.ports | indent 12 }}
           livenessProbe:
@@ -70,6 +76,12 @@ spec:
             successThreshold: 1
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.nats.credsEnabled }}
+      volumes:
+      - name: nats-creds
+        secret:
+          secretName: {{ include "vehicle-triggers-api.fullname" . }}-nats-creds
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

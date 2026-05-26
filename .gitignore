@@ -32,6 +32,7 @@ __debug_bin*
 /nats-testpublisher
 /triggers-bench
 /triggers-state
+/triggers-dlq
 
 CLAUDE.md
 

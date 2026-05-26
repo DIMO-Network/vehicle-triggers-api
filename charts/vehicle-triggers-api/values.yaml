@@ -72,6 +72,14 @@ env:
   NATS_FETCH_BATCH: '100'
   NATS_PUBLISH_ASYNC_MAX_PENDING: '4000'
   NATS_DLQ_MAX_AGE: 168h
+# NATS authentication. When credsEnabled is true an ExternalSecret pulls the
+# creds file from AWS Secrets Manager (credsSecretKey) into a k8s Secret,
+# mounts it at credsMountPath, and sets NATS_CREDS_FILE for the app. Leave
+# disabled for unauthenticated local/dev NATS.
+nats:
+  credsEnabled: false
+  credsSecretKey: dev/vehicle-triggers-api/nats/creds
+  credsMountPath: /etc/nats
 service:
   type: ClusterIP
   ports:

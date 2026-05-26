@@ -88,11 +88,8 @@ type NATSSettings struct {
 	PublishAsyncMaxPending int           `env:"PUBLISH_ASYNC_MAX_PENDING" envDefault:"4000"`
 
 	WebhooksBucket     string        `env:"WEBHOOKS_BUCKET" envDefault:"webhooks"`
-	SignalIndexBucket  string        `env:"SIGNAL_INDEX_BUCKET" envDefault:"signal_index"`
 	TriggerStateBucket string        `env:"TRIGGER_STATE_BUCKET" envDefault:"trigger_state"`
 	TriggerStateTTL    time.Duration `env:"TRIGGER_STATE_TTL" envDefault:"168h"` // 7d
-
-	SignalIndexDebounce time.Duration `env:"SIGNAL_INDEX_DEBOUNCE" envDefault:"5s"`
 }
 
 // Enabled reports whether any NATS wiring should run.

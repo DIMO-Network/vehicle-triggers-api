@@ -57,7 +57,6 @@ func TestNATSSignalFlow(t *testing.T) {
 	settingsCopy.NATS.SignalsDurable = "test-sig-" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.EventsDurable = "test-evt-" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.WebhooksBucket = "tb_wh_" + devAddress.Hex()[2:10]
-	settingsCopy.NATS.SignalIndexBucket = "tb_idx_" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.TriggerStateBucket = "tb_state_" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.Name = "vt-test-" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.StreamReplicas = 1

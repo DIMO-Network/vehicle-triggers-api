@@ -13,11 +13,6 @@ func (c *Client) Webhooks(ctx context.Context) (jetstream.KeyValue, error) {
 	return c.kv(ctx, c.cfg.WebhooksBucket)
 }
 
-// SignalIndex returns the signal-index KV bucket (active signal/event refcounts).
-func (c *Client) SignalIndex(ctx context.Context) (jetstream.KeyValue, error) {
-	return c.kv(ctx, c.cfg.SignalIndexBucket)
-}
-
 // TriggerState returns the trigger-state KV bucket.
 func (c *Client) TriggerState(ctx context.Context) (jetstream.KeyValue, error) {
 	return c.kv(ctx, c.cfg.TriggerStateBucket)

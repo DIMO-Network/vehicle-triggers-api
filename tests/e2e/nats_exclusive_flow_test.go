@@ -58,7 +58,6 @@ func TestNATSExclusiveFlow(t *testing.T) {
 	settingsCopy.NATS.SignalsDurable = "ex-sig-" + suffix
 	settingsCopy.NATS.EventsDurable = "ex-evt-" + suffix
 	settingsCopy.NATS.WebhooksBucket = "ex_wh_" + suffix
-	settingsCopy.NATS.SignalIndexBucket = "ex_idx_" + suffix
 	settingsCopy.NATS.TriggerStateBucket = "ex_state_" + suffix
 	settingsCopy.NATS.Name = "vt-ex-" + suffix
 	settingsCopy.NATS.StreamReplicas = 1
