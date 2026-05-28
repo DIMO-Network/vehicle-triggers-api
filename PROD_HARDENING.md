@@ -61,21 +61,11 @@ Categories:
 
 ### Performance / architecture
 
-- [ ] **Decouple webhook delivery from eval handler.** Today `SendWebhook` is synchronous to the JetStream message handler — a slow receiver holds `MaxAckPending` slots and throttles consume. Async worker pool:
-  - Handler enqueues to a buffered channel + writes state + acks NATS
-  - Worker pool drains channel, owns per-receiver connection pools and retry
-  - On worker pool overflow, signal backpressure (return error to handler → nak)
-  Trade-off: failure semantics get harder (we own retry, not JetStream). Pair with deterministic webhook ID so receivers can dedup. Effort: 1-2 days. Files: new `internal/services/webhookdispatcher/` + wire into `metric_listener.go`.
+- [x] **Decouple webhook delivery from eval handler.** ~~Today `SendWebhook` is synchronous to the JetStream message handler — a slow receiver holds `MaxAckPending` slots and throttles consume.~~ Done: `internal/services/webhookdispatcher` is a pluggable pool. Workers own send + state + audit + circuit-breaker bookkeeping. `Enqueue` returns `ErrQueueFull` on overflow so the JetStream handler naks and JetStream retries. Default pool size 32 / queue 4096 via `NATS_DISPATCHER_WORKERS` / `NATS_DISPATCHER_QUEUE_SIZE`. `WithDispatcher` on the listener swaps the sync path out; sync path retained for the Kafka-only legacy mode. Metrics: queue depth gauge, queue_full counter, delivery_total+latency histogram.
 
-- [ ] **Audit publish fire-and-forget queue.** `PublishAsync` blocks at `MaxAckPending=4000`. We launch a 5s detached goroutine per fire — at 30k/s with 5s blocks that's potentially 150k goroutines. Replace with:
-  - Non-blocking bounded channel (e.g. 50k slots)
-  - Small drainer pool calling `PublishAsync` and discarding (or counting) overflow
-  Audit loss > goroutine explosion. Effort: half day. File: `internal/controllers/metriclistener/metric_listener.go::publishAudit`.
+- [x] **Audit publish fire-and-forget queue.** ~~`PublishAsync` blocks at `MaxAckPending=4000`. We launch a 5s detached goroutine per fire — at 30k/s with 5s blocks that's potentially 150k goroutines.~~ Done: `internal/services/auditqueue` is a bounded buffer + small drainer pool. `Submit` drops on overflow (non-blocking). Drops surface via `vehicle_triggers_audit_dropped_total` — alarm on this. Adapter implements the `webhookdispatcher.AuditPublisher` interface so the dispatcher's `publishAudit` no longer spawns a goroutine. Default `NATS_AUDIT_WORKERS=4`, `NATS_AUDIT_QUEUE_SIZE=16384`.
 
-- [ ] **Webhook cache distributed updates.** Today each replica polls Postgres every 5 min. CRUD propagation latency = 5 min worst case. Either:
-  - **NATS pub/sub on `dimo.webhook.changed.<webhookID>`**: API handler publishes after DB write; replicas subscribe and invalidate. Simple.
-  - **Watch `webhooks` KV bucket**: API handler does DB write + KV upsert. Replicas WatchAll → live updates. Reconciler covers drift.
-  Effort: 1 day. Files: `internal/services/webhookcache/`, `internal/controllers/webhook/`, `internal/app/app.go`.
+- [x] **Webhook cache distributed updates.** ~~Today each replica polls Postgres every 5 min.~~ Done: `internal/services/cachebroadcast` publishes change events on plain NATS subject `dimo.cache.webhook.changed`. `WebhookCache.ScheduleRefresh` publishes; receiver side calls `ScheduleRefreshSilent` to avoid echo loops. App wires the notifier on `WebhookCache` and subscribes in `CreateServers` when NATS is enabled. CRUD controllers untouched. 5-min poll stays as reconciliation safety net.
 
 - [ ] **Webhook signing (HMAC).** TODO in `webhook_sender.go:74`. Sign body + timestamp with per-developer secret stored on the trigger record. Receiver verifies. Required to prevent third-party spoofing of webhook payloads. Effort: 4h. Files: `internal/services/webhooksender/`, `triggers` DB schema (new `signing_secret` column + migration).
 

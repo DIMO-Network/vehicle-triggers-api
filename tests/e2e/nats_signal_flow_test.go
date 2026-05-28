@@ -96,6 +96,12 @@ func TestNATSSignalFlow(t *testing.T) {
 			t.Errorf("nats pull loop: %v", err)
 		}
 	}()
+	if servers.Dispatcher != nil {
+		go func() { _ = servers.Dispatcher.Run(ctx) }()
+	}
+	if servers.AuditQueue != nil {
+		go func() { _ = servers.AuditQueue.Run(ctx) }()
+	}
 	t.Cleanup(func() {
 		_ = servers.SignalConsumer.Stop(context.Background())
 		_ = servers.EventConsumer.Stop(context.Background())

@@ -16,6 +16,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookdispatcher"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhooksender"
 	"crypto/sha256"
 	"encoding/hex"
@@ -81,6 +82,13 @@ type WebhookCache interface {
 	ScheduleRefresh(ctx context.Context)
 }
 
+// WebhookDispatcher is the small interface the listener uses to hand off
+// successful trigger evaluations. The production implementation lives in
+// internal/services/webhookdispatcher.
+type WebhookDispatcher interface {
+	Enqueue(ctx context.Context, j webhookdispatcher.Job) error
+}
+
 type MetricListener struct {
 	webhookCache     WebhookCache
 	repo             TriggerRepo
@@ -94,12 +102,20 @@ type MetricListener struct {
 	bridge NATSBridge
 
 	// auditor, when non-nil, publishes a per-fire record to the audit stream
-	// after a successful webhook delivery. Best-effort, async.
+	// after a successful webhook delivery. Best-effort, async. Ignored when
+	// dispatcher is set - the dispatcher owns audit then.
 	auditor AuditPublisher
 
 	// state, when non-nil, records the fire timestamp in the distributed
-	// state store so other replicas see the cooldown immediately.
+	// state store so other replicas see the cooldown immediately. Ignored
+	// when dispatcher is set.
 	state StateRecorder
+
+	// dispatcher, when non-nil, replaces the inline delivery path with an
+	// async hand-off. The dispatcher owns send + state + audit + failure
+	// count bookkeeping; the listener still does the circuit-breaker check
+	// before enqueuing.
+	dispatcher WebhookDispatcher
 }
 
 // WithBridge returns a copy of the listener wired to publish parsed
@@ -125,6 +141,16 @@ func (m *MetricListener) WithAuditor(a AuditPublisher) *MetricListener {
 func (m *MetricListener) WithStateRecorder(s StateRecorder) *MetricListener {
 	cp := *m
 	cp.state = s
+	return &cp
+}
+
+// WithDispatcher returns a copy of the listener that hands successful trigger
+// evaluations off to the supplied dispatcher instead of running the delivery
+// path inline. The listener still owns the circuit-breaker check and the
+// permission-denied subscription cleanup.
+func (m *MetricListener) WithDispatcher(d WebhookDispatcher) *MetricListener {
+	cp := *m
+	cp.dispatcher = d
 	return &cp
 }
 
@@ -203,9 +229,23 @@ func processMessage(ctx context.Context, messages <-chan *message.Message, proce
 }
 
 func (m *MetricListener) handleTriggeredWebhook(ctx context.Context, trigger *models.Trigger, metricData json.RawMessage, payload *cloudevent.CloudEvent[webhook.WebhookPayload]) error {
-	// Check if we should attempt the webhook (circuit breaker logic)
+	// Circuit-breaker check stays here so we never enqueue work for triggers
+	// that are disabled or at the failure threshold.
 	if !m.ShouldAttemptWebhook(trigger) {
 		return nil
+	}
+
+	// Async path: hand off and return. The dispatcher does send + state +
+	// audit + failure-count bookkeeping. An ErrQueueFull bubbles back up so
+	// the JetStream handler naks and the message is redelivered.
+	if m.dispatcher != nil {
+		return m.dispatcher.Enqueue(ctx, webhookdispatcher.Job{
+			Trigger:    trigger,
+			Payload:    payload,
+			Snapshot:   metricData,
+			MetricName: trigger.MetricName,
+			VehicleDID: payload.Data.AssetDID,
+		})
 	}
 
 	// Send the webhook

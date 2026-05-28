@@ -90,6 +90,19 @@ type NATSSettings struct {
 	FilterSubjectCap       int           `env:"FILTER_SUBJECT_CAP" envDefault:"2048"`
 	PublishAsyncMaxPending int           `env:"PUBLISH_ASYNC_MAX_PENDING" envDefault:"4000"`
 
+	// Dispatcher decouples webhook delivery from the JetStream handler.
+	// Workers=0 keeps the legacy synchronous behavior; >0 spins up a worker
+	// pool that owns delivery + state + audit + failure-count bookkeeping
+	// so a slow receiver can't throttle the consumer.
+	DispatcherWorkers   int `env:"DISPATCHER_WORKERS" envDefault:"32"`
+	DispatcherQueueSize int `env:"DISPATCHER_QUEUE_SIZE" envDefault:"4096"`
+
+	// Audit queue is fronted by a fire-and-forget pool so the dispatcher's
+	// success path never spawns one goroutine per fire (was a goroutine
+	// explosion risk at 30k/s when the audit publisher slowed down).
+	AuditWorkers   int `env:"AUDIT_WORKERS" envDefault:"4"`
+	AuditQueueSize int `env:"AUDIT_QUEUE_SIZE" envDefault:"16384"`
+
 	WebhooksBucket       string        `env:"WEBHOOKS_BUCKET" envDefault:"webhooks"`
 	TriggerStateBucket   string        `env:"TRIGGER_STATE_BUCKET" envDefault:"trigger_state"`
 	TriggerStateTTL      time.Duration `env:"TRIGGER_STATE_TTL" envDefault:"168h"` // 7d

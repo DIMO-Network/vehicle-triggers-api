@@ -102,6 +102,24 @@ func main() {
 		RunConsumer(runnerCtx, runnerGroup, &logger, servers.EventConsumer)
 	}
 
+	if servers.AuditQueue != nil {
+		aq := servers.AuditQueue
+		runnerGroup.Go(func() error {
+			logger.Info().Msg("audit queue: starting drainer pool")
+			err := aq.Run(runnerCtx)
+			logger.Info().Err(err).Msg("audit queue: drainer pool exited")
+			return err
+		})
+	}
+	if servers.Dispatcher != nil {
+		disp := servers.Dispatcher
+		runnerGroup.Go(func() error {
+			logger.Info().Msg("dispatcher: starting workers")
+			err := disp.Run(runnerCtx)
+			logger.Info().Err(err).Msg("dispatcher: workers exited")
+			return err
+		})
+	}
 	if servers.NATSSignalConsumer != nil {
 		RunNATSConsumer(runnerCtx, runnerGroup, &logger, "nats-signals", servers.NATSClient, servers.NATSSignalConsumer, servers.NATSListener.HandleSignalPayload, settings.MaxInFlight)
 	}

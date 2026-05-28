@@ -86,6 +86,12 @@ func TestNATSExclusiveFlow(t *testing.T) {
 			t.Errorf("nats pull loop: %v", err)
 		}
 	}()
+	if servers.Dispatcher != nil {
+		go func() { _ = servers.Dispatcher.Run(ctx) }()
+	}
+	if servers.AuditQueue != nil {
+		go func() { _ = servers.AuditQueue.Run(ctx) }()
+	}
 	t.Cleanup(func() {
 		shutdownCtx, c := context.WithTimeout(context.Background(), 5*time.Second)
 		defer c()

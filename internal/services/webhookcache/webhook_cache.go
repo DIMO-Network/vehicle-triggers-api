@@ -35,6 +35,17 @@ type Repository interface {
 	InternalGetTriggerByID(ctx context.Context, triggerID string) (*models.Trigger, error)
 }
 
+// Notifier broadcasts a "config changed" event over NATS so other replicas
+// can invalidate their own caches in milliseconds instead of waiting for
+// the periodic poll. Set via SetNotifier when NATS is configured.
+type Notifier interface {
+	Notify(ctx context.Context, webhookID string, op string) error
+}
+
+type noopNotifier struct{}
+
+func (noopNotifier) Notify(context.Context, string, string) error { return nil }
+
 // WebhookCache is an in-memory map: assetDID -> signal name -> []*models.Trigger.
 type WebhookCache struct {
 	mu            sync.RWMutex
@@ -44,6 +55,7 @@ type WebhookCache struct {
 	schedule      atomic.Bool
 	debounce      time.Duration
 	buildWorkers  int
+	notifier      Notifier
 }
 
 func NewWebhookCache(repo Repository, settings *config.Settings) *WebhookCache {
@@ -60,7 +72,19 @@ func NewWebhookCache(repo Repository, settings *config.Settings) *WebhookCache {
 		repo:         repo,
 		debounce:     debounce,
 		buildWorkers: workers,
+		notifier:     noopNotifier{},
 	}
+}
+
+// SetNotifier wires the cache to publish a "config changed" event on
+// ScheduleRefresh. Used by the API CRUD paths; the subscriber that receives
+// remote notifications calls ScheduleRefreshSilent instead so the
+// invalidation event doesn't echo back into another publish.
+func (wc *WebhookCache) SetNotifier(n Notifier) {
+	if n == nil {
+		n = noopNotifier{}
+	}
+	wc.notifier = n
 }
 
 // PopulateCache builds the cache from the database
@@ -104,7 +128,25 @@ func logMemStats(logger *zerolog.Logger, phase string) {
 		Msg("memstats")
 }
 
+// ScheduleRefresh debounces a rebuild of this replica's cache and publishes
+// a cross-replica invalidation event. Called from CRUD handlers.
 func (wc *WebhookCache) ScheduleRefresh(ctx context.Context) {
+	wc.scheduleRefresh(ctx, true)
+}
+
+// ScheduleRefreshSilent is the receiver side of cross-replica invalidation:
+// rebuilds the local cache but does NOT re-broadcast, so notifications
+// don't echo into infinite republishing across replicas.
+func (wc *WebhookCache) ScheduleRefreshSilent(ctx context.Context) {
+	wc.scheduleRefresh(ctx, false)
+}
+
+func (wc *WebhookCache) scheduleRefresh(ctx context.Context, broadcast bool) {
+	if broadcast && wc.notifier != nil {
+		if err := wc.notifier.Notify(ctx, "", "any"); err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("cache invalidate publish failed; relying on poll")
+		}
+	}
 	if wc.schedule.CompareAndSwap(false, true) {
 		go func() {
 			time.Sleep(wc.debounce)

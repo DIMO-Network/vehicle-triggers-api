@@ -19,8 +19,11 @@ import (
 	vtnats "github.com/DIMO-Network/vehicle-triggers-api/internal/nats"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/auditqueue"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/cachebroadcast"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerstate"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookdispatcher"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhooksender"
 	"github.com/IBM/sarama"
 	"github.com/gofiber/fiber/v2"
@@ -44,6 +47,13 @@ type Servers struct {
 	// NATSListener is the listener used to dispatch messages pulled off the
 	// NATS consumers.
 	NATSListener *metriclistener.MetricListener
+	// Dispatcher decouples webhook delivery from the JetStream handler. Non-
+	// nil whenever NATS owns the evaluation path; main is responsible for
+	// calling Run on it in the errgroup.
+	Dispatcher *webhookdispatcher.Dispatcher
+	// AuditQueue fronts the audit stream with a fire-and-forget pool. Same
+	// lifecycle as the dispatcher.
+	AuditQueue *auditqueue.Queue
 }
 
 func CreateServers(ctx context.Context, settings *config.Settings, logger zerolog.Logger) (*Servers, error) {
@@ -69,6 +79,8 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		natsSigCons  jetstream.Consumer
 		natsEvtCons  jetstream.Consumer
 		bridge       metriclistener.NATSBridge
+		dispatcher   *webhookdispatcher.Dispatcher
+		auditQ       *auditqueue.Queue
 	)
 	if settings.NATS.Enabled() {
 		natsClient, err = vtnats.Connect(ctx, settings.NATS, logger)
@@ -81,6 +93,13 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		if err := natsClient.EnsureBuckets(ctx); err != nil {
 			return nil, fmt.Errorf("failed to ensure nats buckets: %w", err)
 		}
+		// Wire the webhook cache to publish + subscribe to invalidation
+		// notifications so cross-replica CRUD propagation drops from 5 min
+		// (poll) to sub-second.
+		webhookCache.SetNotifier(cachebroadcast.NewNATSNotifier(natsClient.Conn, logger))
+		if _, err := cachebroadcast.Subscribe(natsClient.Conn, ctx, webhookCache, logger); err != nil {
+			return nil, fmt.Errorf("failed to subscribe to cache invalidate: %w", err)
+		}
 		if settings.NATS.PrimaryMode() {
 			bridge = natsClient
 			stateKV, err := natsClient.TriggerState(ctx)
@@ -92,9 +111,24 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 				return nil, fmt.Errorf("failed to open signal-history bucket: %w", err)
 			}
 			stateStore := triggerstate.New(stateKV, historyKV)
+			webhookSender := webhooksender.NewWebhookSender(nil)
+			maxFailureCount := int(settings.MaxWebhookFailureCount)
+			if maxFailureCount < 1 {
+				maxFailureCount = 1
+			}
+			auditQ = auditqueue.New(auditqueue.Config{
+				Workers: settings.NATS.AuditWorkers,
+				Buffer:  settings.NATS.AuditQueueSize,
+			}, natsClient, logger)
+			dispatcher = webhookdispatcher.New(webhookdispatcher.Config{
+				Workers:         settings.NATS.DispatcherWorkers,
+				QueueSize:       settings.NATS.DispatcherQueueSize,
+				MaxFailureCount: maxFailureCount,
+			}, webhookSender, stateStore, auditQ, repo, logger)
 			natsListener = buildListenerWithState(settings, tokenExchangeCache, repo, webhookCache, stateStore).
 				WithAuditor(natsClient).
-				WithStateRecorder(stateStore)
+				WithStateRecorder(stateStore).
+				WithDispatcher(dispatcher)
 			natsSigCons, err = natsClient.EnsureConsumer(ctx, vtnats.ConsumerSpec{
 				Stream:         settings.NATS.SignalsStream,
 				Durable:        settings.NATS.SignalsDurable,
@@ -166,6 +200,8 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		NATSSignalConsumer: natsSigCons,
 		NATSEventConsumer:  natsEvtCons,
 		NATSListener:       natsListener,
+		Dispatcher:         dispatcher,
+		AuditQueue:         auditQ,
 	}, nil
 }
 
