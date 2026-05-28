@@ -213,13 +213,23 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 			"data": "Server is up and running",
 		}
 		if natsClient != nil {
+			ctx, cancel := context.WithTimeout(c.UserContext(), 2*time.Second)
+			defer cancel()
 			natsHealthy := natsClient.Healthy()
+			streams := natsClient.StreamHealth(ctx)
+			streamsOK := natsHealthy
+			for _, status := range streams {
+				if status != "ok" {
+					streamsOK = false
+				}
+			}
 			body["nats"] = map[string]any{
 				"enabled": true,
 				"healthy": natsHealthy,
+				"streams": streams,
 				"mode":    settings.NATS.Mode,
 			}
-			if !natsHealthy {
+			if !streamsOK {
 				return c.Status(fiber.StatusServiceUnavailable).JSON(body)
 			}
 		}

@@ -113,3 +113,55 @@ func (c *Client) Healthy() bool {
 	}
 	return c.Conn.Status() == nats.CONNECTED
 }
+
+// StreamHealth probes each of the configured streams and returns a per-stream
+// status. A stream is "ok" when it exists and reports zero Lost replicas. A
+// stream that's read-only or has lost replicas surfaces as an error string
+// in the returned map. Used by /health so a degraded JetStream doesn't pass
+// liveness while accepting reads but refusing writes.
+func (c *Client) StreamHealth(ctx context.Context) map[string]string {
+	if c == nil || c.JS == nil {
+		return map[string]string{"_client": "nil"}
+	}
+	names := []string{
+		c.cfg.SignalsStream,
+		c.cfg.EventsStream,
+		c.cfg.AuditStream,
+		c.cfg.DLQStream,
+	}
+	out := make(map[string]string, len(names))
+	for _, name := range names {
+		if name == "" {
+			continue
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		stream, err := c.JS.Stream(probeCtx, name)
+		if err != nil {
+			cancel()
+			out[name] = "stream lookup failed: " + err.Error()
+			continue
+		}
+		info, err := stream.Info(probeCtx)
+		cancel()
+		if err != nil {
+			out[name] = "stream info failed: " + err.Error()
+			continue
+		}
+		if info.Cluster != nil && info.Cluster.Leader == "" {
+			out[name] = "no leader"
+			continue
+		}
+		out[name] = "ok"
+	}
+	return out
+}
+
+// StreamsOK reports whether every probed stream is healthy.
+func (c *Client) StreamsOK(ctx context.Context) bool {
+	for _, status := range c.StreamHealth(ctx) {
+		if status != "ok" {
+			return false
+		}
+	}
+	return true
+}

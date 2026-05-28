@@ -32,17 +32,38 @@ type WebhookSender struct {
 	client *http.Client
 }
 
-// NewWebhookSender creates a new WebhookSender with proper HTTP client configuration
+// NewWebhookSender creates a WebhookSender with an http.Client tuned for
+// high-throughput webhook dispatch. The default transport is replaced so
+// the keep-alive pool can actually sustain bursts to popular receivers -
+// Go's MaxIdleConnsPerHost=2 default forces a new TCP+TLS handshake on the
+// third concurrent request, which dominates per-fire latency at any real
+// production rate. Pass a non-nil client to override (used by tests).
 func NewWebhookSender(client *http.Client) *WebhookSender {
 	if client == nil {
 		client = &http.Client{
-			Timeout: defaultWebhookTimeout,
-			// TODO: Add transport configuration for connection pooling, TLS settings, etc.
+			Timeout:   defaultWebhookTimeout,
+			Transport: defaultTransport(),
 		}
 	}
 	return &WebhookSender{
 		client: client,
 	}
+}
+
+// defaultTransport returns the production-tuned http.Transport. We keep a
+// generous per-host pool because a single popular receiver may handle many
+// triggers across many vehicles, all from the same pod.
+func defaultTransport() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.MaxIdleConns = 1024
+	t.MaxIdleConnsPerHost = 64
+	t.MaxConnsPerHost = 0 // 0 = unlimited; pool will reuse, not block
+	t.IdleConnTimeout = 90 * time.Second
+	t.TLSHandshakeTimeout = 10 * time.Second
+	t.ResponseHeaderTimeout = 20 * time.Second
+	t.ExpectContinueTimeout = 1 * time.Second
+	t.ForceAttemptHTTP2 = true
+	return t
 }
 
 // SendWebhook sends a webhook notification to the specified trigger

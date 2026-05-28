@@ -141,10 +141,21 @@ func (s *KVStore) LastMetric(ctx context.Context, vehicleDID cloudevent.ERC721DI
 	return r, true, nil
 }
 
-// RecordFire writes both KV records in one logical call. The trigger_state
-// write is the gate for cooldown; the signal_history write enables
-// cross-trigger previousValue lookups. Both use Put (last-writer-wins) — a
-// later timestamp is what we want preserved when replicas race.
+// RecordFire writes both KV records in one logical call.
+//
+// trigger_state uses optimistic CAS so concurrent writers from two replicas
+// on the same (trigger, vehicle) don't both blindly Put. Race semantics:
+//
+//  1. Read current revision via Get. Marshal new Record.
+//  2. Try Update on the observed revision. On revision-mismatch, refresh and
+//     retry once - covers the common "another writer just landed" case.
+//  3. On a second conflict, fall back to Put (last-writer-wins) and record
+//     the conflict on a counter. The other writer already sent its webhook;
+//     we already sent ours. Receivers must dedup via the deterministic
+//     webhook ID. See PROD_HARDENING.md for the contract.
+//
+// signal_history is per (vehicle, metric) across triggers - Put is correct
+// because the most-recent value wins by definition.
 //
 // metricName may be empty when the caller does not have a per-metric concept
 // (e.g. unit tests); in that case the signal_history write is skipped.
@@ -160,8 +171,9 @@ func (s *KVStore) RecordFire(ctx context.Context, triggerID, metricName string, 
 		if err != nil {
 			return fmt.Errorf("kv encode trigger_state: %w", err)
 		}
-		if _, err := s.state.Put(ctx, TriggerKey(triggerID, vehicleDID), body); err != nil {
-			return fmt.Errorf("kv put trigger_state: %w", err)
+		key := TriggerKey(triggerID, vehicleDID)
+		if err := writeWithCAS(ctx, s.state, key, body, "trigger_state"); err != nil {
+			return err
 		}
 	}
 	if metricName == "" || s == nil || s.history == nil {
@@ -180,4 +192,63 @@ func (s *KVStore) RecordFire(ctx context.Context, triggerID, metricName string, 
 		return fmt.Errorf("kv put signal_history: %w", err)
 	}
 	return nil
+}
+
+// writeWithCAS executes the CAS-with-retry-with-fallback policy described
+// above on the supplied bucket + key. Errors that aren't conflict-shaped
+// propagate immediately. bucketLabel is used only for the conflict metric.
+func writeWithCAS(ctx context.Context, kv jetstream.KeyValue, key string, body []byte, bucketLabel string) error {
+	const maxRetries = 1
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		entry, getErr := kv.Get(ctx, key)
+		if getErr != nil && !errors.Is(getErr, jetstream.ErrKeyNotFound) {
+			return fmt.Errorf("kv get %s: %w", bucketLabel, getErr)
+		}
+		var rev uint64
+		if getErr == nil {
+			rev = entry.Revision()
+		}
+
+		var writeErr error
+		if rev == 0 {
+			_, writeErr = kv.Create(ctx, key, body)
+		} else {
+			_, writeErr = kv.Update(ctx, key, body, rev)
+		}
+		if writeErr == nil {
+			return nil
+		}
+		if !isConflict(writeErr) {
+			return fmt.Errorf("kv write %s: %w", bucketLabel, writeErr)
+		}
+
+		if attempt < maxRetries {
+			metricsCASConflict(bucketLabel, "retry")
+			continue
+		}
+		// Persistent conflict: write unconditionally so state isn't lost,
+		// and surface the race via the conflict counter so ops can see it.
+		metricsCASConflict(bucketLabel, "fallback")
+		if _, err := kv.Put(ctx, key, body); err != nil {
+			return fmt.Errorf("kv put fallback %s: %w", bucketLabel, err)
+		}
+		return nil
+	}
+	return nil
+}
+
+// isConflict matches the error shapes the KV API returns when an optimistic
+// write loses the CAS race. Both Create (key already exists) and Update
+// (wrong revision) surface as JSErrCodeStreamWrongLastSequence (10071) under
+// the hood; ErrKeyExists is the sentinel for the Create form.
+func isConflict(err error) bool {
+	if errors.Is(err, jetstream.ErrKeyExists) {
+		return true
+	}
+	var apiErr *jetstream.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.ErrorCode == jetstream.JSErrCodeStreamWrongLastSequence
+	}
+	return false
 }

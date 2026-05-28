@@ -106,7 +106,7 @@ func (m *MetricListener) processEventWebhook(ctx context.Context, wh *webhookcac
 
 }
 func (m *MetricListener) createEventPayload(trigger *models.Trigger, eventEval *triggerevaluator.EventEvaluationData) *cloudevent.CloudEvent[webhook.WebhookPayload] {
-	payload := m.createWebhookPayload(trigger, eventEval.VehicleDID)
+	payload := m.createWebhookPayload(trigger, eventEval.VehicleDID, eventEval.Event.ID)
 	payload.Data.Event = &webhook.EventData{
 		Name:       eventEval.Event.Data.Name,
 		Timestamp:  eventEval.Event.Data.Timestamp,

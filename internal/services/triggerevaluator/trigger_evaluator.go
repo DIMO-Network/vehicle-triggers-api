@@ -217,7 +217,8 @@ func (t *TriggerEvaluator) lookupLastFireTime(ctx context.Context, triggerID str
 // lookupPreviousSignal returns the most recent signal payload across any
 // trigger for this (vehicle, metric). Used as the previousValue input for
 // transition CEL conditions like `valueNumber != previousValue`. Errors and
-// misses return a zero-valued Signal.
+// misses return a zero-valued Signal; decode errors bump a metric so silent
+// corruption is observable.
 func (t *TriggerEvaluator) lookupPreviousSignal(ctx context.Context, vehicleDID cloudevent.ERC721DID, metricName string) vss.Signal {
 	if t.state == nil {
 		return vss.Signal{}
@@ -228,6 +229,7 @@ func (t *TriggerEvaluator) lookupPreviousSignal(ctx context.Context, vehicleDID 
 	}
 	var sig vss.Signal
 	if err := json.Unmarshal(rec.LastSnapshot, &sig); err != nil {
+		triggerstate.MetricsDecodeError("signal_history")
 		return vss.Signal{}
 	}
 	return sig
@@ -235,7 +237,7 @@ func (t *TriggerEvaluator) lookupPreviousSignal(ctx context.Context, vehicleDID 
 
 // lookupPreviousEvent returns both the cooldown timestamp and the snapshot of
 // the most recent fire of this trigger on this vehicle in one KV round-trip.
-// Errors and misses return zero values.
+// Errors and misses return zero values; decode errors bump a metric.
 func (t *TriggerEvaluator) lookupPreviousEvent(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID) (time.Time, vss.Event) {
 	if t.state == nil {
 		return time.Time{}, vss.Event{}
@@ -246,7 +248,9 @@ func (t *TriggerEvaluator) lookupPreviousEvent(ctx context.Context, triggerID st
 	}
 	var ev vss.Event
 	if len(rec.LastSnapshot) > 0 {
-		_ = json.Unmarshal(rec.LastSnapshot, &ev)
+		if err := json.Unmarshal(rec.LastSnapshot, &ev); err != nil {
+			triggerstate.MetricsDecodeError("trigger_state")
+		}
 	}
 	return rec.LastFiredAt, ev
 }

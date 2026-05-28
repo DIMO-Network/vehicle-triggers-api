@@ -16,13 +16,13 @@ Categories:
 
 ### Correctness
 
-- [ ] **CAS-based `RecordFire`.** Two replicas racing on same `(trigger, vehicle)` both pass cooldown KV read, both fire, both `Put`. Replace `kv.Put` with `kv.Update` on observed revision (or `kv.Create` for first write), retry once on conflict, skip fire on second conflict. Effort: 1-2h. File: `internal/services/triggerstate/triggerstate.go`.
-- [ ] **Deterministic webhook ID for receiver dedup.** Today `payload.ID = uuid.New().String()` regenerates per delivery, so JetStream redelivery looks like a new event to receivers. Make ID = `sha256(triggerID|assetDID|firedAtUnix)` or include stream sequence in payload. Effort: 30m. File: `internal/controllers/metriclistener/metric_listener.go::createWebhookPayload`.
-- [ ] **KV decode error metric.** `lookupPreviousSignal` / `lookupPreviousEvent` silently swallow JSON decode errors and return zero-value. Add `vehicle_triggers_kv_decode_errors_total{bucket}` so silent corruption shows up. Effort: 30m. File: `internal/services/triggerevaluator/trigger_evaluator.go`.
+- [x] **CAS-based `RecordFire`.** ~~Two replicas racing on same `(trigger, vehicle)` both pass cooldown KV read, both fire, both `Put`. Replace `kv.Put` with `kv.Update` on observed revision (or `kv.Create` for first write), retry once on conflict, skip fire on second conflict. Effort: 1-2h. File: `internal/services/triggerstate/triggerstate.go`.~~ Done: `writeWithCAS` retries once then falls back to `Put`, bumping `vehicle_triggers_state_cas_conflicts_total{bucket, outcome=retry|fallback}`. Full prevention requires receiver dedup via deterministic ID (P0-2). Race test in `tests/e2e/nats_state_cas_test.go`.
+- [x] **Deterministic webhook ID for receiver dedup.** ~~Today `payload.ID = uuid.New().String()` regenerates per delivery~~ Done: `webhookID(triggerID, sourceID)` returns `sha256(triggerID|sourceID)[:16]` hex. `sourceID` = inbound CloudEvent ID from the signal/event (carried by DIS), stable across JS redelivery. UUID fallback only when source absent. Unit tested.
+- [x] **KV decode error metric.** ~~`lookupPreviousSignal` / `lookupPreviousEvent` silently swallow JSON decode errors and return zero-value. Add `vehicle_triggers_kv_decode_errors_total{bucket}` so silent corruption shows up.~~ Done: `vehicle_triggers_state_decode_errors_total{bucket}` bumped from both evaluator lookup paths.
 
 ### Performance — quick wins
 
-- [ ] **Configure webhook HTTP Transport.** Today `webhook_sender.go` uses Go's default Transport (`MaxIdleConnsPerHost=2`). Set:
+- [x] **Configure webhook HTTP Transport.** ~~Today `webhook_sender.go` uses Go's default Transport (`MaxIdleConnsPerHost=2`).~~ Done: cloned default with `MaxIdleConnsPerHost=64`, `MaxIdleConns=1024`, `IdleConnTimeout=90s`, `ForceAttemptHTTP2=true`. See `defaultTransport()`.
   ```go
   Transport: &http.Transport{
       MaxIdleConns:          1024,
@@ -36,13 +36,13 @@ Categories:
   ```
   Removes TLS handshake overhead at high fire rates. Effort: 30m. File: `internal/services/webhooksender/webhook_sender.go`.
 
-- [ ] **End-to-end latency histogram.** Add `vehicle_triggers_eval_latency_seconds{outcome}` measured from JetStream `meta.Timestamp` to handler return. We have throughput counters but no SLO surface. Effort: 1h. File: `internal/nats/consumer_loop.go` + a new `metrics.go`.
+- [x] **End-to-end latency histogram.** ~~Add `vehicle_triggers_eval_latency_seconds{outcome}`~~ Done: `vehicle_triggers_nats_eval_latency_seconds{stream, outcome}` recorded from `meta.Timestamp` at ack/nak/dlq sites. Buckets 1ms-30s.
 
-- [ ] **Token-exchange cache hit/miss counters.** No way today to see whether the 15m permission cache is doing its job. Add `vehicle_triggers_tokenexchange_cache_total{outcome=hit|miss}`. Effort: 30m. File: `internal/clients/tokenexchange/cache.go`.
+- [x] **Token-exchange cache hit/miss counters.** ~~No way today to see whether the 15m permission cache is doing its job.~~ Done: `vehicle_triggers_tokenexchange_cache_total{outcome=hit|miss|error}` bumped in `Cache.HasVehiclePermissions`.
 
 ### Operational
 
-- [ ] **`Settings.Validate()` called from `main`.** Catches misconfigurations at startup instead of at first failure. Validate:
+- [x] **`Settings.Validate()` called from `main`.** ~~Catches misconfigurations at startup instead of at first failure.~~ Done: `Settings.Validate()` + `NATSSettings.Validate()` enforce mode enum, KAFKA-required-when-not-exclusive, MaxDeliver/MaxAckPending/AckWait/FetchBatch/StreamReplicas >= 1, retention >= AckWait * MaxDeliver. Called from `main` after `env.LoadSettings`. Unit-tested in `settings_test.go`.
   - `MaxDeliver > len(BackOff)` (already mitigated in EnsureConsumer but config-level too)
   - `AckWait < BackOff[0]` is a footgun
   - `MaxAckPending > 0`
@@ -51,7 +51,7 @@ Categories:
   - When `Mode != off`, `URL` non-empty
   Effort: 1-2h. File: `internal/config/settings.go`.
 
-- [ ] **Stream/KV write canary in `/health`.** Connection alive ≠ JetStream writable. Read `js.Stream(ctx, name).Info()` and reject if `Lost != 0` or `Status != Online`. Or do a periodic noop write to a sentinel subject. Effort: 1h. File: `internal/app/app.go::CreateFiberApp`, `internal/nats/client.go`.
+- [x] **Stream/KV write canary in `/health`.** ~~Connection alive ≠ JetStream writable.~~ Done: `Client.StreamHealth(ctx)` probes each configured stream via `js.Stream(name).Info()`, reports per-stream status, no-leader detected. `/health` returns 503 when any stream lookup/info fails.
 
 - [ ] **Backup automation.** Today recovery story is "you can `nats stream backup`." No CronJob, no S3 destination, no documented restore procedure. Add:
   - `cmd/triggers-backup` that snapshots streams + buckets to a configurable S3 prefix

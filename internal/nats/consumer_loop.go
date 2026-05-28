@@ -70,9 +70,11 @@ func (c *Client) PullLoop(ctx context.Context, cons jetstream.Consumer, maxInFli
 			meta, _ := m.Metadata()
 			stream := ""
 			var numDelivered uint64
+			var arrived time.Time
 			if meta != nil {
 				stream = meta.Stream
 				numDelivered = meta.NumDelivered
+				arrived = meta.Timestamp
 			}
 			payload := m.Data()
 			if err := handler(ctx, payload); err != nil {
@@ -84,21 +86,25 @@ func (c *Client) PullLoop(ctx context.Context, cons jetstream.Consumer, maxInFli
 						log.Error().Err(dlqErr).Str("subject", m.Subject()).Msg("dlq publish failed; falling back to nak")
 						_ = m.NakWithDelay(0)
 						MetricsConsume(stream, "nak")
+						MetricsEvalLatency(stream, "nak", arrived)
 						return
 					}
 					_ = m.Term()
 					MetricsConsume(stream, "dlq")
+					MetricsEvalLatency(stream, "dlq", arrived)
 					return
 				}
 				log.Error().Err(err).Str("subject", m.Subject()).Uint64("attempt", numDelivered).Msg("handler failed; nak")
 				_ = m.NakWithDelay(0)
 				MetricsConsume(stream, "nak")
+				MetricsEvalLatency(stream, "nak", arrived)
 				return
 			}
 			if err := m.Ack(); err != nil {
 				log.Warn().Err(err).Str("subject", m.Subject()).Msg("ack failed")
 			}
 			MetricsConsume(stream, "ack")
+			MetricsEvalLatency(stream, "ack", arrived)
 		}(msg)
 	}
 }

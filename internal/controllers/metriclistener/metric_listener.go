@@ -17,6 +17,9 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhooksender"
+	"crypto/sha256"
+	"encoding/hex"
+
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/google/cel-go/cel"
 	"github.com/google/uuid"
@@ -273,11 +276,17 @@ func (m *MetricListener) publishAudit(ctx context.Context, trigger *models.Trigg
 	}()
 }
 
-// createWebhookPayload creates a standardized webhook payload following industry best practices
-func (m *MetricListener) createWebhookPayload(trigger *models.Trigger, assetDid cloudevent.ERC721DID) *cloudevent.CloudEvent[webhook.WebhookPayload] {
+// createWebhookPayload creates a standardized webhook payload. The CloudEvent
+// ID is derived deterministically from (triggerID, sourceID) so receivers
+// can dedup across JetStream redelivery: the same source signal/event
+// re-evaluated by another replica produces the same webhook ID. Falls back
+// to a random UUID when sourceID is empty (defensive; the call sites all
+// pass a CloudEvent ID from the inbound payload).
+func (m *MetricListener) createWebhookPayload(trigger *models.Trigger, assetDid cloudevent.ERC721DID, sourceID string) *cloudevent.CloudEvent[webhook.WebhookPayload] {
+	id := webhookID(trigger.ID, sourceID)
 	payload := &cloudevent.CloudEvent[webhook.WebhookPayload]{
 		CloudEventHeader: cloudevent.CloudEventHeader{
-			ID:              uuid.New().String(),
+			ID:              id,
 			Source:          "vehicle-triggers-api", //TODO(kevin): Should be 0x of the storageNode
 			Subject:         assetDid.String(),
 			Time:            time.Now().UTC(),
@@ -296,6 +305,16 @@ func (m *MetricListener) createWebhookPayload(trigger *models.Trigger, assetDid 
 		},
 	}
 	return payload
+}
+
+// webhookID returns a deterministic CloudEvent ID for a fire. The output is
+// stable across JetStream redelivery so receivers can deduplicate.
+func webhookID(triggerID, sourceID string) string {
+	if sourceID == "" {
+		return uuid.New().String()
+	}
+	sum := sha256.Sum256([]byte(triggerID + "|" + sourceID))
+	return hex.EncodeToString(sum[:16]) // 128 bits is plenty for collision-safe dedup
 }
 
 // ShouldAttemptWebhook checks if a webhook should be attempted based on its current state

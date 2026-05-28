@@ -135,7 +135,7 @@ func (m *MetricListener) createSignalPayload(trigger *models.Trigger, sigEval *t
 	default:
 		return nil, fmt.Errorf("unsupported signal type: %s", sigEval.Def.ValueType)
 	}
-	payload := m.createWebhookPayload(trigger, sigEval.VehicleDID)
+	payload := m.createWebhookPayload(trigger, sigEval.VehicleDID, sigEval.Signal.ID)
 	payload.Data.Signal = &webhook.SignalData{
 		Name:      sigEval.Signal.Data.Name,
 		Source:    sigEval.Signal.Source,

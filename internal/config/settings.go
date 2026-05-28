@@ -1,6 +1,9 @@
 package config
 
 import (
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/DIMO-Network/shared/pkg/db"
@@ -104,3 +107,91 @@ func (n NATSSettings) PrimaryMode() bool { return n.Mode == "primary" || n.Mode 
 // KafkaDisabled reports whether the Kafka consumers should be skipped
 // entirely. True only in exclusive mode.
 func (n NATSSettings) KafkaDisabled() bool { return n.Mode == "exclusive" }
+
+// Validate returns an error describing any misconfiguration. Called from
+// main at startup so we fail fast rather than discovering trouble at first
+// signal. Sweeps the cross-field constraints that env tags can't express:
+// mode enum, NATS URL when enabled, Kafka brokers when Kafka is in play,
+// and the retry/backoff/retention math.
+func (s Settings) Validate() error {
+	var errs []string
+
+	if err := s.NATS.Validate(); err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	// Kafka is required unless NATS is in exclusive mode.
+	if !s.NATS.KafkaDisabled() {
+		if strings.TrimSpace(s.KafkaBrokers) == "" {
+			errs = append(errs, "KAFKA_BROKERS empty but NATS_MODE != exclusive")
+		}
+		if strings.TrimSpace(s.DeviceSignalsTopic) == "" {
+			errs = append(errs, "DEVICE_SIGNALS_TOPIC empty but NATS_MODE != exclusive")
+		}
+		if strings.TrimSpace(s.DeviceEventsTopic) == "" {
+			errs = append(errs, "DEVICE_EVENTS_TOPIC empty but NATS_MODE != exclusive")
+		}
+	}
+
+	if s.MaxInFlight < 1 {
+		errs = append(errs, fmt.Sprintf("MAX_IN_FLIGHT=%d must be >= 1", s.MaxInFlight))
+	}
+
+	if len(errs) == 0 {
+		return nil
+	}
+	return errors.New("invalid configuration: " + strings.Join(errs, "; "))
+}
+
+// Validate checks the NATS configuration's internal consistency.
+func (n NATSSettings) Validate() error {
+	var errs []string
+
+	switch n.Mode {
+	case "", "off", "primary", "exclusive":
+	default:
+		errs = append(errs, fmt.Sprintf("NATS_MODE=%q must be one of off|primary|exclusive", n.Mode))
+	}
+
+	if !n.Enabled() {
+		// Nothing else matters until NATS is turned on.
+		if len(errs) == 0 {
+			return nil
+		}
+		return errors.New(strings.Join(errs, "; "))
+	}
+
+	if strings.TrimSpace(n.URL) == "" {
+		errs = append(errs, "NATS_URL empty but mode != off")
+	}
+	if n.MaxDeliver < 1 {
+		errs = append(errs, fmt.Sprintf("NATS_MAX_DELIVER=%d must be >= 1", n.MaxDeliver))
+	}
+	if n.MaxAckPending < 1 {
+		errs = append(errs, fmt.Sprintf("NATS_MAX_ACK_PENDING=%d must be >= 1", n.MaxAckPending))
+	}
+	if n.AckWait <= 0 {
+		errs = append(errs, fmt.Sprintf("NATS_ACK_WAIT=%s must be > 0", n.AckWait))
+	}
+	if n.FetchBatch < 1 {
+		errs = append(errs, fmt.Sprintf("NATS_FETCH_BATCH=%d must be >= 1", n.FetchBatch))
+	}
+	if n.StreamReplicas < 1 {
+		errs = append(errs, fmt.Sprintf("NATS_STREAM_REPLICAS=%d must be >= 1", n.StreamReplicas))
+	}
+
+	// Retention must outlive the worst-case retry window: AckWait * MaxDeliver.
+	// Otherwise messages can be discarded mid-retry.
+	worstCase := n.AckWait * time.Duration(n.MaxDeliver)
+	if n.SignalsMaxAge > 0 && n.SignalsMaxAge < worstCase {
+		errs = append(errs, fmt.Sprintf("NATS_SIGNALS_MAX_AGE=%s shorter than AckWait*MaxDeliver=%s; messages may be discarded mid-retry", n.SignalsMaxAge, worstCase))
+	}
+	if n.EventsMaxAge > 0 && n.EventsMaxAge < worstCase {
+		errs = append(errs, fmt.Sprintf("NATS_EVENTS_MAX_AGE=%s shorter than AckWait*MaxDeliver=%s; messages may be discarded mid-retry", n.EventsMaxAge, worstCase))
+	}
+
+	if len(errs) == 0 {
+		return nil
+	}
+	return errors.New(strings.Join(errs, "; "))
+}

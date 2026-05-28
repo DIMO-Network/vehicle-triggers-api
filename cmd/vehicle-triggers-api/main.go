@@ -58,6 +58,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not load settings: %s", err)
 	}
+	if err := settings.Validate(); err != nil {
+		log.Fatalf("settings.Validate: %s", err)
+	}
 
 	if settings.LogLevel == "" {
 		settings.LogLevel = "info"
