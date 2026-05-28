@@ -66,14 +66,16 @@ type NATSSettings struct {
 	CredsFile string `env:"CREDS_FILE"`
 	Name      string `env:"NAME" envDefault:"vehicle-triggers-api"`
 
-	SignalsStream  string `env:"SIGNALS_STREAM" envDefault:"DIMO_SIGNALS"`
-	EventsStream   string `env:"EVENTS_STREAM" envDefault:"DIMO_EVENTS"`
-	AuditStream    string `env:"AUDIT_STREAM" envDefault:"DIMO_TRIGGER_AUDIT"`
-	DLQStream      string `env:"DLQ_STREAM" envDefault:"DIMO_TRIGGER_DLQ"`
-	SignalsSubject string `env:"SIGNALS_SUBJECT" envDefault:"dimo.signals.>"`
-	EventsSubject  string `env:"EVENTS_SUBJECT" envDefault:"dimo.events.>"`
-	AuditSubject   string `env:"AUDIT_SUBJECT" envDefault:"dimo.trigger.fired.>"`
-	DLQSubject     string `env:"DLQ_SUBJECT" envDefault:"dimo.dlq.>"`
+	SignalsStream     string `env:"SIGNALS_STREAM" envDefault:"DIMO_SIGNALS"`
+	EventsStream      string `env:"EVENTS_STREAM" envDefault:"DIMO_EVENTS"`
+	AuditStream       string `env:"AUDIT_STREAM" envDefault:"DIMO_TRIGGER_AUDIT"`
+	DLQStream         string `env:"DLQ_STREAM" envDefault:"DIMO_TRIGGER_DLQ"`
+	ConfigAuditStream string `env:"CONFIG_AUDIT_STREAM" envDefault:"DIMO_CONFIG_AUDIT"`
+	SignalsSubject    string `env:"SIGNALS_SUBJECT" envDefault:"dimo.signals.>"`
+	EventsSubject     string `env:"EVENTS_SUBJECT" envDefault:"dimo.events.>"`
+	AuditSubject      string `env:"AUDIT_SUBJECT" envDefault:"dimo.trigger.fired.>"`
+	DLQSubject        string `env:"DLQ_SUBJECT" envDefault:"dimo.dlq.>"`
+	ConfigAuditSubject string `env:"CONFIG_AUDIT_SUBJECT" envDefault:"dimo.config.changed.>"`
 
 	SignalsDurable string `env:"SIGNALS_DURABLE" envDefault:"triggers-signals"`
 	EventsDurable  string `env:"EVENTS_DURABLE" envDefault:"triggers-events"`
@@ -81,8 +83,9 @@ type NATSSettings struct {
 	StreamReplicas         int           `env:"STREAM_REPLICAS" envDefault:"1"`
 	SignalsMaxAge          time.Duration `env:"SIGNALS_MAX_AGE" envDefault:"24h"`
 	EventsMaxAge           time.Duration `env:"EVENTS_MAX_AGE" envDefault:"24h"`
-	AuditMaxAge            time.Duration `env:"AUDIT_MAX_AGE" envDefault:"2160h"` // 90d
-	DLQMaxAge              time.Duration `env:"DLQ_MAX_AGE" envDefault:"168h"`    // 7d
+	AuditMaxAge            time.Duration `env:"AUDIT_MAX_AGE" envDefault:"2160h"`       // 90d
+	DLQMaxAge              time.Duration `env:"DLQ_MAX_AGE" envDefault:"168h"`          // 7d
+	ConfigAuditMaxAge      time.Duration `env:"CONFIG_AUDIT_MAX_AGE" envDefault:"2160h"` // 90d
 	FetchBatch             int           `env:"FETCH_BATCH" envDefault:"100"`
 	AckWait                time.Duration `env:"ACK_WAIT" envDefault:"45s"`
 	MaxDeliver             int           `env:"MAX_DELIVER" envDefault:"5"`

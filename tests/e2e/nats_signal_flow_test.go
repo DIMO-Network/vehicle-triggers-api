@@ -50,10 +50,12 @@ func TestNATSSignalFlow(t *testing.T) {
 	settingsCopy.NATS.EventsStream = "TEST_EVENTS_" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.AuditStream = "TEST_AUDIT_" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.DLQStream = "TEST_DLQ_" + devAddress.Hex()[2:10]
+	settingsCopy.NATS.ConfigAuditStream = "TEST_CFG_" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.SignalsSubject = "dimo.signals.>"
 	settingsCopy.NATS.EventsSubject = "dimo.events.>"
 	settingsCopy.NATS.AuditSubject = "dimo.trigger.fired.>"
 	settingsCopy.NATS.DLQSubject = "dimo.dlq.>"
+	settingsCopy.NATS.ConfigAuditSubject = "dimo.config.changed.>"
 	settingsCopy.NATS.SignalsDurable = "test-sig-" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.EventsDurable = "test-evt-" + devAddress.Hex()[2:10]
 	settingsCopy.NATS.WebhooksBucket = "tb_wh_" + devAddress.Hex()[2:10]

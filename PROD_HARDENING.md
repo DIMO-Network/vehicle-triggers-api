@@ -67,13 +67,13 @@ Categories:
 
 - [x] **Webhook cache distributed updates.** ~~Today each replica polls Postgres every 5 min.~~ Done: `internal/services/cachebroadcast` publishes change events on plain NATS subject `dimo.cache.webhook.changed`. `WebhookCache.ScheduleRefresh` publishes; receiver side calls `ScheduleRefreshSilent` to avoid echo loops. App wires the notifier on `WebhookCache` and subscribes in `CreateServers` when NATS is enabled. CRUD controllers untouched. 5-min poll stays as reconciliation safety net.
 
-- [ ] **Webhook signing (HMAC).** TODO in `webhook_sender.go:74`. Sign body + timestamp with per-developer secret stored on the trigger record. Receiver verifies. Required to prevent third-party spoofing of webhook payloads. Effort: 4h. Files: `internal/services/webhooksender/`, `triggers` DB schema (new `signing_secret` column + migration).
+- [x] **Webhook signing (HMAC).** ~~TODO in `webhook_sender.go:74`.~~ Done: migration `00006_trigger_signing_secret.sql` adds nullable `signing_secret`. `CreateTrigger` generates 32 random bytes per trigger; `RegisterWebhookResponse` exposes once. Sender adds `X-DIMO-Timestamp`, `X-DIMO-Signature`, `X-DIMO-Signature-Version: v1` headers when secret set. Algorithm documented in response: `HMAC-SHA256(timestamp + "." + body)`.
 
 ### Operational
 
-- [ ] **DLQ-headers include developer + vehicle context.** Today DLQ records carry `X-Original-Subject` / `X-Failure-Reason` / `X-Delivered-Count`. Adding `X-Developer-License` and `X-Asset-DID` makes triage possible without parsing payload. Effort: 30m. File: `internal/nats/bridge.go::publishDLQ`.
+- [x] **DLQ-headers include developer + vehicle context.** ~~Today DLQ records carry `X-Original-Subject` / `X-Failure-Reason` / `X-Delivered-Count`.~~ Done: `X-Source-Name` (subject suffix), `X-Asset-DID` (best-effort parsed from payload), `X-Recorded-At` (RFC3339Nano) added. Skipped `X-Developer-License` deliberately — one inbound message can match webhooks across multiple developers; tagging "the" developer would mislead. CLI `triggers-dlq list` updated.
 
-- [ ] **Webhook config audit trail.** Currently CRUD modifies `triggers` row in place with no history. For compliance / ops debugging, append every change to an immutable `dimo.config.changed.<webhookID>` stream. Bonus: pairs with webhook cache distributed updates. Effort: 4h.
+- [x] **Webhook config audit trail.** ~~Currently CRUD modifies `triggers` row in place with no history.~~ Done: new stream `DIMO_CONFIG_AUDIT` subject `dimo.config.changed.<webhookID>` provisioned alongside the others. `internal/services/configaudit` publishes on RegisterWebhook / UpdateWebhook / DeleteWebhook / AssignVehicleToWebhook / RemoveVehicleFromWebhook. `WithAudit` setters on both controllers; `configaudit.Noop` when NATS off. 90d retention default. Best-effort: failures logged, never block CRUD.
 
 ---
 

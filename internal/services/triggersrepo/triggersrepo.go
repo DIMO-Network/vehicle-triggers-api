@@ -1,6 +1,8 @@
 package triggersrepo
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"context"
 	"database/sql"
 	"errors"
@@ -96,6 +98,17 @@ func (req CreateTriggerRequest) Validate() error {
 	return nil
 }
 
+// randomHex returns 2*n hex characters of cryptographic randomness, used for
+// per-trigger HMAC signing secrets. Failure here is fatal for the create
+// path - we never want to fall back to a weak secret.
+func randomHex(n int) (string, error) {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
 // CreateTrigger creates a new trigger/webhook.
 func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest) (*models.Trigger, error) {
 	if err := req.Validate(); err != nil {
@@ -112,6 +125,20 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 	}
 	currTime := time.Now().UTC()
 
+	// Per-trigger HMAC signing secret. 32 bytes (256 bits) is enough margin
+	// for collision-resistant HMAC-SHA256. The secret never appears in any
+	// later API response; receivers store it on registration. Rotation =
+	// delete + recreate (intentionally heavy-handed; cheap secrets get
+	// rotated less often).
+	secret, err := randomHex(32)
+	if err != nil {
+		return nil, richerrors.Error{
+			ExternalMsg: "Failed to generate signing secret",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+
 	trigger := &models.Trigger{
 		ID:                      id,
 		DisplayName:             displayName,
@@ -123,6 +150,7 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 		CooldownPeriod:          req.CooldownPeriod,
 		DeveloperLicenseAddress: req.DeveloperLicenseAddress.Bytes(),
 		Status:                  req.Status,
+		SigningSecret:           null.StringFrom(secret),
 		CreatedAt:               currTime,
 		UpdatedAt:               currTime,
 	}

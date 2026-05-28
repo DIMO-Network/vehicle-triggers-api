@@ -3,12 +3,16 @@ package webhooksender
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/DIMO-Network/cloudevent"
@@ -16,6 +20,25 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 )
+
+// signatureHeaders sign the request body using the trigger's signing_secret.
+// Receivers verify with HMAC-SHA256(secret, timestamp + "." + body). The
+// timestamp is included to give the receiver a replay window check (out-of-
+// order delivery is fine; arbitrary-time replay is not). When the trigger's
+// secret is null/empty (legacy rows pre-migration 00006), we skip signing -
+// receivers should treat unsigned requests as an error.
+func signatureHeaders(secret string, body []byte) (timestamp, signature string) {
+	if secret == "" {
+		return "", ""
+	}
+	timestamp = strconv.FormatInt(time.Now().Unix(), 10)
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(timestamp))
+	mac.Write([]byte{'.'})
+	mac.Write(body)
+	signature = hex.EncodeToString(mac.Sum(nil))
+	return timestamp, signature
+}
 
 const (
 	// WebhookFailureCode is the code returned when a webhook caused an error
@@ -92,7 +115,12 @@ func (w *WebhookSender) SendWebhook(ctx context.Context, t *models.Trigger, payl
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "DIMO-Webhook/1.0")
-	// TODO: Add webhook signature for security
+	if t.SigningSecret.Valid && t.SigningSecret.String != "" {
+		ts, sig := signatureHeaders(t.SigningSecret.String, body)
+		req.Header.Set("X-DIMO-Timestamp", ts)
+		req.Header.Set("X-DIMO-Signature", sig)
+		req.Header.Set("X-DIMO-Signature-Version", "v1")
+	}
 
 	// Send request
 	resp, err := w.client.Do(req)

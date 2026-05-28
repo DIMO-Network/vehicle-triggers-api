@@ -8,6 +8,7 @@ import (
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/configaudit"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/aarondl/null/v8"
@@ -34,11 +35,18 @@ type WebhookCache interface {
 	ScheduleRefresh(ctx context.Context)
 }
 
+// ConfigAudit publishes config-change events for downstream compliance and
+// change-management. Best-effort: failures are logged, never block the API.
+type ConfigAudit interface {
+	Publish(ctx context.Context, e configaudit.Event) error
+}
+
 // WebhookController is the controller for creating and managing webhooks.
 type WebhookController struct {
 	repo       Repository
 	signalDefs []signals.SignalDefinition
 	cache      WebhookCache
+	audit      ConfigAudit
 }
 
 // NewWebhookController creates a new WebhookController.
@@ -47,7 +55,32 @@ func NewWebhookController(repo Repository, cache WebhookCache) (*WebhookControll
 		repo:       repo,
 		signalDefs: signals.GetAllSignalDefinitions(),
 		cache:      cache,
+		audit:      configaudit.Noop{},
 	}, nil
+}
+
+// WithAudit wires the controller to publish config-change events. Returns
+// the same controller for fluent chaining at construction time.
+func (w *WebhookController) WithAudit(a ConfigAudit) *WebhookController {
+	if a == nil {
+		a = configaudit.Noop{}
+	}
+	w.audit = a
+	return w
+}
+
+// publishAudit emits a config-change event for the audit trail. Failures are
+// logged via the audit publisher's own logging; the controller continues.
+func (w *WebhookController) publishAudit(ctx context.Context, op configaudit.Op, webhookID, devLicense string, snapshot map[string]any) {
+	if w.audit == nil {
+		return
+	}
+	_ = w.audit.Publish(ctx, configaudit.Event{
+		Op:         op,
+		WebhookID:  webhookID,
+		DevLicense: devLicense,
+		Snapshot:   snapshot,
+	})
 }
 
 // RegisterWebhook godoc
@@ -118,7 +151,23 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(RegisterWebhookResponse{ID: trigger.ID, Message: "Webhook registered successfully"})
+	secret := ""
+	if trigger.SigningSecret.Valid {
+		secret = trigger.SigningSecret.String
+	}
+	w.publishAudit(c.Context(), configaudit.OpWebhookCreate, trigger.ID, token.EthereumAddress.Hex(), map[string]any{
+		"service":    trigger.Service,
+		"metricName": trigger.MetricName,
+		"targetUri":  trigger.TargetURI,
+		"status":     trigger.Status,
+		"cooldown":   trigger.CooldownPeriod,
+	})
+	return c.Status(fiber.StatusCreated).JSON(RegisterWebhookResponse{
+		ID:                 trigger.ID,
+		Message:            "Webhook registered successfully",
+		SigningSecret:      secret,
+		SignatureAlgorithm: "HMAC-SHA256(timestamp + \".\" + body)",
+	})
 }
 
 // ListWebhooks godoc
@@ -239,6 +288,12 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	}
 
 	w.cache.ScheduleRefresh(c.Context())
+	w.publishAudit(c.Context(), configaudit.OpWebhookUpdate, event.ID, common.BytesToAddress(event.DeveloperLicenseAddress).Hex(), map[string]any{
+		"status":    event.Status,
+		"targetUri": event.TargetURI,
+		"condition": event.Condition,
+		"cooldown":  event.CooldownPeriod,
+	})
 
 	return c.Status(fiber.StatusOK).JSON(UpdateWebhookResponse{ID: event.ID, Message: "Webhook updated successfully"})
 }
@@ -273,6 +328,7 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 		return fmt.Errorf("failed to delete webhook: %w", err)
 	}
 	w.cache.ScheduleRefresh(c.Context())
+	w.publishAudit(c.Context(), configaudit.OpWebhookDelete, webhookID, devLicense.Hex(), nil)
 
 	return c.Status(fiber.StatusOK).JSON(GenericResponse{Message: "Webhook deleted successfully"})
 }

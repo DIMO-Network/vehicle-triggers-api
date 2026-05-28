@@ -38,6 +38,15 @@ type RegisterWebhookResponse struct {
 	ID string `json:"id"`
 	// Message provides a brief status message for the operation.
 	Message string `json:"message"`
+	// SigningSecret is the per-trigger HMAC-SHA256 key used to sign outbound
+	// webhook bodies. Returned ONCE at registration time - store it on the
+	// receiver side and verify the X-DIMO-Signature header on every webhook.
+	// The server does not surface this value again; rotation is delete +
+	// recreate.
+	SigningSecret string `json:"signingSecret"`
+	// SignatureAlgorithm describes how to verify the signature header:
+	// X-DIMO-Signature = hex(HMAC-SHA256(SigningSecret, X-DIMO-Timestamp + "." + body))
+	SignatureAlgorithm string `json:"signatureAlgorithm"`
 }
 
 // UpdateWebhookRequest represents the fields that can be modified on an existing webhook.

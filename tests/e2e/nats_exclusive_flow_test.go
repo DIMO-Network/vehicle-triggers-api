@@ -51,10 +51,12 @@ func TestNATSExclusiveFlow(t *testing.T) {
 	settingsCopy.NATS.EventsStream = "EX_EVENTS_" + suffix
 	settingsCopy.NATS.AuditStream = "EX_AUDIT_" + suffix
 	settingsCopy.NATS.DLQStream = "EX_DLQ_" + suffix
+	settingsCopy.NATS.ConfigAuditStream = "EX_CFG_" + suffix
 	settingsCopy.NATS.SignalsSubject = "dimo.signals.>"
 	settingsCopy.NATS.EventsSubject = "dimo.events.>"
 	settingsCopy.NATS.AuditSubject = "dimo.trigger.fired.>"
 	settingsCopy.NATS.DLQSubject = "dimo.dlq.>"
+	settingsCopy.NATS.ConfigAuditSubject = "dimo.config.changed.>"
 	settingsCopy.NATS.SignalsDurable = "ex-sig-" + suffix
 	settingsCopy.NATS.EventsDurable = "ex-evt-" + suffix
 	settingsCopy.NATS.WebhooksBucket = "ex_wh_" + suffix

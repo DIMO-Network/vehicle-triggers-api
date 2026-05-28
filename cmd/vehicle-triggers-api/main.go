@@ -58,9 +58,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not load settings: %s", err)
 	}
-	if err := settings.Validate(); err != nil {
-		log.Fatalf("settings.Validate: %s", err)
-	}
 
 	if settings.LogLevel == "" {
 		settings.LogLevel = "info"
@@ -83,6 +80,12 @@ func main() {
 		if *migrateOnly {
 			return
 		}
+	}
+
+	// Migrations don't need full config; validate everything else only
+	// when we're about to start the service.
+	if err := settings.Validate(); err != nil {
+		log.Fatalf("settings.Validate: %s", err)
 	}
 
 	monApp := monserver.NewMonitoringServer(&logger, settings.EnablePprof)

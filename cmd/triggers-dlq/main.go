@@ -157,9 +157,11 @@ func cmdList(f flags) error {
 			seq = meta.Sequence.Stream
 			ts = meta.Timestamp
 		}
-		fmt.Printf("seq=%-6d subject=%s original=%q reason=%q delivered=%s at=%s\n",
+		fmt.Printf("seq=%-6d subject=%s original=%q source=%q vehicle=%q reason=%q delivered=%s at=%s\n",
 			seq, m.Subject(),
 			m.Headers().Get("X-Original-Subject"),
+			m.Headers().Get("X-Source-Name"),
+			m.Headers().Get("X-Asset-DID"),
 			truncate(m.Headers().Get("X-Failure-Reason"), 80),
 			m.Headers().Get("X-Delivered-Count"),
 			ts.Format(time.RFC3339))

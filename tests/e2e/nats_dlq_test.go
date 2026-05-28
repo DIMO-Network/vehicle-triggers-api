@@ -31,10 +31,12 @@ func TestNATSDLQ(t *testing.T) {
 		EventsStream:       "DLQ_EVENTS_" + suffix,
 		AuditStream:        "DLQ_AUDIT_" + suffix,
 		DLQStream:          "DLQ_DLQ_" + suffix,
+		ConfigAuditStream:  "DLQ_CFG_" + suffix,
 		SignalsSubject:     "dimo.signals.>",
 		EventsSubject:      "dimo.events.>",
 		AuditSubject:       "dimo.trigger.fired.>",
 		DLQSubject:         "dimo.dlq.>",
+		ConfigAuditSubject: "dimo.config.changed.>",
 		SignalsDurable:     "dlq-sig-" + suffix,
 		EventsDurable:      "dlq-evt-" + suffix,
 		WebhooksBucket:     "dlq_wh_" + suffix,
@@ -117,4 +119,9 @@ func TestNATSDLQ(t *testing.T) {
 	require.Equal(t, "dimo.signals.speed", got.Headers().Get("X-Original-Subject"))
 	require.Contains(t, got.Headers().Get("X-Failure-Reason"), "synthetic permanent failure")
 	require.Equal(t, `{"garbage":true}`, string(got.Data()))
+	require.Equal(t, "speed", got.Headers().Get("X-Source-Name"))
+	require.NotEmpty(t, got.Headers().Get("X-Recorded-At"))
+	// Payload here has no "subject" - X-Asset-DID should be empty rather
+	// than crash; downstream tooling treats empty as "unknown vehicle".
+	require.Empty(t, got.Headers().Get("X-Asset-DID"))
 }

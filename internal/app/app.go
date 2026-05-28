@@ -21,6 +21,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/auditqueue"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/cachebroadcast"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/configaudit"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerstate"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookdispatcher"
@@ -238,11 +239,13 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 	// settings.IdentityAPIURL is loaded from your settings.yaml.
 
 	// Register Webhook routes.
+	audit := configaudit.New(natsClient)
 	webhookController, err := webhook.NewWebhookController(repo, webhookCache)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create webhook controller: %w", err)
 	}
-	vehicleSubscriptionController := webhook.NewVehicleSubscriptionController(repo, identityClient, tokenExchangeClient, webhookCache)
+	webhookController.WithAudit(audit)
+	vehicleSubscriptionController := webhook.NewVehicleSubscriptionController(repo, identityClient, tokenExchangeClient, webhookCache).WithAudit(audit)
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		body := fiber.Map{
