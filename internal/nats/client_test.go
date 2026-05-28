@@ -47,7 +47,8 @@ func testSettings(url, prefix string) config.NATSSettings {
 		MaxAckPending:      100,
 		FilterSubjectCap:   128,
 		WebhooksBucket:     "tb_webhooks_" + suffix,
-		TriggerStateBucket: "tb_state_" + suffix,
+		TriggerStateBucket:  "tb_state_" + suffix,
+		SignalHistoryBucket: "tb_hist_" + suffix,
 		TriggerStateTTL:    time.Minute,
 	}
 }
@@ -105,6 +106,7 @@ func TestConnectAndProvision(t *testing.T) {
 		_ = c.JS.DeleteStream(ctx, cfg.AuditStream)
 		_ = c.JS.DeleteKeyValue(ctx, cfg.WebhooksBucket)
 		_ = c.JS.DeleteKeyValue(ctx, cfg.TriggerStateBucket)
+		_ = c.JS.DeleteKeyValue(ctx, cfg.SignalHistoryBucket)
 	})
 }
 

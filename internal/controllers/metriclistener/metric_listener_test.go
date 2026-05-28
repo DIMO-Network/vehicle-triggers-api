@@ -230,11 +230,6 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 			Return(nil).
 			Times(1)
 
-		mockRepo.EXPECT().
-			CreateTriggerLog(gomock.Any(), gomock.Any()).
-			Return(nil).
-			Times(1)
-
 		messages := make(chan *message.Message, 1)
 		msg := message.NewMessage(uuid.New().String(), signalJSON)
 		messages <- msg
@@ -405,11 +400,6 @@ func TestMetricListener_ProcessEventMessages(t *testing.T) {
 
 		mockWebhookSender.EXPECT().
 			SendWebhook(gomock.Any(), mockTrigger, gomock.Any()).
-			Return(nil).
-			Times(1)
-
-		mockRepo.EXPECT().
-			CreateTriggerLog(gomock.Any(), gomock.Any()).
 			Return(nil).
 			Times(1)
 

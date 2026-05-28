@@ -159,13 +159,14 @@ func cmdGet(f flags, triggerID, did string) error {
 		return fmt.Errorf("decode: %w", err)
 	}
 	out := map[string]any{
-		"key":         key,
-		"revision":    entry.Revision(),
-		"created":     entry.Created(),
-		"lastFiredAt": rec.LastFiredAt,
-		"triggerId":   rec.TriggerID,
-		"assetDid":    rec.AssetDID,
-		"ageSeconds":  time.Since(rec.LastFiredAt).Seconds(),
+		"key":          key,
+		"revision":     entry.Revision(),
+		"created":      entry.Created(),
+		"lastFiredAt":  rec.LastFiredAt,
+		"triggerId":    rec.TriggerID,
+		"assetDid":     rec.AssetDID,
+		"ageSeconds":   time.Since(rec.LastFiredAt).Seconds(),
+		"lastSnapshot": json.RawMessage(rec.LastSnapshot),
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

@@ -59,6 +59,7 @@ func TestNATSExclusiveFlow(t *testing.T) {
 	settingsCopy.NATS.EventsDurable = "ex-evt-" + suffix
 	settingsCopy.NATS.WebhooksBucket = "ex_wh_" + suffix
 	settingsCopy.NATS.TriggerStateBucket = "ex_state_" + suffix
+	settingsCopy.NATS.SignalHistoryBucket = "ex_hist_" + suffix
 	settingsCopy.NATS.Name = "vt-ex-" + suffix
 	settingsCopy.NATS.StreamReplicas = 1
 	settingsCopy.NATS.SignalsMaxAge = time.Minute
@@ -177,7 +178,7 @@ func TestNATSExclusiveFlow(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		entry, err := kv.Get(t.Context(), triggerstate.Key(webhookID, assetDid))
+		entry, err := kv.Get(t.Context(), triggerstate.TriggerKey(webhookID, assetDid))
 		if err != nil {
 			return false
 		}
@@ -185,6 +186,23 @@ func TestNATSExclusiveFlow(t *testing.T) {
 		if err := json.Unmarshal(entry.Value(), &rec); err != nil {
 			return false
 		}
-		return !rec.LastFiredAt.IsZero() && rec.TriggerID == webhookID && rec.AssetDID == assetDid.String()
+		return !rec.LastFiredAt.IsZero() && rec.TriggerID == webhookID && rec.AssetDID == assetDid.String() && len(rec.LastSnapshot) > 0
 	}, 5*time.Second, 100*time.Millisecond, "trigger state KV missing fire record")
+
+	// Verify signal_history KV captured the per-metric snapshot.
+	require.Eventually(t, func() bool {
+		kv, err := js.KeyValue(t.Context(), settingsCopy.NATS.SignalHistoryBucket)
+		if err != nil {
+			return false
+		}
+		entry, err := kv.Get(t.Context(), triggerstate.MetricKey(assetDid, "vss.speed"))
+		if err != nil {
+			return false
+		}
+		var rec triggerstate.MetricRecord
+		if err := json.Unmarshal(entry.Value(), &rec); err != nil {
+			return false
+		}
+		return rec.MetricName == "vss.speed" && len(rec.LastSnapshot) > 0
+	}, 5*time.Second, 100*time.Millisecond, "signal_history KV missing metric record")
 }

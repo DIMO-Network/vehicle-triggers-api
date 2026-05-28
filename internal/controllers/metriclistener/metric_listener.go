@@ -18,7 +18,6 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhooksender"
 	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/aarondl/sqlboiler/v4/types"
 	"github.com/google/cel-go/cel"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -42,15 +41,18 @@ type AuditPublisher interface {
 	PublishTriggerFired(ctx context.Context, devLicense string, record []byte) error
 }
 
-// StateRecorder writes the fire timestamp for a (trigger, vehicle) to the
-// distributed state store. Errors are logged and swallowed - the DB-backed
-// trigger_logs row remains the durable record.
+// StateRecorder persists the fire record so other replicas honor cooldown
+// and so the next signal's previousValue lookup sees this fire. Errors are
+// logged and swallowed - the audit stream remains the durable long-term
+// record.
 type StateRecorder interface {
-	RecordFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID, at time.Time) error
+	RecordFire(ctx context.Context, triggerID, metricName string, vehicleDID cloudevent.ERC721DID, at time.Time, snapshot json.RawMessage) error
 }
 
+// TriggerRepo is the listener's narrowed view of triggersrepo. Trigger-log
+// writes used to live here too but were removed when state moved to NATS KV;
+// the audit stream now carries the per-fire record long-term.
 type TriggerRepo interface {
-	CreateTriggerLog(ctx context.Context, triggerLog *models.TriggerLog) error
 	DeleteVehicleSubscription(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (int64, error)
 	ResetTriggerFailureCount(ctx context.Context, trigger *models.Trigger) error
 	IncrementTriggerFailureCount(ctx context.Context, trigger *models.Trigger, failureReason error, maxFailureCount int) error
@@ -223,25 +225,24 @@ func (m *MetricListener) handleTriggeredWebhook(ctx context.Context, trigger *mo
 		}
 	}
 
-	// Log the successful trigger
-	if err := m.logWebhookTrigger(ctx, payload, metricData); err != nil {
-		return fmt.Errorf("failed to log webhook trigger: %w", err)
-	}
-
+	// State + audit are the new long-term record. State is written first so
+	// the cooldown takes effect immediately for the next signal on any
+	// replica; audit is async best-effort.
+	m.recordState(ctx, trigger, payload, metricData)
 	m.publishAudit(ctx, trigger, payload)
-	m.recordState(ctx, trigger, payload)
 
 	return nil
 }
 
 // recordState writes the fire to the distributed state store so other
-// replicas honor the cooldown immediately. Errors are logged - the DB log
-// remains authoritative.
-func (m *MetricListener) recordState(ctx context.Context, trigger *models.Trigger, payload *cloudevent.CloudEvent[webhook.WebhookPayload]) {
+// replicas honor the cooldown immediately and the next previousValue lookup
+// sees this fire's snapshot. Errors are logged - the audit stream remains
+// the long-term record.
+func (m *MetricListener) recordState(ctx context.Context, trigger *models.Trigger, payload *cloudevent.CloudEvent[webhook.WebhookPayload], snapshot json.RawMessage) {
 	if m.state == nil {
 		return
 	}
-	if err := m.state.RecordFire(ctx, trigger.ID, payload.Data.AssetDID, time.Now().UTC()); err != nil {
+	if err := m.state.RecordFire(ctx, trigger.ID, trigger.MetricName, payload.Data.AssetDID, time.Now().UTC(), snapshot); err != nil {
 		zerolog.Ctx(ctx).Warn().Err(err).Str("triggerId", trigger.ID).Msg("state recorder: write failed")
 	}
 }
@@ -270,22 +271,6 @@ func (m *MetricListener) publishAudit(ctx context.Context, trigger *models.Trigg
 			zerolog.Ctx(ctx).Warn().Err(err).Str("triggerId", trigger.ID).Msg("audit publish failed")
 		}
 	}()
-}
-
-func (m *MetricListener) logWebhookTrigger(ctx context.Context, payload *cloudevent.CloudEvent[webhook.WebhookPayload], metricData json.RawMessage) error {
-	now := time.Now().UTC()
-	eventLog := &models.TriggerLog{
-		ID:              payload.ID,
-		TriggerID:       payload.Data.WebhookId,
-		AssetDid:        payload.Data.AssetDID.String(),
-		SnapshotData:    types.JSON(metricData),
-		LastTriggeredAt: now,
-		CreatedAt:       now,
-	}
-	if err := m.repo.CreateTriggerLog(ctx, eventLog); err != nil {
-		return fmt.Errorf("failed to create trigger log: %w", err)
-	}
-	return nil
 }
 
 // createWebhookPayload creates a standardized webhook payload following industry best practices

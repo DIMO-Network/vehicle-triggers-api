@@ -2,9 +2,7 @@ package triggerevaluator
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"time"
 
@@ -13,15 +11,11 @@ import (
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/celcondition"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerstate"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/cel-go/cel"
 )
-
-type TriggerRepo interface {
-	GetLastLogValue(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (*models.TriggerLog, error)
-	GetLastLogForMetric(ctx context.Context, assetDid cloudevent.ERC721DID, metricName string) (*models.TriggerLog, error)
-}
 
 // SignalEvaluationData is a struct that contains the data needed to evaluate a signal trigger.
 type SignalEvaluationData struct {
@@ -38,17 +32,19 @@ type EventEvaluationData struct {
 	RawData    json.RawMessage
 }
 
-// StateStore lets the evaluator look up the most recent fire for a trigger +
-// vehicle without hitting Postgres. Optional - when nil, the evaluator falls
-// back to the trigger_logs table. See internal/services/triggerstate for the
-// production NATS KV backend.
+// StateStore is the evaluator's read-only view of the NATS KV state buckets.
+// LastFire drives the cooldown check and the per-trigger previousEvent input;
+// LastMetric drives the cross-trigger previousValue input on the signal path.
+// A nil store, a miss, or a transport error all degrade to "no prior data"
+// so evaluation never blocks on NATS - the cost is one redundant fire when
+// state is unavailable, which is acceptable given at-least-once delivery.
 type StateStore interface {
-	LastFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID) (time.Time, bool, error)
+	LastFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID) (triggerstate.Record, bool, error)
+	LastMetric(ctx context.Context, vehicleDID cloudevent.ERC721DID, metricName string) (triggerstate.MetricRecord, bool, error)
 }
 
 // TriggerEvaluator handles trigger condition evaluation and related logic
 type TriggerEvaluator struct {
-	repo        TriggerRepo
 	tokenClient TokenExchangeClient
 	state       StateStore
 }
@@ -65,22 +61,23 @@ type TokenExchangeClient interface {
 	HasVehiclePermissions(ctx context.Context, vehicleDID cloudevent.ERC721DID, developerLicense common.Address, permissions []string) (bool, error)
 }
 
-// NewTriggerEvaluator creates a new TriggerEvaluator
-func NewTriggerEvaluator(r TriggerRepo, t TokenExchangeClient) *TriggerEvaluator {
-	return &TriggerEvaluator{repo: r, tokenClient: t}
+// NewTriggerEvaluator creates a new TriggerEvaluator. State is required for
+// production wiring; tests can pass nil to exercise the zero-previous-value
+// path. The DB-backed previousValue / cooldown fallback was removed - all
+// state lives in NATS now (see internal/services/triggerstate).
+func NewTriggerEvaluator(t TokenExchangeClient) *TriggerEvaluator {
+	return &TriggerEvaluator{tokenClient: t}
 }
 
-// WithStateStore returns a copy of the evaluator that consults state for the
-// cooldown check before falling through to the trigger_logs table.
+// WithStateStore returns a copy of the evaluator wired to a state store.
 func (t *TriggerEvaluator) WithStateStore(s StateStore) *TriggerEvaluator {
 	cp := *t
 	cp.state = s
 	return &cp
 }
 
-// EvaluateSignalTrigger evaluates a signal trigger and returns whether it should fire return true if it should fire, false if not.
+// EvaluateSignalTrigger evaluates a signal trigger and returns whether it should fire.
 func (t *TriggerEvaluator) EvaluateSignalTrigger(ctx context.Context, trigger *models.Trigger, program cel.Program, signal *SignalEvaluationData) (*TriggerEvaluationResult, error) {
-	// Check permissions first
 	hasPerm, err := t.tokenClient.HasVehiclePermissions(ctx, signal.VehicleDID, common.BytesToAddress(trigger.DeveloperLicenseAddress), signal.Def.Permissions)
 	if err != nil {
 		return nil, richerrors.Error{
@@ -96,18 +93,8 @@ func (t *TriggerEvaluator) EvaluateSignalTrigger(ctx context.Context, trigger *m
 		}, nil
 	}
 
-	// Cooldown check via KV (when wired) with DB fallback for misses/errors.
-	lastFiredAt, err := t.lookupLastFire(ctx, trigger.ID, signal.VehicleDID)
-	if err != nil {
-		return nil, richerrors.Error{
-			Code:        http.StatusInternalServerError,
-			Err:         err,
-			ExternalMsg: "failed to retrieve trigger logs for signal trigger",
-		}
-	}
-
-	// Check cooldown
-	cooldownPassed, err := t.checkCooldown(trigger, lastFiredAt)
+	lastFired := t.lookupLastFireTime(ctx, trigger.ID, signal.VehicleDID)
+	cooldownPassed, err := t.checkCooldown(trigger, lastFired)
 	if err != nil {
 		return nil, richerrors.Error{
 			Code:        http.StatusInternalServerError,
@@ -122,26 +109,11 @@ func (t *TriggerEvaluator) EvaluateSignalTrigger(ctx context.Context, trigger *m
 		}, nil
 	}
 
-	// Previous signal for condition: use last log for this (vehicle, metric) so transition-to-zero
-	// conditions see the prior value (e.g. 1) from when another trigger fired, not only this trigger's log.
-	lastLogForMetric, err := t.repo.GetLastLogForMetric(ctx, signal.VehicleDID, trigger.MetricName)
-	if err != nil {
-		return nil, richerrors.Error{
-			Code:        http.StatusInternalServerError,
-			Err:         err,
-			ExternalMsg: "failed to retrieve last signal for metric",
-		}
-	}
-	var previousSignal vss.Signal
-	if lastLogForMetric != nil {
-		if err := json.Unmarshal(lastLogForMetric.SnapshotData, &previousSignal); err != nil {
-			return nil, richerrors.Error{
-				Code:        http.StatusInternalServerError,
-				Err:         err,
-				ExternalMsg: "failed to unmarshal previous signal",
-			}
-		}
-	}
+	// Previous signal for CEL transition conditions: the snapshot from the
+	// most recent fire of any trigger on this (vehicle, metric). Comes from
+	// the signal_history KV bucket. Miss = zero-valued previousSignal, same
+	// as the first-time-fire case.
+	previousSignal := t.lookupPreviousSignal(ctx, signal.VehicleDID, trigger.MetricName)
 
 	conditionMet, err := celcondition.EvaluateSignalCondition(program, &signal.Signal, &previousSignal, signal.Def.ValueType)
 	if err != nil {
@@ -163,10 +135,8 @@ func (t *TriggerEvaluator) EvaluateSignalTrigger(ctx context.Context, trigger *m
 	}, nil
 }
 
-// EvaluateEventTrigger evaluates an event trigger and returns whether it should fire
-// Returns: shouldFire, permissionDenied, cooldownActive, error
+// EvaluateEventTrigger evaluates an event trigger and returns whether it should fire.
 func (t *TriggerEvaluator) EvaluateEventTrigger(ctx context.Context, trigger *models.Trigger, program cel.Program, ev *EventEvaluationData) (*TriggerEvaluationResult, error) {
-	// Check permissions for events (use standard permissions)
 	hasPerm, err := t.tokenClient.HasVehiclePermissions(ctx, ev.VehicleDID, common.BytesToAddress(trigger.DeveloperLicenseAddress), signals.DefaultPermissions)
 	if err != nil {
 		return nil, richerrors.Error{
@@ -182,20 +152,11 @@ func (t *TriggerEvaluator) EvaluateEventTrigger(ctx context.Context, trigger *mo
 		}, nil
 	}
 
-	// Get last trigger log for cooldown and condition evaluation. Events
-	// still need the snapshot for previous-event CEL evaluation, so we keep
-	// the DB read here.
-	lastTrigger, err := t.getLastLogValue(ctx, trigger.ID, ev.VehicleDID)
-	if err != nil {
-		return nil, richerrors.Error{
-			Code:        http.StatusInternalServerError,
-			Err:         err,
-			ExternalMsg: "failed to retrieve trigger logs for event trigger",
-		}
-	}
+	// trigger_state stores both cooldown timestamp and the prior fire's
+	// payload, so one KV read covers both event-side needs.
+	lastFired, previousEvent := t.lookupPreviousEvent(ctx, trigger.ID, ev.VehicleDID)
 
-	// Check cooldown
-	cooldownPassed, err := t.checkCooldown(trigger, lastTrigger.LastTriggeredAt)
+	cooldownPassed, err := t.checkCooldown(trigger, lastFired)
 	if err != nil {
 		return nil, richerrors.Error{
 			Code:        http.StatusInternalServerError,
@@ -208,16 +169,6 @@ func (t *TriggerEvaluator) EvaluateEventTrigger(ctx context.Context, trigger *mo
 			ShouldFire:     false,
 			CoolDownNotMet: true,
 		}, nil
-	}
-
-	// Evaluate condition
-	var previousEvent vss.Event
-	if err := json.Unmarshal(lastTrigger.SnapshotData, &previousEvent); err != nil {
-		return nil, richerrors.Error{
-			Code:        http.StatusInternalServerError,
-			Err:         err,
-			ExternalMsg: "failed to unmarshal previous event",
-		}
 	}
 
 	conditionMet, err := celcondition.EvaluateEventCondition(program, &ev.Event, &previousEvent)
@@ -240,7 +191,7 @@ func (t *TriggerEvaluator) EvaluateEventTrigger(ctx context.Context, trigger *mo
 	}, nil
 }
 
-// checkCooldown checks if the cooldown period has passed since the last trigger
+// checkCooldown checks if the cooldown period has passed since the last trigger.
 func (e *TriggerEvaluator) checkCooldown(t *models.Trigger, lastTriggeredAt time.Time) (bool, error) {
 	if lastTriggeredAt.IsZero() {
 		return true, nil
@@ -249,40 +200,53 @@ func (e *TriggerEvaluator) checkCooldown(t *models.Trigger, lastTriggeredAt time
 	return time.Since(lastTriggeredAt) >= cooldown, nil
 }
 
-// lookupLastFire returns the last fire timestamp for (trigger, vehicle).
-// Consults the configured KV state store first when present and falls back
-// to the trigger_logs table on miss or KV error. Used only by the signal
-// path; the event path keeps reading the full TriggerLog because it also
-// needs the snapshot body for previous-event CEL evaluation.
-func (t *TriggerEvaluator) lookupLastFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID) (time.Time, error) {
-	if t.state != nil {
-		when, ok, err := t.state.LastFire(ctx, triggerID, vehicleDID)
-		if err == nil && ok {
-			return when, nil
-		}
-		// Miss or error: fall through to DB so a NATS outage can't suppress
-		// cooldowns.
+// lookupLastFireTime returns the last fire timestamp from the trigger_state
+// KV bucket. Errors and misses both return zero time so evaluation proceeds
+// (matching first-time behavior).
+func (t *TriggerEvaluator) lookupLastFireTime(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID) time.Time {
+	if t.state == nil {
+		return time.Time{}
 	}
-	last, err := t.getLastLogValue(ctx, triggerID, vehicleDID)
-	if err != nil {
-		return time.Time{}, err
+	rec, ok, _ := t.state.LastFire(ctx, triggerID, vehicleDID)
+	if !ok {
+		return time.Time{}
 	}
-	return last.LastTriggeredAt, nil
+	return rec.LastFiredAt
 }
 
-// getLastLogValue retrieves the last trigger log for a given trigger and vehicle
-func (t *TriggerEvaluator) getLastLogValue(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (*models.TriggerLog, error) {
-	lastTrigger, err := t.repo.GetLastLogValue(ctx, triggerID, assetDid)
-	if err != nil {
-		// If no previous log exists, create a default one
-		if errors.Is(err, sql.ErrNoRows) {
-			return &models.TriggerLog{
-				SnapshotData: []byte("{}"),
-				AssetDid:     assetDid.String(),
-				TriggerID:    triggerID,
-			}, nil
-		}
-		return nil, err
+// lookupPreviousSignal returns the most recent signal payload across any
+// trigger for this (vehicle, metric). Used as the previousValue input for
+// transition CEL conditions like `valueNumber != previousValue`. Errors and
+// misses return a zero-valued Signal.
+func (t *TriggerEvaluator) lookupPreviousSignal(ctx context.Context, vehicleDID cloudevent.ERC721DID, metricName string) vss.Signal {
+	if t.state == nil {
+		return vss.Signal{}
 	}
-	return lastTrigger, nil
+	rec, ok, _ := t.state.LastMetric(ctx, vehicleDID, metricName)
+	if !ok || len(rec.LastSnapshot) == 0 {
+		return vss.Signal{}
+	}
+	var sig vss.Signal
+	if err := json.Unmarshal(rec.LastSnapshot, &sig); err != nil {
+		return vss.Signal{}
+	}
+	return sig
+}
+
+// lookupPreviousEvent returns both the cooldown timestamp and the snapshot of
+// the most recent fire of this trigger on this vehicle in one KV round-trip.
+// Errors and misses return zero values.
+func (t *TriggerEvaluator) lookupPreviousEvent(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID) (time.Time, vss.Event) {
+	if t.state == nil {
+		return time.Time{}, vss.Event{}
+	}
+	rec, ok, _ := t.state.LastFire(ctx, triggerID, vehicleDID)
+	if !ok {
+		return time.Time{}, vss.Event{}
+	}
+	var ev vss.Event
+	if len(rec.LastSnapshot) > 0 {
+		_ = json.Unmarshal(rec.LastSnapshot, &ev)
+	}
+	return rec.LastFiredAt, ev
 }

@@ -13,6 +13,12 @@ func (c *Client) Webhooks(ctx context.Context) (jetstream.KeyValue, error) {
 	return c.kv(ctx, c.cfg.WebhooksBucket)
 }
 
+// SignalHistory returns the signal-history KV bucket (per-vehicle per-metric
+// last fire snapshot).
+func (c *Client) SignalHistory(ctx context.Context) (jetstream.KeyValue, error) {
+	return c.kv(ctx, c.cfg.SignalHistoryBucket)
+}
+
 // TriggerState returns the trigger-state KV bucket.
 func (c *Client) TriggerState(ctx context.Context) (jetstream.KeyValue, error) {
 	return c.kv(ctx, c.cfg.TriggerStateBucket)

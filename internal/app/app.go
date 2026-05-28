@@ -87,7 +87,11 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 			if err != nil {
 				return nil, fmt.Errorf("failed to open trigger-state bucket: %w", err)
 			}
-			stateStore := triggerstate.New(stateKV)
+			historyKV, err := natsClient.SignalHistory(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to open signal-history bucket: %w", err)
+			}
+			stateStore := triggerstate.New(stateKV, historyKV)
 			natsListener = buildListenerWithState(settings, tokenExchangeCache, repo, webhookCache, stateStore).
 				WithAuditor(natsClient).
 				WithStateRecorder(stateStore)
@@ -125,12 +129,21 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		eventConsumer  *kafka.Consumer
 	)
 	if !settings.NATS.KafkaDisabled() {
-		signalConsumer, err = createSignalConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache, bridge)
+		// Kafka path evaluates triggers (or bridges to NATS). When it
+		// evaluates, it needs a state store for cooldown / previousValue.
+		// Without NATS-primary providing a KV store, fall back to an
+		// in-memory store - works for single-replica deployments and tests;
+		// real multi-replica setups must enable NATS_MODE=primary.
+		var kafkaState *triggerstate.InMemoryStore
+		if bridge == nil {
+			kafkaState = triggerstate.NewInMemory()
+		}
+		signalConsumer, err = createSignalConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache, bridge, kafkaState)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create signal consumer: %w", err)
 		}
 
-		eventConsumer, err = createEventConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache, bridge)
+		eventConsumer, err = createEventConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache, bridge, kafkaState)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create event consumer: %w", err)
 		}
@@ -280,18 +293,23 @@ func buildListener(settings *config.Settings, tokenExchangeCache *tokenexchange.
 // trigger_logs table on every check.
 func buildListenerWithState(settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, state triggerevaluator.StateStore) *metriclistener.MetricListener {
 	webhookSender := webhooksender.NewWebhookSender(nil)
-	evaluator := triggerevaluator.NewTriggerEvaluator(repo, tokenExchangeCache)
+	evaluator := triggerevaluator.NewTriggerEvaluator(tokenExchangeCache)
 	if state != nil {
 		evaluator = evaluator.WithStateStore(state)
 	}
 	return metriclistener.NewMetricsListener(webhookCache, repo, webhookSender, evaluator, settings)
 }
 
-func createSignalConsumer(_ context.Context, settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, bridge metriclistener.NATSBridge) (*kafka.Consumer, error) {
+func createSignalConsumer(_ context.Context, settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, bridge metriclistener.NATSBridge, state *triggerstate.InMemoryStore) (*kafka.Consumer, error) {
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-	listener := buildListener(settings, tokenExchangeCache, repo, webhookCache)
+	var listener *metriclistener.MetricListener
+	if state != nil {
+		listener = buildListenerWithState(settings, tokenExchangeCache, repo, webhookCache, state).WithStateRecorder(state)
+	} else {
+		listener = buildListener(settings, tokenExchangeCache, repo, webhookCache)
+	}
 	if bridge != nil {
 		listener = listener.WithBridge(bridge)
 	}
@@ -313,11 +331,16 @@ func createSignalConsumer(_ context.Context, settings *config.Settings, tokenExc
 	return consumer, nil
 }
 
-func createEventConsumer(_ context.Context, settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, bridge metriclistener.NATSBridge) (*kafka.Consumer, error) {
+func createEventConsumer(_ context.Context, settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, bridge metriclistener.NATSBridge, state *triggerstate.InMemoryStore) (*kafka.Consumer, error) {
 	clusterConfig := sarama.NewConfig()
 	clusterConfig.Version = sarama.V2_8_1_0
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-	listener := buildListener(settings, tokenExchangeCache, repo, webhookCache)
+	var listener *metriclistener.MetricListener
+	if state != nil {
+		listener = buildListenerWithState(settings, tokenExchangeCache, repo, webhookCache, state).WithStateRecorder(state)
+	} else {
+		listener = buildListener(settings, tokenExchangeCache, repo, webhookCache)
+	}
 	if bridge != nil {
 		listener = listener.WithBridge(bridge)
 	}

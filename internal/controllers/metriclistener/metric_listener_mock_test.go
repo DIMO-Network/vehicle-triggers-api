@@ -11,9 +11,12 @@ package metriclistener
 
 import (
 	context "context"
+	json "encoding/json"
 	reflect "reflect"
+	time "time"
 
 	cloudevent "github.com/DIMO-Network/cloudevent"
+	vss "github.com/DIMO-Network/model-garage/pkg/vss"
 	webhook "github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	models "github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	triggerevaluator "github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
@@ -21,6 +24,136 @@ import (
 	cel "github.com/google/cel-go/cel"
 	gomock "go.uber.org/mock/gomock"
 )
+
+// MockNATSBridge is a mock of NATSBridge interface.
+type MockNATSBridge struct {
+	ctrl     *gomock.Controller
+	recorder *MockNATSBridgeMockRecorder
+	isgomock struct{}
+}
+
+// MockNATSBridgeMockRecorder is the mock recorder for MockNATSBridge.
+type MockNATSBridgeMockRecorder struct {
+	mock *MockNATSBridge
+}
+
+// NewMockNATSBridge creates a new mock instance.
+func NewMockNATSBridge(ctrl *gomock.Controller) *MockNATSBridge {
+	mock := &MockNATSBridge{ctrl: ctrl}
+	mock.recorder = &MockNATSBridgeMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockNATSBridge) EXPECT() *MockNATSBridgeMockRecorder {
+	return m.recorder
+}
+
+// PublishEvents mocks base method.
+func (m *MockNATSBridge) PublishEvents(ctx context.Context, ce vss.EventCloudEvent) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishEvents", ctx, ce)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishEvents indicates an expected call of PublishEvents.
+func (mr *MockNATSBridgeMockRecorder) PublishEvents(ctx, ce any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishEvents", reflect.TypeOf((*MockNATSBridge)(nil).PublishEvents), ctx, ce)
+}
+
+// PublishSignals mocks base method.
+func (m *MockNATSBridge) PublishSignals(ctx context.Context, ce vss.SignalCloudEvent) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishSignals", ctx, ce)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishSignals indicates an expected call of PublishSignals.
+func (mr *MockNATSBridgeMockRecorder) PublishSignals(ctx, ce any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishSignals", reflect.TypeOf((*MockNATSBridge)(nil).PublishSignals), ctx, ce)
+}
+
+// MockAuditPublisher is a mock of AuditPublisher interface.
+type MockAuditPublisher struct {
+	ctrl     *gomock.Controller
+	recorder *MockAuditPublisherMockRecorder
+	isgomock struct{}
+}
+
+// MockAuditPublisherMockRecorder is the mock recorder for MockAuditPublisher.
+type MockAuditPublisherMockRecorder struct {
+	mock *MockAuditPublisher
+}
+
+// NewMockAuditPublisher creates a new mock instance.
+func NewMockAuditPublisher(ctrl *gomock.Controller) *MockAuditPublisher {
+	mock := &MockAuditPublisher{ctrl: ctrl}
+	mock.recorder = &MockAuditPublisherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockAuditPublisher) EXPECT() *MockAuditPublisherMockRecorder {
+	return m.recorder
+}
+
+// PublishTriggerFired mocks base method.
+func (m *MockAuditPublisher) PublishTriggerFired(ctx context.Context, devLicense string, record []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishTriggerFired", ctx, devLicense, record)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PublishTriggerFired indicates an expected call of PublishTriggerFired.
+func (mr *MockAuditPublisherMockRecorder) PublishTriggerFired(ctx, devLicense, record any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishTriggerFired", reflect.TypeOf((*MockAuditPublisher)(nil).PublishTriggerFired), ctx, devLicense, record)
+}
+
+// MockStateRecorder is a mock of StateRecorder interface.
+type MockStateRecorder struct {
+	ctrl     *gomock.Controller
+	recorder *MockStateRecorderMockRecorder
+	isgomock struct{}
+}
+
+// MockStateRecorderMockRecorder is the mock recorder for MockStateRecorder.
+type MockStateRecorderMockRecorder struct {
+	mock *MockStateRecorder
+}
+
+// NewMockStateRecorder creates a new mock instance.
+func NewMockStateRecorder(ctrl *gomock.Controller) *MockStateRecorder {
+	mock := &MockStateRecorder{ctrl: ctrl}
+	mock.recorder = &MockStateRecorderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockStateRecorder) EXPECT() *MockStateRecorderMockRecorder {
+	return m.recorder
+}
+
+// RecordFire mocks base method.
+func (m *MockStateRecorder) RecordFire(ctx context.Context, triggerID, metricName string, vehicleDID cloudevent.ERC721DID, at time.Time, snapshot json.RawMessage) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RecordFire", ctx, triggerID, metricName, vehicleDID, at, snapshot)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RecordFire indicates an expected call of RecordFire.
+func (mr *MockStateRecorderMockRecorder) RecordFire(ctx, triggerID, metricName, vehicleDID, at, snapshot any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordFire", reflect.TypeOf((*MockStateRecorder)(nil).RecordFire), ctx, triggerID, metricName, vehicleDID, at, snapshot)
+}
 
 // MockTriggerRepo is a mock of TriggerRepo interface.
 type MockTriggerRepo struct {
@@ -44,20 +177,6 @@ func NewMockTriggerRepo(ctrl *gomock.Controller) *MockTriggerRepo {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockTriggerRepo) EXPECT() *MockTriggerRepoMockRecorder {
 	return m.recorder
-}
-
-// CreateTriggerLog mocks base method.
-func (m *MockTriggerRepo) CreateTriggerLog(ctx context.Context, triggerLog *models.TriggerLog) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTriggerLog", ctx, triggerLog)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CreateTriggerLog indicates an expected call of CreateTriggerLog.
-func (mr *MockTriggerRepoMockRecorder) CreateTriggerLog(ctx, triggerLog any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTriggerLog", reflect.TypeOf((*MockTriggerRepo)(nil).CreateTriggerLog), ctx, triggerLog)
 }
 
 // DeleteVehicleSubscription mocks base method.

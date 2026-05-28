@@ -87,9 +87,11 @@ type NATSSettings struct {
 	FilterSubjectCap       int           `env:"FILTER_SUBJECT_CAP" envDefault:"2048"`
 	PublishAsyncMaxPending int           `env:"PUBLISH_ASYNC_MAX_PENDING" envDefault:"4000"`
 
-	WebhooksBucket     string        `env:"WEBHOOKS_BUCKET" envDefault:"webhooks"`
-	TriggerStateBucket string        `env:"TRIGGER_STATE_BUCKET" envDefault:"trigger_state"`
-	TriggerStateTTL    time.Duration `env:"TRIGGER_STATE_TTL" envDefault:"168h"` // 7d
+	WebhooksBucket       string        `env:"WEBHOOKS_BUCKET" envDefault:"webhooks"`
+	TriggerStateBucket   string        `env:"TRIGGER_STATE_BUCKET" envDefault:"trigger_state"`
+	TriggerStateTTL      time.Duration `env:"TRIGGER_STATE_TTL" envDefault:"168h"` // 7d
+	SignalHistoryBucket  string        `env:"SIGNAL_HISTORY_BUCKET" envDefault:"signal_history"`
+	SignalHistoryTTL     time.Duration `env:"SIGNAL_HISTORY_TTL" envDefault:"168h"` // 7d
 }
 
 // Enabled reports whether any NATS wiring should run.

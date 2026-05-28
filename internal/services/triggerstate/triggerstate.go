@@ -1,13 +1,24 @@
-// Package triggerstate stores per-trigger per-vehicle fire history in a NATS
-// JetStream KV bucket. It exists so the evaluator can check cooldown without
-// hitting Postgres on every signal, and so multiple service replicas share a
-// single source of truth for "did this trigger fire recently?"
+// Package triggerstate stores evaluator state in NATS JetStream KV buckets so
+// signal/event evaluation has zero Postgres reads on the hot path.
 //
-// The bucket has a TTL (NATS_TRIGGER_STATE_TTL, default 7d) that bounds
-// storage and matches the longest reasonable cooldown window. Reads and
-// writes are best-effort: any KV error bubbles back as a miss so callers can
-// fall through to the database-backed log, keeping correctness even if NATS
-// is unreachable.
+// Two buckets are used:
+//
+//   - trigger_state (per trigger + vehicle): last fire timestamp and the
+//     payload snapshot from that fire. Drives the cooldown check and the
+//     "previous value for THIS trigger" CEL input on the event path. TTL is
+//     configurable (NATS_TRIGGER_STATE_TTL, default 7d) and bounds storage at
+//     the longest reasonable cooldown window.
+//
+//   - signal_history (per vehicle + metric): payload snapshot from the most
+//     recent fire of ANY trigger on this metric for this vehicle. Drives the
+//     "previous value across triggers" CEL input on the signal path. TTL
+//     bounded similarly.
+//
+// Writes happen synchronously after a successful webhook delivery so any
+// replica reading next sees the new state. Reads are best-effort: a KV miss
+// or error returns "no prior data" so evaluation uses zero-valued previous
+// data, matching the first-time-fire case. That trades a single redundant
+// fire on a hard NATS outage for never hanging the eval loop on the DB.
 package triggerstate
 
 import (
@@ -22,35 +33,62 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// Store reads and writes per-(trigger, vehicle) fire state. The interface is
-// small so it can be swapped or mocked in tests.
+// Store reads and writes evaluator state. The interface is small so it can be
+// swapped or mocked in tests.
 type Store interface {
-	LastFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID) (time.Time, bool, error)
-	RecordFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID, at time.Time) error
+	LastFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID) (Record, bool, error)
+	LastMetric(ctx context.Context, vehicleDID cloudevent.ERC721DID, metricName string) (MetricRecord, bool, error)
+	RecordFire(ctx context.Context, triggerID, metricName string, vehicleDID cloudevent.ERC721DID, at time.Time, snapshot json.RawMessage) error
 }
 
-// Record is the JSON payload stored per key.
+// Record is the JSON payload stored per (trigger, vehicle) key in the
+// trigger_state bucket.
 type Record struct {
-	LastFiredAt time.Time `json:"lastFiredAt"`
-	TriggerID   string    `json:"triggerId"`
-	AssetDID    string    `json:"assetDid"`
+	LastFiredAt  time.Time       `json:"lastFiredAt"`
+	TriggerID    string          `json:"triggerId"`
+	AssetDID     string          `json:"assetDid"`
+	LastSnapshot json.RawMessage `json:"lastSnapshot,omitempty"`
 }
 
-// KVStore is a Store backed by a NATS JetStream KV bucket.
+// MetricRecord is the JSON payload stored per (vehicle, metric) key in the
+// signal_history bucket.
+type MetricRecord struct {
+	LastFiredAt  time.Time       `json:"lastFiredAt"`
+	AssetDID     string          `json:"assetDid"`
+	MetricName   string          `json:"metricName"`
+	LastSnapshot json.RawMessage `json:"lastSnapshot,omitempty"`
+}
+
+// KVStore is a Store backed by two NATS JetStream KV buckets - one per-trigger
+// and one per-metric. Both buckets are opened by the caller; passing nil for
+// either disables that half (used by tests that exercise only one path).
 type KVStore struct {
-	kv jetstream.KeyValue
+	state   jetstream.KeyValue
+	history jetstream.KeyValue
 }
 
-// New wraps an existing KV bucket handle.
-func New(kv jetstream.KeyValue) *KVStore {
-	return &KVStore{kv: kv}
+// New wraps existing KV bucket handles. state holds per-(trigger, vehicle)
+// records, history holds per-(vehicle, metric) records. Either may be nil.
+func New(state, history jetstream.KeyValue) *KVStore {
+	return &KVStore{state: state, history: history}
 }
 
-// Key builds the bucket key for (triggerID, vehicleDID). NATS KV keys allow
-// alphanumeric plus -_=./ — we replace anything else with '_' so triggerIDs
-// (UUIDs) and DIDs (did:erc721:...) round-trip cleanly.
-func Key(triggerID string, vehicleDID cloudevent.ERC721DID) string {
+// TriggerKey builds the trigger_state bucket key for (triggerID, vehicleDID).
+// NATS KV keys allow alphanumeric plus -_=./ — we replace anything else with
+// '_' so triggerIDs (UUIDs) and DIDs (did:erc721:...) round-trip cleanly.
+func TriggerKey(triggerID string, vehicleDID cloudevent.ERC721DID) string {
 	return sanitize(triggerID) + "." + sanitize(vehicleDID.String())
+}
+
+// MetricKey builds the signal_history bucket key for (vehicleDID, metricName).
+func MetricKey(vehicleDID cloudevent.ERC721DID, metricName string) string {
+	return sanitize(vehicleDID.String()) + "." + sanitize(metricName)
+}
+
+// Key is kept as an alias for the trigger key for backwards compatibility
+// with the CLI and earlier call sites.
+func Key(triggerID string, vehicleDID cloudevent.ERC721DID) string {
+	return TriggerKey(triggerID, vehicleDID)
 }
 
 func sanitize(s string) string {
@@ -63,40 +101,83 @@ func sanitize(s string) string {
 	return r.Replace(s)
 }
 
-// LastFire returns the timestamp of the most recent fire for this trigger +
-// vehicle. The second return value is false when the key is absent (no prior
-// fire on record). Any other KV error is returned as-is so callers can decide
-// whether to fall back to the database.
-func (s *KVStore) LastFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID) (time.Time, bool, error) {
-	entry, err := s.kv.Get(ctx, Key(triggerID, vehicleDID))
+// LastFire returns the most recent fire record for this (trigger, vehicle).
+// The second return value is false when the key is absent.
+func (s *KVStore) LastFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID) (Record, bool, error) {
+	if s == nil || s.state == nil {
+		return Record{}, false, nil
+	}
+	entry, err := s.state.Get(ctx, TriggerKey(triggerID, vehicleDID))
 	if err != nil {
 		if errors.Is(err, jetstream.ErrKeyNotFound) {
-			return time.Time{}, false, nil
+			return Record{}, false, nil
 		}
-		return time.Time{}, false, fmt.Errorf("kv get: %w", err)
+		return Record{}, false, fmt.Errorf("kv get trigger_state: %w", err)
 	}
 	var r Record
 	if err := json.Unmarshal(entry.Value(), &r); err != nil {
-		return time.Time{}, false, fmt.Errorf("kv decode: %w", err)
+		return Record{}, false, fmt.Errorf("kv decode trigger_state: %w", err)
 	}
-	return r.LastFiredAt, true, nil
+	return r, true, nil
 }
 
-// RecordFire writes the fire timestamp. Uses Put (last-writer-wins) rather
-// than Update because two replicas racing on the same (trigger, vehicle)
-// after a tied cooldown window should both succeed; the later timestamp is
-// what we want preserved.
-func (s *KVStore) RecordFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID, at time.Time) error {
-	body, err := json.Marshal(Record{
-		LastFiredAt: at.UTC(),
-		TriggerID:   triggerID,
-		AssetDID:    vehicleDID.String(),
+// LastMetric returns the most recent fire record for this (vehicle, metric)
+// across any trigger. False when absent.
+func (s *KVStore) LastMetric(ctx context.Context, vehicleDID cloudevent.ERC721DID, metricName string) (MetricRecord, bool, error) {
+	if s == nil || s.history == nil {
+		return MetricRecord{}, false, nil
+	}
+	entry, err := s.history.Get(ctx, MetricKey(vehicleDID, metricName))
+	if err != nil {
+		if errors.Is(err, jetstream.ErrKeyNotFound) {
+			return MetricRecord{}, false, nil
+		}
+		return MetricRecord{}, false, fmt.Errorf("kv get signal_history: %w", err)
+	}
+	var r MetricRecord
+	if err := json.Unmarshal(entry.Value(), &r); err != nil {
+		return MetricRecord{}, false, fmt.Errorf("kv decode signal_history: %w", err)
+	}
+	return r, true, nil
+}
+
+// RecordFire writes both KV records in one logical call. The trigger_state
+// write is the gate for cooldown; the signal_history write enables
+// cross-trigger previousValue lookups. Both use Put (last-writer-wins) — a
+// later timestamp is what we want preserved when replicas race.
+//
+// metricName may be empty when the caller does not have a per-metric concept
+// (e.g. unit tests); in that case the signal_history write is skipped.
+func (s *KVStore) RecordFire(ctx context.Context, triggerID, metricName string, vehicleDID cloudevent.ERC721DID, at time.Time, snapshot json.RawMessage) error {
+	now := at.UTC()
+	if s != nil && s.state != nil {
+		body, err := json.Marshal(Record{
+			LastFiredAt:  now,
+			TriggerID:    triggerID,
+			AssetDID:     vehicleDID.String(),
+			LastSnapshot: snapshot,
+		})
+		if err != nil {
+			return fmt.Errorf("kv encode trigger_state: %w", err)
+		}
+		if _, err := s.state.Put(ctx, TriggerKey(triggerID, vehicleDID), body); err != nil {
+			return fmt.Errorf("kv put trigger_state: %w", err)
+		}
+	}
+	if metricName == "" || s == nil || s.history == nil {
+		return nil
+	}
+	body, err := json.Marshal(MetricRecord{
+		LastFiredAt:  now,
+		AssetDID:     vehicleDID.String(),
+		MetricName:   metricName,
+		LastSnapshot: snapshot,
 	})
 	if err != nil {
-		return fmt.Errorf("kv encode: %w", err)
+		return fmt.Errorf("kv encode signal_history: %w", err)
 	}
-	if _, err := s.kv.Put(ctx, Key(triggerID, vehicleDID), body); err != nil {
-		return fmt.Errorf("kv put: %w", err)
+	if _, err := s.history.Put(ctx, MetricKey(vehicleDID, metricName), body); err != nil {
+		return fmt.Errorf("kv put signal_history: %w", err)
 	}
 	return nil
 }
