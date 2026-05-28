@@ -53,11 +53,7 @@ Categories:
 
 - [x] **Stream/KV write canary in `/health`.** ~~Connection alive ≠ JetStream writable.~~ Done: `Client.StreamHealth(ctx)` probes each configured stream via `js.Stream(name).Info()`, reports per-stream status, no-leader detected. `/health` returns 503 when any stream lookup/info fails.
 
-- [ ] **Backup automation.** Today recovery story is "you can `nats stream backup`." No CronJob, no S3 destination, no documented restore procedure. Add:
-  - `cmd/triggers-backup` that snapshots streams + buckets to a configurable S3 prefix
-  - Helm CronJob template running it daily
-  - Restore runbook section in `NATS_CONTRACT.md` or new `OPERATIONS.md`
-  Effort: half day.
+- [x] **Backup automation.** ~~Today recovery story is "you can `nats stream backup`."~~ Done: Helm CronJob templates (`backup-cronjob.yaml` + `backup-script-configmap.yaml`) run `nats stream backup` for each stream + KV bucket via the nats-box image, tarball + S3 upload. Default off; enabled with `backup.enabled=true` + `backup.s3Bucket`. Restore procedure documented in `OPERATIONS.md`. We deliberately did NOT build a Go binary - the standard `nats` CLI is the right tool for server-native snapshots.
 
 ---
 

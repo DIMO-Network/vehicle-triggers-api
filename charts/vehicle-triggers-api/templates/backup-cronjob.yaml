@@ -1,0 +1,76 @@
+{{- if .Values.backup.enabled }}
+# Daily JetStream backup CronJob. Snapshots each configured stream and KV
+# bucket with `nats stream backup` / `nats kv backup` from the nats-box image
+# and uploads the tarballs to an S3 prefix. Restore procedure lives in
+# OPERATIONS.md.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "vehicle-triggers-api.fullname" . }}-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vehicle-triggers-api.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: {{ include "vehicle-triggers-api.serviceAccountName" . }}
+          {{- if .Values.nats.credsEnabled }}
+          volumes:
+          - name: nats-creds
+            secret:
+              secretName: {{ include "vehicle-triggers-api.fullname" . }}-nats-creds
+          - name: script
+            configMap:
+              name: {{ include "vehicle-triggers-api.fullname" . }}-backup-script
+              defaultMode: 0755
+          {{- else }}
+          volumes:
+          - name: script
+            configMap:
+              name: {{ include "vehicle-triggers-api.fullname" . }}-backup-script
+              defaultMode: 0755
+          {{- end }}
+          containers:
+          - name: backup
+            image: {{ .Values.backup.image | default "natsio/nats-box:latest" | quote }}
+            command: ["/bin/sh", "/script/backup.sh"]
+            env:
+            - name: NATS_URL
+              value: {{ .Values.env.NATS_URL | quote }}
+            - name: BACKUP_S3_BUCKET
+              value: {{ .Values.backup.s3Bucket | quote }}
+            - name: BACKUP_S3_PREFIX
+              value: {{ .Values.backup.s3Prefix | quote }}
+            - name: STREAMS
+              value: {{ list .Values.env.NATS_SIGNALS_STREAM .Values.env.NATS_EVENTS_STREAM .Values.env.NATS_AUDIT_STREAM .Values.env.NATS_DLQ_STREAM | join "," | quote }}
+            - name: BUCKETS
+              value: {{ list .Values.env.NATS_TRIGGER_STATE_BUCKET .Values.env.NATS_SIGNAL_HISTORY_BUCKET .Values.env.NATS_WEBHOOKS_BUCKET | join "," | quote }}
+            {{- if .Values.nats.credsEnabled }}
+            - name: NATS_CREDS
+              value: {{ printf "%s/nats.creds" .Values.nats.credsMountPath | quote }}
+            {{- end }}
+            volumeMounts:
+            - name: script
+              mountPath: /script
+              readOnly: true
+            {{- if .Values.nats.credsEnabled }}
+            - name: nats-creds
+              mountPath: {{ .Values.nats.credsMountPath }}
+              readOnly: true
+            {{- end }}
+            resources:
+              limits:
+                cpu: 500m
+                memory: 256Mi
+              requests:
+                cpu: 50m
+                memory: 64Mi
+{{- end }}

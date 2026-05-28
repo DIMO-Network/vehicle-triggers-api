@@ -80,6 +80,19 @@ nats:
   credsEnabled: false
   credsSecretKey: dev/vehicle-triggers-api/nats/creds
   credsMountPath: /etc/nats
+
+# Daily JetStream backup. Snapshots every configured stream + KV bucket via
+# `nats stream backup` from a nats-box container and (if aws CLI is present)
+# uploads the tarball to s3://<s3Bucket>/<s3Prefix>/. Restore procedure in
+# OPERATIONS.md. Image must include both `nats` CLI and `aws` CLI - the
+# default natsio/nats-box only has nats; override with an image that bakes
+# aws in for prod use.
+backup:
+  enabled: false
+  schedule: "0 6 * * *" # daily 06:00 UTC
+  image: natsio/nats-box:latest
+  s3Bucket: ""
+  s3Prefix: "vehicle-triggers-api/jetstream"
 service:
   type: ClusterIP
   ports:

@@ -1,0 +1,61 @@
+{{- if .Values.backup.enabled }}
+# Shell script the backup CronJob runs. Kept inline so operators can tweak
+# the retention policy / S3 path without redeploying the chart.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vehicle-triggers-api.fullname" . }}-backup-script
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vehicle-triggers-api.labels" . | nindent 4 }}
+data:
+  backup.sh: |
+    #!/bin/sh
+    # vehicle-triggers-api JetStream backup script.
+    # Snapshots every configured stream + KV bucket and uploads to S3.
+    # Exits non-zero on the first failure so the CronJob is marked failed.
+    set -eu
+
+    ts=$(date -u +%Y%m%dT%H%M%SZ)
+    workdir="/tmp/backup-${ts}"
+    mkdir -p "$workdir"
+
+    auth=""
+    if [ -n "${NATS_CREDS:-}" ] && [ -f "$NATS_CREDS" ]; then
+      auth="--creds=${NATS_CREDS}"
+    fi
+
+    # Streams
+    IFS=,
+    for stream in $STREAMS; do
+      [ -z "$stream" ] && continue
+      echo "[backup] snapshotting stream $stream"
+      nats stream backup $auth -s "$NATS_URL" "$stream" "$workdir/stream-$stream"
+    done
+
+    # KV buckets are backed by streams named KV_<bucket>.
+    for bucket in $BUCKETS; do
+      [ -z "$bucket" ] && continue
+      echo "[backup] snapshotting kv $bucket"
+      nats stream backup $auth -s "$NATS_URL" "KV_${bucket}" "$workdir/kv-$bucket"
+    done
+    unset IFS
+
+    # Tarball + upload. aws CLI may not be present in nats-box; the chart
+    # operator should bake it in via .Values.backup.image when needed.
+    tarball="/tmp/vehicle-triggers-backup-${ts}.tar.gz"
+    tar -C /tmp -czf "$tarball" "$(basename "$workdir")"
+    echo "[backup] tarball $(ls -lh "$tarball" | awk '{print $5}')"
+
+    if command -v aws >/dev/null 2>&1 && [ -n "${BACKUP_S3_BUCKET:-}" ]; then
+      dest="s3://${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/$(basename "$tarball")"
+      echo "[backup] uploading to $dest"
+      aws s3 cp "$tarball" "$dest"
+    else
+      echo "[backup] aws cli or BACKUP_S3_BUCKET missing; backup left at $tarball"
+      ls -lh "$tarball"
+    fi
+
+    rm -rf "$workdir"
+    echo "[backup] done"
+{{- end }}
