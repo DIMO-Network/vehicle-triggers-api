@@ -75,8 +75,25 @@ func (c *Client) PublishEvents(ctx context.Context, ce vss.EventCloudEvent) (int
 	return ok, firstErr
 }
 
+// dlqSubjectFor derives the DLQ publish subject from the configured DLQ
+// subject filter. We trim the trailing wildcard (`.>` or `.*`) and append
+// the original subject so DLQ entries keep their full source hierarchy and
+// filter by original signal/event name. Falls back to the package-level
+// DLQSubject (dimo.dlq.*) when no DLQ subject is configured.
+func (c *Client) dlqSubjectFor(original string) string {
+	prefix := strings.TrimSuffix(c.cfg.DLQSubject, ".>")
+	prefix = strings.TrimSuffix(prefix, ".*")
+	if prefix == "" || prefix == c.cfg.DLQSubject {
+		// No wildcard suffix or empty config — fall back to package default
+		// to avoid publishing to a subject the DLQ stream doesn't capture.
+		return DLQSubject(original)
+	}
+	return prefix + "." + original
+}
+
 // publishDLQ writes a poison message to the DLQ stream, preserving the
-// original subject hierarchy under dimo.dlq.* and stamping headers with
+// original subject hierarchy under the configured DLQ prefix and stamping
+// headers with
 // triage context: subject, source name, vehicle DID, failure reason, deliver
 // count, original stream, and the timestamp the failure was recorded.
 // Best-effort: returns an error if the publish fails so the caller can fall
@@ -106,7 +123,7 @@ func (c *Client) publishDLQ(m jetstream.Msg, handlerErr error) error {
 		headers.Set("X-Delivered-Count", fmt.Sprintf("%d", meta.NumDelivered))
 	}
 	dlq := &nats.Msg{
-		Subject: DLQSubject(m.Subject()),
+		Subject: c.dlqSubjectFor(m.Subject()),
 		Data:    m.Data(),
 		Header:  headers,
 	}

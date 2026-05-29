@@ -51,6 +51,31 @@ const (
 	maxResponseBodySize = 1024
 )
 
+// ErrPermanent wraps receiver responses that retrying will never fix
+// (most 4xx). The dispatcher checks for this with errors.Is and skips its
+// in-worker retry loop, surfacing the failure immediately to onFailure so
+// the FailureCount bookkeeping engages instead of burning the retry budget
+// and per-host rate-limit tokens on a broken receiver.
+var ErrPermanent = errors.New("webhook permanent failure")
+
+// isRetryableStatus returns false for 4xx that won't recover on retry. We
+// keep 408 (Request Timeout), 425 (Too Early), and 429 (Too Many Requests)
+// retryable because they signal "try again later," not "request is broken."
+// 5xx is always retryable.
+func isRetryableStatus(code int) bool {
+	if code < 400 {
+		return true
+	}
+	if code >= 500 {
+		return true
+	}
+	switch code {
+	case http.StatusRequestTimeout, http.StatusTooEarly, http.StatusTooManyRequests:
+		return true
+	}
+	return false
+}
+
 // WebhookSender handles all webhook delivery operations
 type WebhookSender struct {
 	client *http.Client
@@ -140,9 +165,17 @@ func (w *WebhookSender) SendWebhook(ctx context.Context, t *models.Trigger, payl
 	if resp.StatusCode >= 400 {
 		// Read response body for error details (limited size for security)
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize))
+		baseErr := fmt.Errorf("webhook returned status code %d: %s", resp.StatusCode, string(respBody))
+		if !isRetryableStatus(resp.StatusCode) {
+			// Wrap ErrPermanent so the dispatcher recognises this with
+			// errors.Is and skips its retry loop. richerrors carries the
+			// existing failure code untouched so FailureCount accounting
+			// still engages.
+			baseErr = fmt.Errorf("%w: %w", ErrPermanent, baseErr)
+		}
 		return richerrors.Error{
 			Code: WebhookFailureCode,
-			Err:  fmt.Errorf("webhook returned status code %d: %s", resp.StatusCode, string(respBody)),
+			Err:  baseErr,
 		}
 	}
 

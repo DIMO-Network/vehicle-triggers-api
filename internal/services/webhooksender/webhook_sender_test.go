@@ -226,8 +226,9 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 
 		// Error message should contain truncated response (limited by maxResponseBodySize)
 		assert.Contains(t, err.Error(), "webhook returned status code 400")
-		// The full large response should not be in the error (should be truncated)
-		assert.True(t, len(err.Error()) <= maxResponseBodySize+50, "Response should be truncated") // +50 for buffer
+		// The full large response should not be in the error (should be truncated).
+		// Buffer accommodates the "webhook permanent failure:" wrap added for 400.
+		assert.True(t, len(err.Error()) <= maxResponseBodySize+128, "Response should be truncated")
 	})
 
 	t.Run("HTTPS server with custom client", func(t *testing.T) {

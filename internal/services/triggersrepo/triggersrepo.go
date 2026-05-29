@@ -62,6 +62,17 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db, cipher: secrets.Plaintext{}}
 }
 
+// Ping verifies the database connection is alive. Used by /health so K8s
+// readiness probes don't keep a pod in service routing webhooks when the
+// dispatcher's eventual repo writes are about to fail. Wraps the standard
+// sql.DB.PingContext with the caller's deadline.
+func (r *Repository) Ping(ctx context.Context) error {
+	if r.db == nil {
+		return fmt.Errorf("triggersrepo: nil db")
+	}
+	return r.db.PingContext(ctx)
+}
+
 // CreateTriggerRequest represents the data needed to create a new trigger.
 type CreateTriggerRequest struct {
 	DisplayName             string

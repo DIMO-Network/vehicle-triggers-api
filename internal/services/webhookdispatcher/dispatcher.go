@@ -23,6 +23,7 @@ package webhookdispatcher
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -259,6 +260,13 @@ retryLoop:
 			return
 		}
 		lastErr = err
+		// Permanent errors (4xx other than 408/425/429) won't recover on
+		// retry. Skip remaining attempts so we don't burn per-host rate-
+		// limit tokens on a broken receiver and don't tarpit other jobs
+		// waiting for this worker.
+		if errors.Is(err, webhooksender.ErrPermanent) {
+			break retryLoop
+		}
 	}
 	d.onFailure(ctx, j, lastErr)
 	deliveryTotal.WithLabelValues("error").Inc()

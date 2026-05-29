@@ -269,9 +269,19 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 		body := fiber.Map{
 			"data": "Server is up and running",
 		}
+		healthy := true
+		// DB ping comes first. Without it a Postgres outage leaves the
+		// pod in service routing webhook creates that will fail at write,
+		// surfacing as 500s instead of a readiness-probe-driven drain.
+		ctx, cancel := context.WithTimeout(c.UserContext(), 2*time.Second)
+		defer cancel()
+		if err := repo.Ping(ctx); err != nil {
+			body["db"] = map[string]any{"healthy": false, "error": err.Error()}
+			healthy = false
+		} else {
+			body["db"] = map[string]any{"healthy": true}
+		}
 		if natsClient != nil {
-			ctx, cancel := context.WithTimeout(c.UserContext(), 2*time.Second)
-			defer cancel()
 			natsHealthy := natsClient.Healthy()
 			streams := natsClient.StreamHealth(ctx)
 			streamsOK := natsHealthy
@@ -287,8 +297,11 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 				"mode":    settings.NATS.Mode,
 			}
 			if !streamsOK {
-				return c.Status(fiber.StatusServiceUnavailable).JSON(body)
+				healthy = false
 			}
+		}
+		if !healthy {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(body)
 		}
 		return c.JSON(body)
 	})

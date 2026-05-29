@@ -149,14 +149,20 @@ func (wc *WebhookCache) scheduleRefresh(ctx context.Context, broadcast bool) {
 		}
 	}
 	if wc.schedule.CompareAndSwap(false, true) {
+		// Capture the logger from the caller's ctx, but detach the value
+		// chain from the request-bound ctx itself. Fiber pools fasthttp
+		// request contexts; holding one across the debounce + DB roundtrip
+		// races with the next request reusing the same memory. Use a fresh
+		// background ctx for the actual refresh and copy only the logger so
+		// log lines still get the right structured fields.
+		logger := zerolog.Ctx(ctx)
 		go func() {
 			time.Sleep(wc.debounce)
 			if wc.schedule.Load() {
-				// if we waited and we still want to refresh, do it
 				wc.schedule.Store(false)
-				err := wc.PopulateCache(ctx)
-				if err != nil {
-					zerolog.Ctx(ctx).Error().Err(err).Msg("failed to populate webhook cache")
+				bgCtx := logger.WithContext(context.Background())
+				if err := wc.PopulateCache(bgCtx); err != nil {
+					logger.Error().Err(err).Msg("failed to populate webhook cache")
 				}
 			}
 		}()
