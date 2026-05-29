@@ -50,7 +50,6 @@ func testSettings(url, prefix string) config.NATSSettings {
 		MaxDeliver:         3,
 		MaxAckPending:      100,
 		FilterSubjectCap:   128,
-		WebhooksBucket:     "tb_webhooks_" + suffix,
 		TriggerStateBucket:  "tb_state_" + suffix,
 		SignalHistoryBucket: "tb_hist_" + suffix,
 		TriggerStateTTL:    time.Minute,
@@ -94,12 +93,12 @@ func TestConnectAndProvision(t *testing.T) {
 	require.NoError(t, c.EnsureStreams(ctx))
 	require.NoError(t, c.EnsureBuckets(ctx))
 
-	// KV buckets are reachable.
-	webhooks, err := c.Webhooks(ctx)
+	// trigger_state bucket is reachable.
+	tsKV, err := c.TriggerState(ctx)
 	require.NoError(t, err)
-	_, err = webhooks.PutString(ctx, "probe", "ok")
+	_, err = tsKV.PutString(ctx, "probe", "ok")
 	require.NoError(t, err)
-	got, err := webhooks.Get(ctx, "probe")
+	got, err := tsKV.Get(ctx, "probe")
 	require.NoError(t, err)
 	require.Equal(t, "ok", string(got.Value()))
 
@@ -108,7 +107,6 @@ func TestConnectAndProvision(t *testing.T) {
 		_ = c.JS.DeleteStream(ctx, cfg.SignalsStream)
 		_ = c.JS.DeleteStream(ctx, cfg.EventsStream)
 		_ = c.JS.DeleteStream(ctx, cfg.AuditStream)
-		_ = c.JS.DeleteKeyValue(ctx, cfg.WebhooksBucket)
 		_ = c.JS.DeleteKeyValue(ctx, cfg.TriggerStateBucket)
 		_ = c.JS.DeleteKeyValue(ctx, cfg.SignalHistoryBucket)
 	})

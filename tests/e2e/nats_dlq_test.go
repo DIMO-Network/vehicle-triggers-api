@@ -39,7 +39,6 @@ func TestNATSDLQ(t *testing.T) {
 		ConfigAuditSubject: "dimo.config.changed.>",
 		SignalsDurable:     "dlq-sig-" + suffix,
 		EventsDurable:      "dlq-evt-" + suffix,
-		WebhooksBucket:     "dlq_wh_" + suffix,
 		TriggerStateBucket:  "dlq_state_" + suffix,
 		SignalHistoryBucket: "dlq_hist_" + suffix,
 		StreamReplicas:     1,

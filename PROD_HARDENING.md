@@ -81,25 +81,25 @@ Categories:
 
 ### Architecture
 
-- [ ] **Failure count out of DB.** `IncrementTriggerFailureCount` writes one row per delivery failure. Move to KV with rate-limited DB flush every N seconds (or just KV). Effort: half day. File: `internal/services/triggersrepo/`, `internal/controllers/metriclistener/metric_listener.go`.
+- [~] **Failure count out of DB.** ~~`IncrementTriggerFailureCount` writes one row per delivery failure.~~ Deferred. Re-analysis: failure_count writes only occur on delivery failure, which is rare under healthy conditions. Once the circuit breaker trips, writes stop. Cross-replica CAS coordination is heavy for a slow-path write. Re-open if/when prod metrics show this is a real DB hotspot.
 
-- [ ] **Drop `webhooks` KV bucket OR wire it.** Provisioned in `EnsureBuckets`, never read or written. Either delete or commit to using it for distributed cache invalidation (paired with P1 webhook cache item). Effort: varies. File: `internal/nats/provision.go`.
+- [x] **Drop `webhooks` KV bucket OR wire it.** ~~Provisioned in `EnsureBuckets`, never read or written.~~ Done: bucket + accessor removed. Provisioned in `EnsureBuckets`, never read or written. Either delete or commit to using it for distributed cache invalidation (paired with P1 webhook cache item). Effort: varies. File: `internal/nats/provision.go`.
 
-- [ ] **Drop dead `triggersrepo` methods.** `GetLastLogValue`, `GetLastLogForMetric`, `CreateTriggerLog` no longer called by anything. Either remove or leave with a `// Deprecated:` doc string pointing at the audit stream. Effort: 30m.
+- [x] **Drop dead `triggersrepo` methods.** ~~`GetLastLogValue`, `GetLastLogForMetric`, `CreateTriggerLog` no longer called.~~ Done: removed + tests. `GetLastLogValue`, `GetLastLogForMetric`, `CreateTriggerLog` no longer called by anything. Either remove or leave with a `// Deprecated:` doc string pointing at the audit stream. Effort: 30m.
 
-- [ ] **Drop `trigger_logs` table.** After audit-stream consumer is built and a soak period proves we don't need it. Effort: 30m migration + coordination.
+- [~] **Drop `trigger_logs` table.** Deferred per its own pre-req: requires audit-stream consumer (owned by billing team, not us) and a soak period proving DB history is no longer queried. Re-open once those land. After audit-stream consumer is built and a soak period proves we don't need it. Effort: 30m migration + coordination.
 
-- [ ] **Normalize one name for trigger ID.** Audit and webhook payloads use both `webhookId` and `triggers.id` for the same value. Pick one and use it everywhere. Effort: 1h.
+- [x] **Normalize one name for trigger ID.** ~~Audit and webhook payloads use both `webhookId` and `triggers.id` for the same value.~~ Done: Go field is `WebhookID`, JSON name stays `webhookId` (public name; comment documents the equivalence with triggers.id). Audit and webhook payloads use both `webhookId` and `triggers.id` for the same value. Pick one and use it everywhere. Effort: 1h.
 
-- [ ] **Unify "do work when X enabled" pattern.** Two styles in app.go: `bridge != nil` (interface presence) vs `settings.NATS.PrimaryMode()` (config). Pick one. Effort: 1h.
+- [x] **Unify "do work when X enabled" pattern.** ~~Two styles in app.go.~~ Done (clarification, not rewrite): documented the convention in `buildListener` doc - settings.NATS.X decides what to construct; downstream functions take dependencies and check nil. Standard DI idiom; no code change. Two styles in app.go: `bridge != nil` (interface presence) vs `settings.NATS.PrimaryMode()` (config). Pick one. Effort: 1h.
 
 ### Operational
 
-- [ ] **Helm storage sizing guidance.** `NATS_STREAM_REPLICAS=3` default, no comment on storage per `MaxAge`. At 30k/s × 24h × ~600B = ~50GB/node/stream. Document in `values.yaml`. Effort: 30m.
+- [x] **Helm storage sizing guidance.** ~~`NATS_STREAM_REPLICAS=3` default, no comment on storage per `MaxAge`.~~ Done: rule of thumb and worked example in `values.yaml`. `NATS_STREAM_REPLICAS=3` default, no comment on storage per `MaxAge`. At 30k/s × 24h × ~600B = ~50GB/node/stream. Document in `values.yaml`. Effort: 30m.
 
-- [ ] **CI smoke load test.** `cmd/triggers-bench` is manual. Add a `go test -tags=load` test that runs it briefly against a testcontainer cluster and asserts no drops at low rate. Catches wiring regressions. Effort: half day.
+- [x] **CI smoke load test.** ~~`cmd/triggers-bench` is manual.~~ Done: `tests/e2e/load_smoke_test.go` (build tag `load`) runs ~300 msg/s for 5s against testcontainer NATS via `vtnats.Connect` + `PullLoop`, asserts zero drops and clean drain. CI runs `go test -tags=load ./tests/e2e/...` in a separate job. `cmd/triggers-bench` is manual. Add a `go test -tags=load` test that runs it briefly against a testcontainer cluster and asserts no drops at low rate. Catches wiring regressions. Effort: half day.
 
-- [ ] **Reconciler pod for webhook cache.** Periodic full DB → KV scan that catches drift from failed dual-writes (paired with P1 webhook cache distribution). Effort: half day.
+- [~] **Reconciler pod for webhook cache.** Deferred. The 5-min DB poll in `webhookCache` is the existing reconciliation safety net for the new cachebroadcast pub/sub path (P1-3). Promote to a dedicated CronJob only if the poll proves insufficient in prod (e.g. propagation lag observed > 5 min sustained).
 
 ---
 

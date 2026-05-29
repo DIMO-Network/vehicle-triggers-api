@@ -59,7 +59,6 @@ func TestNATSExclusiveFlow(t *testing.T) {
 	settingsCopy.NATS.ConfigAuditSubject = "dimo.config.changed.>"
 	settingsCopy.NATS.SignalsDurable = "ex-sig-" + suffix
 	settingsCopy.NATS.EventsDurable = "ex-evt-" + suffix
-	settingsCopy.NATS.WebhooksBucket = "ex_wh_" + suffix
 	settingsCopy.NATS.TriggerStateBucket = "ex_state_" + suffix
 	settingsCopy.NATS.SignalHistoryBucket = "ex_hist_" + suffix
 	settingsCopy.NATS.Name = "vt-ex-" + suffix

@@ -72,13 +72,12 @@ func (c *Client) EnsureStreams(ctx context.Context) error {
 	return nil
 }
 
-// EnsureBuckets creates-or-updates the three KV buckets: webhooks (trigger
-// registry mirror), trigger_state (per-trigger fire records driving cooldown
-// and previousValue), and signal_history (per-vehicle per-metric fire records
-// driving cross-trigger previousValue). Idempotent.
+// EnsureBuckets creates-or-updates the two KV buckets the service uses:
+// trigger_state (per-trigger fire records driving cooldown and previousValue)
+// and signal_history (per-vehicle per-metric fire records driving
+// cross-trigger previousValue). Idempotent.
 func (c *Client) EnsureBuckets(ctx context.Context) error {
 	buckets := []jetstream.KeyValueConfig{
-		{Bucket: c.cfg.WebhooksBucket, History: 1, Replicas: c.cfg.StreamReplicas, Description: "trigger registry"},
 		{Bucket: c.cfg.TriggerStateBucket, History: 1, Replicas: c.cfg.StreamReplicas, TTL: c.cfg.TriggerStateTTL, Description: "per-trigger per-vehicle fire record"},
 		{Bucket: c.cfg.SignalHistoryBucket, History: 1, Replicas: c.cfg.StreamReplicas, TTL: c.cfg.SignalHistoryTTL, Description: "per-vehicle per-metric last fire snapshot"},
 	}

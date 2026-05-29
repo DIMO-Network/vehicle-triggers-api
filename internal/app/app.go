@@ -330,6 +330,15 @@ func startWebhookCache(ctx context.Context, settings *config.Settings, tokenExch
 // buildListener wires a MetricListener with shared services. Used by both
 // the Kafka and NATS sides; the Kafka path optionally wraps it with a bridge.
 //
+// Convention used throughout this file:
+//
+//   - settings.NATS.{Enabled,PrimaryMode,KafkaDisabled} decides what to
+//     construct at startup (in CreateServers).
+//   - Functions further down (like createSignalConsumer) take the
+//     dependency directly and check for nil to decide whether to wire it.
+//     "Pass the dependency; let nil opt out" keeps the function signatures
+//     honest about what they actually need.
+//
 // Deprecated handling: when NATS_MODE=exclusive the Kafka-side listener is
 // never constructed, so the bridge variant is only used in the transitional
 // NATS_MODE=primary mode.

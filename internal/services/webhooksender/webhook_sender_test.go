@@ -39,7 +39,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 			var payload cloudevent.CloudEvent[webhook.WebhookPayload]
 			err = json.Unmarshal(body, &payload)
 			require.NoError(t, err)
-			assert.Equal(t, "test-webhook-id", payload.Data.WebhookId)
+			assert.Equal(t, "test-webhook-id", payload.Data.WebhookID)
 
 			w.WriteHeader(http.StatusOK)
 			_, _ = fmt.Fprint(w, "success")
@@ -347,7 +347,7 @@ func createTestPayload(webhookID string) *cloudevent.CloudEvent[webhook.WebhookP
 		Data: webhook.WebhookPayload{
 			Service:     "signals",
 			MetricName:  "vss.speed",
-			WebhookId:   webhookID,
+			WebhookID:   webhookID,
 			WebhookName: "Test Webhook",
 			AssetDID:    assetDID,
 			Condition:   "valueNumber > 55",

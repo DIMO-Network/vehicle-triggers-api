@@ -52,7 +52,7 @@ spec:
             - name: STREAMS
               value: {{ list .Values.env.NATS_SIGNALS_STREAM .Values.env.NATS_EVENTS_STREAM .Values.env.NATS_AUDIT_STREAM .Values.env.NATS_DLQ_STREAM | join "," | quote }}
             - name: BUCKETS
-              value: {{ list .Values.env.NATS_TRIGGER_STATE_BUCKET .Values.env.NATS_SIGNAL_HISTORY_BUCKET .Values.env.NATS_WEBHOOKS_BUCKET | join "," | quote }}
+              value: {{ list .Values.env.NATS_TRIGGER_STATE_BUCKET .Values.env.NATS_SIGNAL_HISTORY_BUCKET | join "," | quote }}
             {{- if .Values.nats.credsEnabled }}
             - name: NATS_CREDS
               value: {{ printf "%s/nats.creds" .Values.nats.credsMountPath | quote }}

@@ -8,11 +8,6 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// Webhooks returns the webhook-registry KV bucket.
-func (c *Client) Webhooks(ctx context.Context) (jetstream.KeyValue, error) {
-	return c.kv(ctx, c.cfg.WebhooksBucket)
-}
-
 // SignalHistory returns the signal-history KV bucket (per-vehicle per-metric
 // last fire snapshot).
 func (c *Client) SignalHistory(ctx context.Context) (jetstream.KeyValue, error) {

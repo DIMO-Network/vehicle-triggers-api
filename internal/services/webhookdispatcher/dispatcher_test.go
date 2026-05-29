@@ -39,7 +39,7 @@ func sampleJob() Job {
 		Trigger: &models.Trigger{ID: "t-1", Status: "enabled"},
 		Payload: &cloudevent.CloudEvent[webhook.WebhookPayload]{
 			Data: webhook.WebhookPayload{
-				WebhookId: "t-1",
+				WebhookID: "t-1",
 				AssetDID: cloudevent.ERC721DID{
 					ChainID: 137,
 				},
@@ -113,6 +113,11 @@ func TestDispatcherShutdownDrainsInFlight(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		require.NoError(t, d.Enqueue(t.Context(), sampleJob()))
 	}
+
+	// Wait for at least one worker to have dequeued before cancelling,
+	// otherwise on busy schedulers Run returns before any sender call lands
+	// and the test becomes flaky.
+	require.Eventually(t, func() bool { return sender.calls.Load() >= 1 }, 2*time.Second, 5*time.Millisecond)
 
 	// Cancel and verify Run returns within a reasonable bound.
 	cancel()

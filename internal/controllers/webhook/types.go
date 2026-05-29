@@ -120,8 +120,10 @@ type WebhookPayload struct {
 	// MetricName is the fully qualified signal/metric monitored by the webhook.
 	MetricName string `json:"metricName"`
 
-	// WebhookId is the ID of the webhook trigger that fired
-	WebhookId string `json:"webhookId"`
+	// WebhookID is the ID of the webhook trigger that fired. Same value as
+	// triggers.id in the database; surfaced under the public name
+	// "webhookId" in the JSON payload.
+	WebhookID string `json:"webhookId"`
 
 	// WebhookName is the user-friendly display name of the trigger
 	WebhookName string `json:"webhookName"`

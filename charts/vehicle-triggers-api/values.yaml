@@ -52,6 +52,15 @@ env:
   #   primary   - Kafka consumers bridge into NATS, NATS does evaluation.
   #   exclusive - NATS only. Kafka consumers are skipped; KAFKA_BROKERS can
   #               be empty. Target state.
+  #
+  # Storage planning rule of thumb (file storage, replicas=3):
+  #   per_node_disk_per_stream = msgs_per_sec * avg_msg_bytes * max_age_seconds
+  # At ~30k msg/s steady state, 600B avg signal envelope, 24h MaxAge:
+  #   30000 * 600 * 86400 ~= 50 GB per node per signals stream.
+  # Audit and DLQ are sized off fire rate (typically 10-100x lower than
+  # signal rate); CONFIG_AUDIT is sized off CRUD rate (negligible).
+  # Bump NATS_*_MAX_AGE down to reduce storage, up to reduce risk of
+  # discarding mid-retry messages (see Settings.Validate).
   NATS_MODE: off
   NATS_URL: nats://nats-dev.dimo-platform.svc.cluster.local:4222
   NATS_NAME: vehicle-triggers-api

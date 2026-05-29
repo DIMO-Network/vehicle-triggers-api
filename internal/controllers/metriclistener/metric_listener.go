@@ -338,7 +338,7 @@ func (m *MetricListener) createWebhookPayload(trigger *models.Trigger, assetDid 
 		Data: webhook.WebhookPayload{
 			Service:     trigger.Service,
 			MetricName:  trigger.MetricName,
-			WebhookId:   trigger.ID,
+			WebhookID:   trigger.ID,
 			WebhookName: trigger.DisplayName,
 			AssetDID:    assetDid,
 			Condition:   trigger.Condition,
