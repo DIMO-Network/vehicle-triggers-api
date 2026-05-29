@@ -39,6 +39,14 @@ type Settings struct {
 	// to ~1 CPU; raise it on multi-core nodes.
 	CacheBuildWorkers int `env:"CACHE_BUILD_WORKERS" envDefault:"2"`
 
+	// MaxAllowedCooldownPeriod is the hard upper bound (seconds) on
+	// triggers.cooldown_period. It exists so the cooldown KV bucket TTL is
+	// guaranteed to outlive any configured cooldown - silent fires
+	// otherwise once TTL expires the state record mid-cooldown. Default
+	// 30 days; service refuses to start unless TriggerStateTTL is at least
+	// 2x this value (see Settings.Validate).
+	MaxAllowedCooldownPeriod int `env:"MAX_ALLOWED_COOLDOWN_PERIOD" envDefault:"2592000"`
+
 	NATS NATSSettings `envPrefix:"NATS_"`
 
 	DB db.Settings `envPrefix:"DB_"`
@@ -150,6 +158,26 @@ func (s Settings) Validate() error {
 
 	if s.MaxInFlight < 1 {
 		errs = append(errs, fmt.Sprintf("MAX_IN_FLIGHT=%d must be >= 1", s.MaxInFlight))
+	}
+
+	if s.MaxAllowedCooldownPeriod < 1 {
+		errs = append(errs, fmt.Sprintf("MAX_ALLOWED_COOLDOWN_PERIOD=%d must be >= 1", s.MaxAllowedCooldownPeriod))
+	}
+
+	// Distributed-cooldown invariant: the trigger_state KV bucket TTL must
+	// outlive the longest cooldown by a comfortable factor. Otherwise a
+	// long-cooldown trigger silently re-fires once TTL expires mid-window.
+	// Only enforced when NATS is wired in (the in-memory fallback isn't
+	// TTL-bounded).
+	if s.NATS.Enabled() && s.MaxAllowedCooldownPeriod > 0 {
+		maxCooldown := time.Duration(s.MaxAllowedCooldownPeriod) * time.Second
+		minTTL := 2 * maxCooldown
+		if s.NATS.TriggerStateTTL < minTTL {
+			errs = append(errs, fmt.Sprintf(
+				"NATS_TRIGGER_STATE_TTL=%s must be >= 2*MAX_ALLOWED_COOLDOWN_PERIOD (=%s); raise the TTL or lower the cooldown ceiling",
+				s.NATS.TriggerStateTTL, minTTL,
+			))
+		}
 	}
 
 	if len(errs) == 0 {

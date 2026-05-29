@@ -111,7 +111,12 @@ func (m *MetricListener) processSignalWebhook(ctx context.Context, wh *webhookca
 			if err != nil {
 				return fmt.Errorf("failed to delete vehicle subscription: %w", err)
 			}
-			m.webhookCache.ScheduleRefresh(ctx)
+			// Surgical local invalidation; no broadcast. A permission-denied
+			// signal stream could fire this thousands of times per second on
+			// a misconfigured developer, and broadcasting each one would
+			// thrash every replica. Other replicas catch up via the periodic
+			// poll or the next permission-denied on their side.
+			m.webhookCache.InvalidateVehicleTrigger(sigAndRaw.VehicleDID.String(), wh.Trigger.ID)
 		}
 		return nil
 	}

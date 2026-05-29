@@ -12,7 +12,24 @@ import (
 // PayloadHandler processes the raw JetStream message body. Returning nil acks
 // the message; a non-nil error nak's it so JetStream redelivers per the
 // consumer's BackOff ladder.
+//
+// Wrap with ErrBackpressure to signal that the failure is transient and
+// purely a load-shed - the message itself isn't poison. The PullLoop will
+// use BackpressureNakDelay instead of the consumer's BackOff, which buys
+// time for the downstream queue to drain without burning MaxDeliver budget
+// on a self-inflicted condition.
 type PayloadHandler func(ctx context.Context, payload []byte) error
+
+// ErrBackpressure marks a handler error as load-shed, not poison. Wrap with
+// fmt.Errorf("%w: ...", ErrBackpressure) or errors.Join(ErrBackpressure, ...)
+// so the PullLoop classifier picks it up.
+var ErrBackpressure = errors.New("nats: handler backpressure")
+
+// BackpressureNakDelay is how long PullLoop holds a backpressure-flagged
+// message before redelivery. Default 30s - long enough that we don't churn
+// the queue, short enough that a brief spike clears within MaxDeliver
+// attempts (e.g. 5 attempts * 30s = 2.5 min total runway).
+var BackpressureNakDelay = 30 * time.Second
 
 // PullLoop pulls in batches from the consumer and dispatches each message to
 // handler in a bounded worker pool. Returns when ctx is cancelled or the
@@ -78,6 +95,19 @@ func (c *Client) PullLoop(ctx context.Context, cons jetstream.Consumer, maxInFli
 			}
 			payload := m.Data()
 			if err := handler(ctx, payload); err != nil {
+				// Backpressure: handler refused work because a downstream
+				// queue was full. Nak with a long delay so we don't burn
+				// through MaxDeliver while the queue drains. We still count
+				// these against MaxDeliver (JetStream doesn't let us not),
+				// but the long delay gives a default 5x30s = 2.5min window
+				// before DLQ, which is plenty for a transient spike.
+				if errors.Is(err, ErrBackpressure) {
+					log.Warn().Err(err).Str("subject", m.Subject()).Uint64("attempt", numDelivered).Msg("backpressure; nak with delay")
+					_ = m.NakWithDelay(BackpressureNakDelay)
+					MetricsConsume(stream, "nak_backpressure")
+					MetricsEvalLatency(stream, "nak_backpressure", arrived)
+					return
+				}
 				// Last attempt? Park it in the DLQ and terminally fail so the
 				// stream doesn't keep redelivering forever or silently drop
 				// after MaxDeliver expires.

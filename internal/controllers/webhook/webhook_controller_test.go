@@ -473,7 +473,7 @@ func newWebhookControllerAndMocks(t *testing.T) (*WebhookController, *MockReposi
 	ctrl := gomock.NewController(t)
 	mockRepo := NewMockRepository(ctrl)
 	mockCache := NewMockWebhookCache(ctrl)
-	controller, err := NewWebhookController(mockRepo, mockCache)
+	controller, err := NewWebhookController(mockRepo, mockCache, 0)
 	require.NoError(t, err)
 	return controller, mockRepo, mockCache
 }

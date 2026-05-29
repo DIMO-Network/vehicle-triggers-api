@@ -240,7 +240,7 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 
 	// Register Webhook routes.
 	audit := configaudit.New(natsClient)
-	webhookController, err := webhook.NewWebhookController(repo, webhookCache)
+	webhookController, err := webhook.NewWebhookController(repo, webhookCache, settings.MaxAllowedCooldownPeriod)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create webhook controller: %w", err)
 	}

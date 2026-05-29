@@ -9,20 +9,22 @@ import (
 
 func validBaseSettings() Settings {
 	return Settings{
-		KafkaBrokers:       "kafka:9092",
-		DeviceSignalsTopic: "signals",
-		DeviceEventsTopic:  "events",
-		MaxInFlight:        50,
+		KafkaBrokers:             "kafka:9092",
+		DeviceSignalsTopic:       "signals",
+		DeviceEventsTopic:        "events",
+		MaxInFlight:              50,
+		MaxAllowedCooldownPeriod: 2592000, // 30 days
 		NATS: NATSSettings{
-			Mode:          "off",
-			URL:           "nats://localhost:4222",
-			MaxDeliver:    5,
-			MaxAckPending: 5000,
-			AckWait:       45 * time.Second,
-			FetchBatch:    100,
-			StreamReplicas: 1,
-			SignalsMaxAge: 24 * time.Hour,
-			EventsMaxAge:  24 * time.Hour,
+			Mode:            "off",
+			URL:             "nats://localhost:4222",
+			MaxDeliver:      5,
+			MaxAckPending:   5000,
+			AckWait:         45 * time.Second,
+			FetchBatch:      100,
+			StreamReplicas:  1,
+			SignalsMaxAge:   24 * time.Hour,
+			EventsMaxAge:    24 * time.Hour,
+			TriggerStateTTL: 60 * 24 * time.Hour, // 60d, > 2 * 30d
 		},
 	}
 }
@@ -75,5 +77,21 @@ func TestSettingsValidate(t *testing.T) {
 		s := validBaseSettings()
 		s.MaxInFlight = 0
 		require.ErrorContains(t, s.Validate(), "MAX_IN_FLIGHT")
+	})
+
+	t.Run("rejects TriggerStateTTL shorter than 2*max cooldown when nats enabled", func(t *testing.T) {
+		s := validBaseSettings()
+		s.NATS.Mode = "primary"
+		s.MaxAllowedCooldownPeriod = 7 * 24 * 60 * 60 // 7d
+		s.NATS.TriggerStateTTL = 7 * 24 * time.Hour   // = max cooldown; fails 2x check
+		require.ErrorContains(t, s.Validate(), "NATS_TRIGGER_STATE_TTL")
+	})
+
+	t.Run("accepts TriggerStateTTL >= 2 * max cooldown", func(t *testing.T) {
+		s := validBaseSettings()
+		s.NATS.Mode = "primary"
+		s.MaxAllowedCooldownPeriod = 7 * 24 * 60 * 60
+		s.NATS.TriggerStateTTL = 15 * 24 * time.Hour
+		require.NoError(t, s.Validate())
 	})
 }

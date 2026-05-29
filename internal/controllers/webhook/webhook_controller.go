@@ -43,19 +43,24 @@ type ConfigAudit interface {
 
 // WebhookController is the controller for creating and managing webhooks.
 type WebhookController struct {
-	repo       Repository
-	signalDefs []signals.SignalDefinition
-	cache      WebhookCache
-	audit      ConfigAudit
+	repo              Repository
+	signalDefs        []signals.SignalDefinition
+	cache             WebhookCache
+	audit             ConfigAudit
+	maxCooldownPeriod int
 }
 
-// NewWebhookController creates a new WebhookController.
-func NewWebhookController(repo Repository, cache WebhookCache) (*WebhookController, error) {
+// NewWebhookController creates a new WebhookController. maxCooldownPeriod
+// caps trigger.cooldown_period at registration; the cap is required so the
+// trigger_state KV bucket TTL can be sized to cover any allowed cooldown
+// (enforced by Settings.Validate).
+func NewWebhookController(repo Repository, cache WebhookCache, maxCooldownPeriod int) (*WebhookController, error) {
 	return &WebhookController{
-		repo:       repo,
-		signalDefs: signals.GetAllSignalDefinitions(),
-		cache:      cache,
-		audit:      configaudit.Noop{},
+		repo:              repo,
+		signalDefs:        signals.GetAllSignalDefinitions(),
+		cache:             cache,
+		audit:             configaudit.Noop{},
+		maxCooldownPeriod: maxCooldownPeriod,
 	}, nil
 }
 
@@ -113,7 +118,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		return err
 	}
 
-	if err := validateCoolDownPeriod(payload.CoolDownPeriod); err != nil {
+	if err := validateCoolDownPeriod(payload.CoolDownPeriod, w.maxCooldownPeriod); err != nil {
 		return err
 	}
 
@@ -269,7 +274,7 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		event.Condition = *payload.Condition
 	}
 	if payload.CoolDownPeriod != nil {
-		if err := validateCoolDownPeriod(*payload.CoolDownPeriod); err != nil {
+		if err := validateCoolDownPeriod(*payload.CoolDownPeriod, w.maxCooldownPeriod); err != nil {
 			return err
 		}
 		event.CooldownPeriod = *payload.CoolDownPeriod

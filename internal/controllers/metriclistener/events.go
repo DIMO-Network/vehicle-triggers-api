@@ -96,7 +96,9 @@ func (m *MetricListener) processEventWebhook(ctx context.Context, wh *webhookcac
 			if err != nil {
 				return fmt.Errorf("failed to delete vehicle subscription: %w", err)
 			}
-			m.webhookCache.ScheduleRefresh(ctx)
+			// See signal.go for why this is a surgical invalidation rather
+			// than a broadcasting ScheduleRefresh.
+			m.webhookCache.InvalidateVehicleTrigger(eventEval.VehicleDID.String(), wh.Trigger.ID)
 		}
 		return nil
 	}

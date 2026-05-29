@@ -23,7 +23,6 @@ package webhookdispatcher
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -32,6 +31,7 @@ import (
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	vtnats "github.com/DIMO-Network/vehicle-triggers-api/internal/nats"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhooksender"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
@@ -39,8 +39,9 @@ import (
 
 // ErrQueueFull is returned by Enqueue when no worker slot is available. The
 // caller (a JetStream handler) should propagate this so the message is naked
-// and redelivered.
-var ErrQueueFull = errors.New("webhook dispatcher queue full")
+// and redelivered. We wrap nats.ErrBackpressure so the PullLoop treats it
+// as load-shed (long nak delay, no DLQ chain) rather than poison.
+var ErrQueueFull = fmt.Errorf("webhook dispatcher queue full: %w", vtnats.ErrBackpressure)
 
 // Sender delivers a single webhook to its target URL.
 type Sender interface {

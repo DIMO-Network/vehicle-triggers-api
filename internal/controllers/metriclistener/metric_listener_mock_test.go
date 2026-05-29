@@ -21,6 +21,7 @@ import (
 	models "github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	triggerevaluator "github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
 	webhookcache "github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
+	webhookdispatcher "github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookdispatcher"
 	cel "github.com/google/cel-go/cel"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -418,6 +419,18 @@ func (mr *MockWebhookCacheMockRecorder) GetWebhooks(vehicleDID, service, metricN
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWebhooks", reflect.TypeOf((*MockWebhookCache)(nil).GetWebhooks), vehicleDID, service, metricName)
 }
 
+// InvalidateVehicleTrigger mocks base method.
+func (m *MockWebhookCache) InvalidateVehicleTrigger(assetDID, triggerID string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "InvalidateVehicleTrigger", assetDID, triggerID)
+}
+
+// InvalidateVehicleTrigger indicates an expected call of InvalidateVehicleTrigger.
+func (mr *MockWebhookCacheMockRecorder) InvalidateVehicleTrigger(assetDID, triggerID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvalidateVehicleTrigger", reflect.TypeOf((*MockWebhookCache)(nil).InvalidateVehicleTrigger), assetDID, triggerID)
+}
+
 // ScheduleRefresh mocks base method.
 func (m *MockWebhookCache) ScheduleRefresh(ctx context.Context) {
 	m.ctrl.T.Helper()
@@ -428,4 +441,42 @@ func (m *MockWebhookCache) ScheduleRefresh(ctx context.Context) {
 func (mr *MockWebhookCacheMockRecorder) ScheduleRefresh(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScheduleRefresh", reflect.TypeOf((*MockWebhookCache)(nil).ScheduleRefresh), ctx)
+}
+
+// MockWebhookDispatcher is a mock of WebhookDispatcher interface.
+type MockWebhookDispatcher struct {
+	ctrl     *gomock.Controller
+	recorder *MockWebhookDispatcherMockRecorder
+	isgomock struct{}
+}
+
+// MockWebhookDispatcherMockRecorder is the mock recorder for MockWebhookDispatcher.
+type MockWebhookDispatcherMockRecorder struct {
+	mock *MockWebhookDispatcher
+}
+
+// NewMockWebhookDispatcher creates a new mock instance.
+func NewMockWebhookDispatcher(ctrl *gomock.Controller) *MockWebhookDispatcher {
+	mock := &MockWebhookDispatcher{ctrl: ctrl}
+	mock.recorder = &MockWebhookDispatcherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockWebhookDispatcher) EXPECT() *MockWebhookDispatcherMockRecorder {
+	return m.recorder
+}
+
+// Enqueue mocks base method.
+func (m *MockWebhookDispatcher) Enqueue(ctx context.Context, j webhookdispatcher.Job) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Enqueue", ctx, j)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Enqueue indicates an expected call of Enqueue.
+func (mr *MockWebhookDispatcherMockRecorder) Enqueue(ctx, j any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Enqueue", reflect.TypeOf((*MockWebhookDispatcher)(nil).Enqueue), ctx, j)
 }

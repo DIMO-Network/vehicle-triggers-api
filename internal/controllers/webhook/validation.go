@@ -116,10 +116,16 @@ func validateCondition(serviceName, condition, valueType string) error {
 	return nil
 }
 
-func validateCoolDownPeriod(coolDownPeriod int) error {
+func validateCoolDownPeriod(coolDownPeriod, maxAllowed int) error {
 	if coolDownPeriod < 0 {
 		return richerrors.Error{
 			ExternalMsg: "Cool down period must be greater than or equal to 0",
+			Code:        fiber.StatusBadRequest,
+		}
+	}
+	if maxAllowed > 0 && coolDownPeriod > maxAllowed {
+		return richerrors.Error{
+			ExternalMsg: fmt.Sprintf("Cool down period %d exceeds MAX_ALLOWED_COOLDOWN_PERIOD=%d; the state KV bucket's TTL cannot cover longer cooldowns", coolDownPeriod, maxAllowed),
 			Code:        fiber.StatusBadRequest,
 		}
 	}

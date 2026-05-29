@@ -80,6 +80,7 @@ type TriggerEvaluator interface {
 type WebhookCache interface {
 	GetWebhooks(vehicleDID string, service string, metricName string) []*webhookcache.Webhook
 	ScheduleRefresh(ctx context.Context)
+	InvalidateVehicleTrigger(assetDID, triggerID string)
 }
 
 // WebhookDispatcher is the small interface the listener uses to hand off

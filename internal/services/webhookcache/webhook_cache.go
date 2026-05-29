@@ -184,6 +184,41 @@ func (wc *WebhookCache) Update(newData map[string]map[string][]*Webhook) {
 	wc.lastRefresh = time.Now()
 }
 
+// InvalidateVehicleTrigger removes the cached webhook entries for the given
+// (assetDID, triggerID) pair without broadcasting a cross-replica refresh.
+// Use this on the hot path - for example when eval discovers a revoked
+// permission and unsubscribes the vehicle locally. The 5-minute periodic
+// refresh is the reconciliation safety net for other replicas; we
+// deliberately do NOT publish a cachebroadcast event here because
+// permission-denied is a per-signal event and broadcasting it would
+// stampede every replica thousands of times per second on a misconfigured
+// developer.
+func (wc *WebhookCache) InvalidateVehicleTrigger(assetDID, triggerID string) {
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+
+	byVehicle, ok := wc.webhooks[assetDID]
+	if !ok {
+		return
+	}
+	for key, hooks := range byVehicle {
+		filtered := hooks[:0]
+		for _, h := range hooks {
+			if h.Trigger == nil || h.Trigger.ID != triggerID {
+				filtered = append(filtered, h)
+			}
+		}
+		if len(filtered) == 0 {
+			delete(byVehicle, key)
+		} else {
+			byVehicle[key] = filtered
+		}
+	}
+	if len(byVehicle) == 0 {
+		delete(wc.webhooks, assetDID)
+	}
+}
+
 func (wc *WebhookCache) fetchVehicleWebhooks(ctx context.Context) (map[string]map[string][]*Webhook, error) {
 	logger := zerolog.Ctx(ctx)
 	fetchStart := time.Now()
