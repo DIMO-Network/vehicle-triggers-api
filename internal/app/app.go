@@ -2,9 +2,12 @@ package app
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/secrets"
 
 	"github.com/DIMO-Network/server-garage/pkg/fibercommon"
 	"github.com/DIMO-Network/shared/pkg/db"
@@ -68,6 +71,17 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 	tokenExchangeCache := tokenexchange.NewCache(settings.TokenExchangeCacheExpiration, settings.TokenExchangeCacheCleanupInterval, tokenExchangeAPI)
 
 	repo := triggersrepo.NewRepository(store.DBS().Writer.DB)
+	if hexKey := strings.TrimSpace(settings.SigningSecretKeyHex); hexKey != "" {
+		key, err := hex.DecodeString(hexKey)
+		if err != nil {
+			return nil, fmt.Errorf("SIGNING_SECRET_KEY_HEX: %w", err)
+		}
+		cipher, err := secrets.NewAESGCM(key)
+		if err != nil {
+			return nil, fmt.Errorf("AES-GCM cipher: %w", err)
+		}
+		repo.SetCipher(cipher)
+	}
 
 	webhookCache, err := startWebhookCache(ctx, settings, tokenExchangeCache, repo)
 	if err != nil {
@@ -122,9 +136,13 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 				Buffer:  settings.NATS.AuditQueueSize,
 			}, natsClient, logger)
 			dispatcher = webhookdispatcher.New(webhookdispatcher.Config{
-				Workers:         settings.NATS.DispatcherWorkers,
-				QueueSize:       settings.NATS.DispatcherQueueSize,
-				MaxFailureCount: maxFailureCount,
+				Workers:           settings.NATS.DispatcherWorkers,
+				QueueSize:         settings.NATS.DispatcherQueueSize,
+				MaxFailureCount:   maxFailureCount,
+				RetryAttempts:     settings.NATS.DispatcherRetryAttempts,
+				RetryInitialDelay: settings.NATS.DispatcherRetryInitialDelay,
+				PerHostRPS:        settings.NATS.DispatcherPerHostRPS,
+				PerHostBurst:      settings.NATS.DispatcherPerHostBurst,
 			}, webhookSender, stateStore, auditQ, repo, logger)
 			natsListener = buildListenerWithState(settings, tokenExchangeCache, repo, webhookCache, stateStore).
 				WithAuditor(natsClient).
@@ -285,6 +303,7 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 	devJWTAuth.Get("/v1/webhooks/:webhookId", vehicleSubscriptionController.ListVehiclesForWebhook)
 	devJWTAuth.Put("/v1/webhooks/:webhookId", webhookController.UpdateWebhook)
 	devJWTAuth.Delete("/v1/webhooks/:webhookId", webhookController.DeleteWebhook)
+	devJWTAuth.Post("/v1/webhooks/:webhookId/rotate-secret", webhookController.RotateSigningSecret)
 
 	// Vehicle subscriptions
 	devJWTAuth.Post("/v1/webhooks/:webhookId/subscribe/list", vehicleSubscriptionController.SubscribeVehiclesFromList)
@@ -317,8 +336,13 @@ func startWebhookCache(ctx context.Context, settings *config.Settings, tokenExch
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			webhookCache.ScheduleRefresh(ctx)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				webhookCache.ScheduleRefresh(ctx)
+			}
 		}
 	}()
 

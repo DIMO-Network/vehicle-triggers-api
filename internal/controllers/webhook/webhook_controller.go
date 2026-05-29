@@ -22,6 +22,7 @@ type Repository interface {
 	GetTriggerByIDAndDeveloperLicense(ctx context.Context, triggerID string, developerLicense common.Address) (*models.Trigger, error)
 	UpdateTrigger(ctx context.Context, trigger *models.Trigger) error
 	DeleteTrigger(ctx context.Context, triggerID string, developerLicense common.Address) error
+	RotateSigningSecret(ctx context.Context, triggerID string, developerLicense common.Address) (string, error)
 
 	// subscriptions
 	CreateVehicleSubscription(ctx context.Context, assetDID cloudevent.ERC721DID, triggerID string) (*models.VehicleSubscription, error)
@@ -301,6 +302,43 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	})
 
 	return c.Status(fiber.StatusOK).JSON(UpdateWebhookResponse{ID: event.ID, Message: "Webhook updated successfully"})
+}
+
+// RotateSigningSecret godoc
+// @Summary      Rotate a webhook signing secret
+// @Description  Generates and persists a new HMAC-SHA256 signing secret for
+// @Description  the webhook. The new secret is returned exactly once - store
+// @Description  it on the receiver side before the response leaves the wire.
+// @Tags         Webhooks
+// @Produce      json
+// @Param        webhookId  path  string  true  "Webhook ID"
+// @Success      200  {object}  RotateSigningSecretResponse  "New signing secret"
+// @Failure      404  "Webhook not found"
+// @Failure      500  "Internal server error"
+// @Security     BearerAuth
+// @Router       /v1/webhooks/{webhookId}/rotate-secret [post]
+func (w *WebhookController) RotateSigningSecret(c *fiber.Ctx) error {
+	webhookID, err := getWebhookID(c)
+	if err != nil {
+		return err
+	}
+	devLicense, err := getDevLicense(c)
+	if err != nil {
+		return err
+	}
+	secret, err := w.repo.RotateSigningSecret(c.Context(), webhookID, devLicense)
+	if err != nil {
+		return err
+	}
+	w.publishAudit(c.Context(), configaudit.OpWebhookUpdate, webhookID, devLicense.Hex(), map[string]any{
+		"secretRotated": true,
+	})
+	return c.Status(fiber.StatusOK).JSON(RotateSigningSecretResponse{
+		ID:                 webhookID,
+		Message:            "Signing secret rotated",
+		SigningSecret:      secret,
+		SignatureAlgorithm: "HMAC-SHA256(timestamp + \".\" + body)",
+	})
 }
 
 // DeleteWebhook godoc

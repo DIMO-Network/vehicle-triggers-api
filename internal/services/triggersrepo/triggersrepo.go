@@ -3,6 +3,8 @@ package triggersrepo
 import (
 	"crypto/rand"
 	"encoding/hex"
+
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/secrets"
 	"context"
 	"database/sql"
 	"errors"
@@ -52,11 +54,12 @@ func IsEventService(service string) bool {
 }
 
 type Repository struct {
-	db *sql.DB
+	db     *sql.DB
+	cipher secrets.Cipher
 }
 
 func NewRepository(db *sql.DB) *Repository {
-	return &Repository{db: db}
+	return &Repository{db: db, cipher: secrets.Plaintext{}}
 }
 
 // CreateTriggerRequest represents the data needed to create a new trigger.
@@ -98,6 +101,36 @@ func (req CreateTriggerRequest) Validate() error {
 	return nil
 }
 
+// SetCipher wires the at-rest encryption cipher used for per-trigger
+// signing secrets. Defaults to Plaintext (no encryption) so existing
+// deployments behave unchanged until they configure SIGNING_SECRET_KEY_HEX.
+func (r *Repository) SetCipher(c secrets.Cipher) {
+	if c == nil {
+		c = secrets.Plaintext{}
+	}
+	r.cipher = c
+}
+
+// EncryptSigningSecret applies the wired cipher to a freshly generated
+// secret before it lands in the trigger row. Exposed as a helper for CreateTrigger
+// and RotateSigningSecret.
+func (r *Repository) encryptSecret(plaintext string) (string, error) {
+	if r.cipher == nil {
+		return plaintext, nil
+	}
+	return r.cipher.Encrypt(plaintext)
+}
+
+// DecryptSigningSecret is the reverse for read paths (audit, send). When no
+// cipher is wired or the stored value looks like legacy plaintext, returns
+// the input unchanged.
+func (r *Repository) DecryptSigningSecret(stored string) (string, error) {
+	if r.cipher == nil {
+		return stored, nil
+	}
+	return r.cipher.Decrypt(stored)
+}
+
 // randomHex returns 2*n hex characters of cryptographic randomness, used for
 // per-trigger HMAC signing secrets. Failure here is fatal for the create
 // path - we never want to fall back to a weak secret.
@@ -126,14 +159,21 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 	currTime := time.Now().UTC()
 
 	// Per-trigger HMAC signing secret. 32 bytes (256 bits) is enough margin
-	// for collision-resistant HMAC-SHA256. The secret never appears in any
-	// later API response; receivers store it on registration. Rotation =
-	// delete + recreate (intentionally heavy-handed; cheap secrets get
-	// rotated less often).
-	secret, err := randomHex(32)
+	// for collision-resistant HMAC-SHA256. The plaintext value is returned
+	// in the registration response exactly once; the column stores the
+	// cipher-encrypted form so a DB compromise doesn't leak signing keys.
+	plaintextSecret, err := randomHex(32)
 	if err != nil {
 		return nil, richerrors.Error{
 			ExternalMsg: "Failed to generate signing secret",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	storedSecret, err := r.encryptSecret(plaintextSecret)
+	if err != nil {
+		return nil, richerrors.Error{
+			ExternalMsg: "Failed to encrypt signing secret",
 			Err:         err,
 			Code:        http.StatusInternalServerError,
 		}
@@ -150,7 +190,7 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 		CooldownPeriod:          req.CooldownPeriod,
 		DeveloperLicenseAddress: req.DeveloperLicenseAddress.Bytes(),
 		Status:                  req.Status,
-		SigningSecret:           null.StringFrom(secret),
+		SigningSecret:           null.StringFrom(storedSecret),
 		CreatedAt:               currTime,
 		UpdatedAt:               currTime,
 	}
@@ -289,6 +329,40 @@ func (r *Repository) getTriggerByIDAndDeveloperLicense(tx *sql.Tx, ctx context.C
 	}
 
 	return trigger, nil
+}
+
+// RotateSigningSecret generates a fresh per-trigger HMAC signing secret,
+// writes it under the developer's ownership check, and returns the new
+// value. Returns the secret only via the function result - it must be
+// surfaced to the API caller exactly once. Subsequent reads via GetTrigger*
+// expose only the stored value, which is the same secret until the next
+// rotation.
+func (r *Repository) RotateSigningSecret(ctx context.Context, triggerID string, devLicense common.Address) (string, error) {
+	trigger, err := r.GetTriggerByIDAndDeveloperLicense(ctx, triggerID, devLicense)
+	if err != nil {
+		return "", err
+	}
+	secret, err := randomHex(32)
+	if err != nil {
+		return "", richerrors.Error{
+			ExternalMsg: "Failed to generate signing secret",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	stored, err := r.encryptSecret(secret)
+	if err != nil {
+		return "", richerrors.Error{
+			ExternalMsg: "Failed to encrypt signing secret",
+			Err:         err,
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	trigger.SigningSecret = null.StringFrom(stored)
+	if err := r.UpdateTrigger(ctx, trigger); err != nil {
+		return "", err
+	}
+	return secret, nil
 }
 
 func (r *Repository) UpdateTrigger(ctx context.Context, trigger *models.Trigger) error {

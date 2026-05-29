@@ -141,3 +141,50 @@ func TestDispatcherDeliveryError(t *testing.T) {
 	require.NoError(t, d.Enqueue(t.Context(), sampleJob())) // sync mode swallows the error (metric only)
 	require.EqualValues(t, 1, sender.calls.Load())
 }
+
+// flakyThenOKSender fails the first N times then succeeds. Used to exercise
+// the in-worker retry loop.
+type flakyThenOKSender struct {
+	failuresLeft int32
+	calls        atomic.Uint64
+}
+
+func (s *flakyThenOKSender) SendWebhook(_ context.Context, _ *models.Trigger, _ *cloudevent.CloudEvent[webhook.WebhookPayload]) error {
+	s.calls.Add(1)
+	if atomic.AddInt32(&s.failuresLeft, -1) >= 0 {
+		return errors.New("transient")
+	}
+	return nil
+}
+
+func TestDispatcherInWorkerRetry(t *testing.T) {
+	t.Parallel()
+	// Two transient failures then success - covered by RetryAttempts=2.
+	sender := &flakyThenOKSender{failuresLeft: 2}
+	d := New(Config{
+		Workers:           0,
+		QueueSize:         1,
+		MaxFailureCount:   5,
+		RetryAttempts:     2,
+		RetryInitialDelay: time.Millisecond, // keep test fast
+	}, sender, nil, nil, nil, zerolog.Nop())
+
+	require.NoError(t, d.Enqueue(t.Context(), sampleJob()))
+	require.EqualValues(t, 3, sender.calls.Load(), "first attempt + 2 retries")
+}
+
+func TestDispatcherRetryExhausted(t *testing.T) {
+	t.Parallel()
+	// Three transient failures with RetryAttempts=2 means we still error.
+	sender := &flakyThenOKSender{failuresLeft: 3}
+	d := New(Config{
+		Workers:           0,
+		QueueSize:         1,
+		MaxFailureCount:   5,
+		RetryAttempts:     2,
+		RetryInitialDelay: time.Millisecond,
+	}, sender, nil, nil, nil, zerolog.Nop())
+
+	require.NoError(t, d.Enqueue(t.Context(), sampleJob()))
+	require.EqualValues(t, 3, sender.calls.Load(), "exhausted at 1+2 attempts")
+}

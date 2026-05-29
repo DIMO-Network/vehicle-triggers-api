@@ -19,6 +19,7 @@ import (
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	vtnats "github.com/DIMO-Network/vehicle-triggers-api/internal/nats"
 )
 
 // signatureHeaders sign the request body using the trigger's signing_secret.
@@ -115,6 +116,9 @@ func (w *WebhookSender) SendWebhook(ctx context.Context, t *models.Trigger, payl
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "DIMO-Webhook/1.0")
+	if trace := vtnats.TraceFromContext(ctx); trace != "" {
+		req.Header.Set("X-DIMO-Trace-ID", trace)
+	}
 	if t.SigningSecret.Valid && t.SigningSecret.String != "" {
 		ts, sig := signatureHeaders(t.SigningSecret.String, body)
 		req.Header.Set("X-DIMO-Timestamp", ts)

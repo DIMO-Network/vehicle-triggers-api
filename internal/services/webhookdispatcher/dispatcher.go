@@ -93,16 +93,33 @@ type Config struct {
 	JobTimeout time.Duration
 	// AuditTimeout caps the detached audit publish. Default 5s.
 	AuditTimeout time.Duration
+	// RetryAttempts is the number of in-worker retries on a webhook
+	// delivery failure (in addition to the first attempt). Default 2 (so
+	// up to 3 total attempts per job). Each retry uses exponential backoff
+	// starting at RetryInitialDelay. The retry loop avoids the much heavier
+	// JetStream redelivery path which re-runs CEL eval + perms + state KV.
+	RetryAttempts int
+	// RetryInitialDelay is the backoff before the first retry. Default
+	// 100ms. Each subsequent retry multiplies by 5: 100ms, 500ms, 2.5s.
+	RetryInitialDelay time.Duration
+	// PerHostRPS is the per-pod per-receiver send rate ceiling. Multiple
+	// triggers on the same destination share the budget naturally. 0
+	// disables limiting (default). Set per receiver-tolerance, e.g. 50.
+	PerHostRPS float64
+	// PerHostBurst is the immediate token allowance per host. Defaults to
+	// PerHostRPS so a short spike doesn't queue.
+	PerHostBurst int
 }
 
 // Dispatcher owns the worker pool and the job channel.
 type Dispatcher struct {
-	cfg    Config
-	sender Sender
-	state  StateRecorder
-	audit  AuditPublisher
-	repo   FailureRepo
-	log    zerolog.Logger
+	cfg     Config
+	sender  Sender
+	state   StateRecorder
+	audit   AuditPublisher
+	repo    FailureRepo
+	limiter *hostLimiter
+	log     zerolog.Logger
 
 	queue chan Job
 	wg    sync.WaitGroup
@@ -125,15 +142,25 @@ func New(cfg Config, sender Sender, state StateRecorder, audit AuditPublisher, r
 	if cfg.MaxFailureCount < 1 {
 		cfg.MaxFailureCount = 1
 	}
+	if cfg.RetryAttempts < 0 {
+		cfg.RetryAttempts = 0
+	}
+	if cfg.RetryInitialDelay <= 0 {
+		cfg.RetryInitialDelay = 100 * time.Millisecond
+	}
+	if cfg.PerHostBurst < 1 {
+		cfg.PerHostBurst = int(cfg.PerHostRPS)
+	}
 	return &Dispatcher{
-		cfg:    cfg,
-		sender: sender,
-		state:  state,
-		audit:  audit,
-		repo:   repo,
-		log:    log,
-		queue:  make(chan Job, cfg.QueueSize),
-		stop:   make(chan struct{}),
+		cfg:     cfg,
+		sender:  sender,
+		state:   state,
+		audit:   audit,
+		repo:    repo,
+		limiter: newHostLimiter(cfg.PerHostRPS, cfg.PerHostBurst),
+		log:     log,
+		queue:   make(chan Job, cfg.QueueSize),
+		stop:    make(chan struct{}),
 	}
 }
 
@@ -192,22 +219,50 @@ func (d *Dispatcher) worker(ctx context.Context, id int) {
 
 // process runs the full delivery + bookkeeping for a single job. Used by
 // both the worker pool and the inline mode.
+//
+// Includes in-worker retry with exponential backoff so a transient receiver
+// hiccup doesn't bounce us back to JetStream redelivery (which would re-run
+// CEL eval, permission checks, KV lookups - all wasted work for what's
+// already a known-good fire). After RetryAttempts retries we surface the
+// last error to the caller which propagates back to PullLoop.
 func (d *Dispatcher) process(parent context.Context, j Job) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(detach(parent), d.cfg.JobTimeout)
 	defer cancel()
 
-	err := d.sender.SendWebhook(ctx, j.Trigger, j.Payload)
-	if err != nil {
-		d.onFailure(ctx, j, err)
-		deliveryTotal.WithLabelValues("error").Inc()
-		deliveryLatency.WithLabelValues("error").Observe(time.Since(start).Seconds())
-		return
+	delay := d.cfg.RetryInitialDelay
+	var lastErr error
+retryLoop:
+	for attempt := 0; attempt <= d.cfg.RetryAttempts; attempt++ {
+		if attempt > 0 {
+			retryTotal.Inc()
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				lastErr = ctx.Err()
+				break retryLoop
+			}
+			delay *= 5
+		}
+		// Per-host rate limit: blocks until the receiver's token bucket
+		// allows another send. Critically, this happens INSIDE the worker
+		// goroutine so other workers serving other receivers don't wait.
+		if err := d.limiter.Wait(ctx, j.Trigger.TargetURI); err != nil {
+			lastErr = err
+			break
+		}
+		err := d.sender.SendWebhook(ctx, j.Trigger, j.Payload)
+		if err == nil {
+			d.onSuccess(ctx, j)
+			deliveryTotal.WithLabelValues("ok").Inc()
+			deliveryLatency.WithLabelValues("ok").Observe(time.Since(start).Seconds())
+			return
+		}
+		lastErr = err
 	}
-
-	d.onSuccess(ctx, j)
-	deliveryTotal.WithLabelValues("ok").Inc()
-	deliveryLatency.WithLabelValues("ok").Observe(time.Since(start).Seconds())
+	d.onFailure(ctx, j, lastErr)
+	deliveryTotal.WithLabelValues("error").Inc()
+	deliveryLatency.WithLabelValues("error").Observe(time.Since(start).Seconds())
 }
 
 func (d *Dispatcher) onSuccess(ctx context.Context, j Job) {

@@ -33,6 +33,7 @@ type Webhook struct {
 type Repository interface {
 	InternalGetAllVehicleSubscriptions(ctx context.Context) ([]*models.VehicleSubscription, error)
 	InternalGetTriggerByID(ctx context.Context, triggerID string) (*models.Trigger, error)
+	DecryptSigningSecret(stored string) (string, error)
 }
 
 // Notifier broadcasts a "config changed" event over NATS so other replicas
@@ -316,6 +317,18 @@ func (wc *WebhookCache) compileTriggersParallel(ctx context.Context, triggerIDs 
 				if err != nil {
 					logger.Error().Err(err).Str("trigger_id", id).Msg("failed to get trigger by id for webhook cache")
 					continue
+				}
+				// Decrypt the signing secret here so downstream code paths
+				// (sender HMAC, audit) see plaintext. Failure to decrypt is
+				// not fatal - the trigger still functions for non-signing
+				// concerns; the sender just won't add a signature header.
+				if trigger.SigningSecret.Valid {
+					if pt, err := wc.repo.DecryptSigningSecret(trigger.SigningSecret.String); err == nil {
+						trigger.SigningSecret.String = pt
+					} else {
+						logger.Warn().Err(err).Str("trigger_id", id).Msg("failed to decrypt signing secret; webhook will be sent unsigned")
+						trigger.SigningSecret.Valid = false
+					}
 				}
 				valueType := ""
 				if triggersrepo.IsSignalService(trigger.Service) {

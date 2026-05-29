@@ -57,6 +57,13 @@ type config struct {
 	ConsumerN  string
 
 	NoConsume bool
+
+	// KVMode replaces the stream publish + consume loop with a pure KV
+	// write loop against a temporary bucket. Used to measure the trigger_
+	// state bucket's write ceiling, which dominates the hot-path cost at
+	// scale (one Put per fire per trigger).
+	KVMode   bool
+	KVBucket string
 }
 
 func parseConfig() (*config, error) {
@@ -76,6 +83,8 @@ func parseConfig() (*config, error) {
 	flag.StringVar(&cfg.Subject, "subject", "bench.signals.>", "Stream subject")
 	flag.StringVar(&cfg.ConsumerN, "consumer-name", "bench-cons", "Durable consumer name (random suffix appended)")
 	flag.BoolVar(&cfg.NoConsume, "no-consume", false, "Skip the consumer side (publish-only benchmark)")
+	flag.BoolVar(&cfg.KVMode, "kv-writes", false, "Bench KV writes instead of stream publish/consume (measures trigger_state ceiling)")
+	flag.StringVar(&cfg.KVBucket, "kv-bucket", "BENCH_KV", "KV bucket name when -kv-writes is set")
 	flag.Parse()
 	cfg.Signals = splitCSV(sigList)
 	if len(cfg.Signals) == 0 {
@@ -120,6 +129,11 @@ func run(cfg *config) error {
 	if cfg.CredsFile != "" {
 		opts = append(opts, nc.UserCredentials(cfg.CredsFile))
 	}
+
+	if cfg.KVMode {
+		return runKV(ctx, cfg, opts)
+	}
+
 	conn, err := nc.Connect(cfg.URL, opts...)
 	if err != nil {
 		return fmt.Errorf("nats connect: %w", err)
@@ -497,3 +511,105 @@ func (s *samples) snapshot() []time.Duration {
 // callers want exact production parity in -subject flags they construct
 // from outside this tool).
 var _ = vtnats.SignalSubject
+
+// runKV measures the KV-write ceiling. Each "publish" is a Put into the
+// configured bucket, mirroring what triggerstate.RecordFire does on every
+// fire. We don't model the read side - the production path reads + writes,
+// and the bench focuses on the write half since that's the bottleneck
+// observed in real load.
+func runKV(ctx context.Context, cfg *config, opts []nc.Option) error {
+	conn, err := nc.Connect(cfg.URL, opts...)
+	if err != nil {
+		return fmt.Errorf("nats connect: %w", err)
+	}
+	defer conn.Drain() //nolint:errcheck
+	js, err := jetstream.New(conn, jetstream.WithPublishAsyncMaxPending(50_000))
+	if err != nil {
+		return fmt.Errorf("jetstream: %w", err)
+	}
+
+	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+		Bucket:   cfg.KVBucket,
+		History:  1,
+		Replicas: cfg.Replicas,
+		TTL:      10 * time.Minute,
+	})
+	if err != nil {
+		return fmt.Errorf("kv setup: %w", err)
+	}
+	defer js.DeleteKeyValue(context.Background(), cfg.KVBucket) //nolint:errcheck
+
+	samples := newSamples(int(cfg.Rate*cfg.Duration.Seconds()) + 1024)
+	var ok, errs uint64
+
+	pubCtx, cancelPub := context.WithTimeout(ctx, cfg.Duration)
+	defer cancelPub()
+
+	progress := make(chan struct{})
+	go func() {
+		t := time.NewTicker(2 * time.Second)
+		defer t.Stop()
+		var last uint64
+		for {
+			select {
+			case <-pubCtx.Done():
+				close(progress)
+				return
+			case <-t.C:
+				cur := atomic.LoadUint64(&ok)
+				fmt.Printf("[kv-bench] ok=%d (+%d) errs=%d\n", cur, cur-last, atomic.LoadUint64(&errs))
+				last = cur
+			}
+		}
+	}()
+	var wg sync.WaitGroup
+	pubCount := cfg.Publishers
+	if pubCount < 1 {
+		pubCount = 1
+	}
+	perPub := cfg.Rate / float64(pubCount)
+	start := time.Now()
+	for i := 0; i < pubCount; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			interval := time.Duration(float64(time.Second) / perPub)
+			t := time.NewTicker(interval)
+			defer t.Stop()
+			payload := []byte(`{"lastFiredAt":"2026-01-01T00:00:00Z","triggerId":"x","assetDid":"y"}`)
+			seq := 0
+			for {
+				select {
+				case <-pubCtx.Done():
+					return
+				case <-t.C:
+					seq++
+					key := fmt.Sprintf("p%d.k%d", id, seq)
+					t0 := time.Now()
+					_, err := kv.Put(pubCtx, key, payload)
+					lat := time.Since(t0)
+					if err != nil {
+						atomic.AddUint64(&errs, 1)
+						continue
+					}
+					atomic.AddUint64(&ok, 1)
+					samples.add(lat)
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+	elapsed := time.Since(start)
+	cancelPub() // signals progress to exit if it's still ticking
+	_ = progress
+
+	fmt.Println()
+	fmt.Println("=== triggers-bench KV results ===")
+	fmt.Printf("target rate           : %.0f put/s for %s (publishers=%d, replicas=%d)\n", cfg.Rate, cfg.Duration, cfg.Publishers, cfg.Replicas)
+	fmt.Printf("elapsed               : %s\n", elapsed)
+	fmt.Printf("ok / errs             : %d / %d\n", atomic.LoadUint64(&ok), atomic.LoadUint64(&errs))
+	fmt.Printf("throughput            : %.1f put/s\n", float64(atomic.LoadUint64(&ok))/elapsed.Seconds())
+	fmt.Println("\nKV put latency:")
+	printLatency(samples)
+	return nil
+}

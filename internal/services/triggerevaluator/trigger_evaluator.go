@@ -15,6 +15,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/cel-go/cel"
+	"github.com/rs/zerolog"
 )
 
 // SignalEvaluationData is a struct that contains the data needed to evaluate a signal trigger.
@@ -229,7 +230,9 @@ func (t *TriggerEvaluator) lookupPreviousSignal(ctx context.Context, vehicleDID 
 	}
 	var sig vss.Signal
 	if err := json.Unmarshal(rec.LastSnapshot, &sig); err != nil {
-		triggerstate.MetricsDecodeError("signal_history")
+		if preview := triggerstate.MetricsDecodeErrorWithSample("signal_history", rec.LastSnapshot, 100); preview != "" {
+			zerolog.Ctx(ctx).Warn().Err(err).Str("bucket", "signal_history").Str("preview", preview).Msg("kv decode error sample")
+		}
 		return vss.Signal{}
 	}
 	return sig
@@ -249,7 +252,9 @@ func (t *TriggerEvaluator) lookupPreviousEvent(ctx context.Context, triggerID st
 	var ev vss.Event
 	if len(rec.LastSnapshot) > 0 {
 		if err := json.Unmarshal(rec.LastSnapshot, &ev); err != nil {
-			triggerstate.MetricsDecodeError("trigger_state")
+			if preview := triggerstate.MetricsDecodeErrorWithSample("trigger_state", rec.LastSnapshot, 100); preview != "" {
+				zerolog.Ctx(ctx).Warn().Err(err).Str("bucket", "trigger_state").Str("preview", preview).Msg("kv decode error sample")
+			}
 		}
 	}
 	return rec.LastFiredAt, ev

@@ -119,12 +119,14 @@ func (q *Queue) drain(ctx context.Context, id int) {
 			}
 			queueDepth.Set(float64(len(q.ch)))
 			pubCtx, cancel := context.WithTimeout(context.Background(), q.cfg.PublishTimeout)
+			started := time.Now()
 			if err := q.publisher.PublishTriggerFired(pubCtx, e.DevLicense, e.Record); err != nil {
 				errorTotal.Inc()
 				log.Warn().Err(err).Str("devLicense", e.DevLicense).Msg("audit publish failed")
 			} else {
 				publishedTotal.Inc()
 			}
+			publishBlocked.Observe(time.Since(started).Seconds())
 			cancel()
 			_ = ctx // ctx parameter kept for symmetry with other Run signatures
 		}

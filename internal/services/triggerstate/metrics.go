@@ -1,6 +1,8 @@
 package triggerstate
 
 import (
+	"sync/atomic"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -10,6 +12,12 @@ import (
 // at-least-once delivery contract is actually producing duplicate fires in
 // production. Decode-error counters surface silent data corruption that
 // would otherwise just degrade the previousValue lookup to a zero default.
+// sampledErrors is a parallel atomic counter to the prom decodeErrors metric.
+// Prom counters don't expose their value publicly; we keep our own so the
+// "sample every Nth" decision in MetricsDecodeErrorWithSample is cheap and
+// deterministic without scraping our own metrics.
+var sampledErrors atomic.Uint64
+
 var (
 	casConflicts = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vehicle_triggers",
@@ -38,4 +46,28 @@ func metricsCASConflict(bucket, outcome string) {
 // Exported so the evaluator can call it from its read path.
 func MetricsDecodeError(bucket string) {
 	decodeErrors.WithLabelValues(bucket).Inc()
+}
+
+// MetricsDecodeErrorWithSample bumps the counter and, every sampleEvery
+// errors, returns a non-empty preview of the bad payload (truncated). The
+// caller is responsible for logging that preview - we return rather than
+// log here so we don't take a dependency on a logger. Returns "" when we
+// shouldn't sample this occurrence.
+//
+// The intent is to surface enough of a real malformed payload that ops can
+// reproduce locally without flooding logs at high error rates.
+func MetricsDecodeErrorWithSample(bucket string, payload []byte, sampleEvery int) string {
+	MetricsDecodeError(bucket)
+	if sampleEvery < 1 {
+		sampleEvery = 100
+	}
+	n := sampledErrors.Add(1)
+	if int(n%uint64(sampleEvery)) != 0 {
+		return ""
+	}
+	const max = 200
+	if len(payload) > max {
+		return string(payload[:max]) + "...(truncated)"
+	}
+	return string(payload)
 }

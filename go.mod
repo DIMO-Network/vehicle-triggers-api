@@ -38,6 +38,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/sync v0.20.0
+	golang.org/x/time v0.11.0
 	google.golang.org/grpc v1.79.1
 )
 

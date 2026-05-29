@@ -165,3 +165,7 @@ serviceMonitor:
   path: /metrics
   port: mon-http
   interval: 30s
+  # PrometheusRule wiring for the SLOs documented in OPERATIONS.md.
+  # Disabled by default so envs without prometheus-operator don't fail
+  # on the missing CRD; flip to true when the operator is installed.
+  alertsEnabled: false

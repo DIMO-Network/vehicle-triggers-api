@@ -37,4 +37,12 @@ var (
 		Name:      "publish_errors_total",
 		Help:      "Number of audit publish attempts that returned an error from PublishTriggerFired.",
 	})
+
+	publishBlocked = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "vehicle_triggers",
+		Subsystem: "audit",
+		Name:      "publish_blocked_seconds",
+		Help:      "Time the audit publisher's call to PublishTriggerFired spent blocked. High values mean JetStream-side back-pressure is now upstream of our queue (max_pending exhausted).",
+		Buckets:   []float64{0.001, 0.005, 0.01, 0.025, 0.1, 0.5, 1, 5},
+	})
 )

@@ -32,6 +32,16 @@ type RegisterWebhookRequest struct {
 	VerificationToken string `json:"verificationToken" validate:"required" example:"1234567890"`
 }
 
+// RotateSigningSecretResponse is returned after a webhook signing secret is
+// rotated. The new secret is surfaced exactly once; subsequent reads only
+// see the old delivery behavior with the new secret applied.
+type RotateSigningSecretResponse struct {
+	ID                 string `json:"id"`
+	Message            string `json:"message"`
+	SigningSecret      string `json:"signingSecret"`
+	SignatureAlgorithm string `json:"signatureAlgorithm"`
+}
+
 // RegisterWebhookResponse is returned after a webhook is successfully created.
 type RegisterWebhookResponse struct {
 	// ID is the unique identifier of the created webhook.

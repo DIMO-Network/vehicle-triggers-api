@@ -47,6 +47,13 @@ type Settings struct {
 	// 2x this value (see Settings.Validate).
 	MaxAllowedCooldownPeriod int `env:"MAX_ALLOWED_COOLDOWN_PERIOD" envDefault:"2592000"`
 
+	// SigningSecretKeyHex is a 64-char hex (32-byte) key used to AES-256-GCM
+	// encrypt per-trigger HMAC signing secrets at rest in Postgres. Empty
+	// disables encryption (legacy plaintext storage). Rows written before
+	// the key is enabled remain readable - the cipher falls back to
+	// plaintext when the stored value doesn't look encrypted.
+	SigningSecretKeyHex string `env:"SIGNING_SECRET_KEY_HEX"`
+
 	NATS NATSSettings `envPrefix:"NATS_"`
 
 	DB db.Settings `envPrefix:"DB_"`
@@ -91,9 +98,18 @@ type NATSSettings struct {
 	StreamReplicas         int           `env:"STREAM_REPLICAS" envDefault:"1"`
 	SignalsMaxAge          time.Duration `env:"SIGNALS_MAX_AGE" envDefault:"24h"`
 	EventsMaxAge           time.Duration `env:"EVENTS_MAX_AGE" envDefault:"24h"`
-	AuditMaxAge            time.Duration `env:"AUDIT_MAX_AGE" envDefault:"2160h"`       // 90d
-	DLQMaxAge              time.Duration `env:"DLQ_MAX_AGE" envDefault:"168h"`          // 7d
+	AuditMaxAge            time.Duration `env:"AUDIT_MAX_AGE" envDefault:"2160h"`        // 90d
+	DLQMaxAge              time.Duration `env:"DLQ_MAX_AGE" envDefault:"168h"`           // 7d
 	ConfigAuditMaxAge      time.Duration `env:"CONFIG_AUDIT_MAX_AGE" envDefault:"2160h"` // 90d
+	// Per-stream hard storage caps. 0 = unlimited (rely on MaxAge). Pair
+	// with Discard:DiscardOld so the oldest data is evicted when the cap
+	// is hit. Defaults sized for the prod load envelope; raise per
+	// SCALING.md sizing math if disk usage tells you to.
+	SignalsMaxBytes     int64 `env:"SIGNALS_MAX_BYTES" envDefault:"107374182400"`     // 100 GiB
+	EventsMaxBytes      int64 `env:"EVENTS_MAX_BYTES" envDefault:"10737418240"`       // 10 GiB
+	AuditMaxBytes       int64 `env:"AUDIT_MAX_BYTES" envDefault:"107374182400"`       // 100 GiB
+	DLQMaxBytes         int64 `env:"DLQ_MAX_BYTES" envDefault:"10737418240"`          // 10 GiB
+	ConfigAuditMaxBytes int64 `env:"CONFIG_AUDIT_MAX_BYTES" envDefault:"1073741824"` // 1 GiB
 	FetchBatch             int           `env:"FETCH_BATCH" envDefault:"100"`
 	AckWait                time.Duration `env:"ACK_WAIT" envDefault:"45s"`
 	MaxDeliver             int           `env:"MAX_DELIVER" envDefault:"5"`
@@ -105,8 +121,12 @@ type NATSSettings struct {
 	// Workers=0 keeps the legacy synchronous behavior; >0 spins up a worker
 	// pool that owns delivery + state + audit + failure-count bookkeeping
 	// so a slow receiver can't throttle the consumer.
-	DispatcherWorkers   int `env:"DISPATCHER_WORKERS" envDefault:"32"`
-	DispatcherQueueSize int `env:"DISPATCHER_QUEUE_SIZE" envDefault:"4096"`
+	DispatcherWorkers           int           `env:"DISPATCHER_WORKERS" envDefault:"32"`
+	DispatcherQueueSize         int           `env:"DISPATCHER_QUEUE_SIZE" envDefault:"4096"`
+	DispatcherRetryAttempts     int           `env:"DISPATCHER_RETRY_ATTEMPTS" envDefault:"2"`
+	DispatcherRetryInitialDelay time.Duration `env:"DISPATCHER_RETRY_INITIAL_DELAY" envDefault:"100ms"`
+	DispatcherPerHostRPS        float64       `env:"DISPATCHER_PER_HOST_RPS" envDefault:"0"`
+	DispatcherPerHostBurst      int           `env:"DISPATCHER_PER_HOST_BURST" envDefault:"0"`
 
 	// Audit queue is fronted by a fire-and-forget pool so the dispatcher's
 	// success path never spawns one goroutine per fire (was a goroutine

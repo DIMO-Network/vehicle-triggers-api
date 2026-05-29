@@ -38,4 +38,11 @@ var (
 		Help:      "Wall clock from dispatcher job start to receiver response.",
 		Buckets:   []float64{0.005, 0.025, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
 	}, []string{"outcome"})
+
+	retryTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "vehicle_triggers",
+		Subsystem: "dispatcher",
+		Name:      "retry_total",
+		Help:      "Number of in-worker retry attempts (does not count the first attempt). High rates indicate flaky receivers.",
+	})
 )

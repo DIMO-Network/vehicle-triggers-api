@@ -3,11 +3,33 @@ package nats
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"golang.org/x/sync/semaphore"
 )
+
+// traceCtxKey carries a per-message trace identifier through the handler
+// pipeline so downstream components (listener, dispatcher, sender) can stamp
+// it on logs and outbound webhook headers. The format is "<stream>:<seq>";
+// the JetStream message sequence is the natural span id - stable across
+// redelivery on the same stream, distinct across streams, and lets ops
+// grep one fire end-to-end.
+type traceCtxKey struct{}
+
+// WithTrace attaches the supplied trace id to ctx.
+func WithTrace(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, traceCtxKey{}, id)
+}
+
+// TraceFromContext returns the trace id attached to ctx, or "" if none.
+func TraceFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(traceCtxKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
 
 // PayloadHandler processes the raw JetStream message body. Returning nil acks
 // the message; a non-nil error nak's it so JetStream redelivers per the
@@ -88,13 +110,17 @@ func (c *Client) PullLoop(ctx context.Context, cons jetstream.Consumer, maxInFli
 			stream := ""
 			var numDelivered uint64
 			var arrived time.Time
+			var seq uint64
 			if meta != nil {
 				stream = meta.Stream
 				numDelivered = meta.NumDelivered
 				arrived = meta.Timestamp
+				seq = meta.Sequence.Stream
 			}
+			traceID := fmt.Sprintf("%s:%d", stream, seq)
+			handlerCtx := WithTrace(ctx, traceID)
 			payload := m.Data()
-			if err := handler(ctx, payload); err != nil {
+			if err := handler(handlerCtx, payload); err != nil {
 				// Backpressure: handler refused work because a downstream
 				// queue was full. Nak with a long delay so we don't burn
 				// through MaxDeliver while the queue drains. We still count

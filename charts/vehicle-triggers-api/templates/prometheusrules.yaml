@@ -1,0 +1,62 @@
+{{- if .Values.serviceMonitor.alertsEnabled }}
+# PrometheusRule covering the operational SLOs documented in OPERATIONS.md.
+# Enable with .Values.serviceMonitor.alertsEnabled = true. Routes are not
+# specified here - Alertmanager owns the destination map per env.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "vehicle-triggers-api.fullname" . }}-rules
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vehicle-triggers-api.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: vehicle-triggers-api
+      rules:
+        # R from PROD_HARDENING_V2: any audit drop is a billing miscount.
+        # Alert on any non-zero rate over a 5-minute window so we catch
+        # sustained underrun without firing on single-tick blips.
+        - alert: VehicleTriggersAuditDropped
+          expr: rate(vehicle_triggers_audit_dropped_total[5m]) > 0
+          for: 2m
+          labels:
+            severity: warning
+            service: vehicle-triggers-api
+          annotations:
+            summary: "Audit records dropping (billing miscount)"
+            description: "vehicle_triggers_audit_dropped_total has a non-zero rate; downstream billing aggregation will undercount. Raise NATS_AUDIT_QUEUE_SIZE or NATS_AUDIT_WORKERS."
+        # Dispatcher queue-full is backpressure made visible. Sustained
+        # rate means we should scale workers / pods or rate-limit the
+        # offending receiver.
+        - alert: VehicleTriggersDispatcherQueueFull
+          expr: rate(vehicle_triggers_dispatcher_queue_full_total[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+            service: vehicle-triggers-api
+          annotations:
+            summary: "Webhook dispatcher backpressure"
+            description: "Dispatcher Enqueue is rejecting jobs; messages are being naked and risk DLQing. Raise NATS_DISPATCHER_WORKERS / NATS_DISPATCHER_QUEUE_SIZE or scale out."
+        # DLQ accumulation = sustained poison or a chain of queue-full naks
+        # (mitigated by ErrBackpressure handling but still possible).
+        - alert: VehicleTriggersDLQAccumulating
+          expr: rate(vehicle_triggers_nats_consume_total{outcome="dlq"}[10m]) > 0
+          for: 10m
+          labels:
+            severity: warning
+            service: vehicle-triggers-api
+          annotations:
+            summary: "DLQ entries accumulating"
+            description: "Messages are landing in the DLQ stream. Inspect with `triggers-dlq list`; replay or purge as appropriate."
+        # /health failure means stream-level health check is failing -
+        # JetStream cluster degradation, not just connection liveness.
+        - alert: VehicleTriggersHealthCheckFailing
+          expr: probe_success{job=~".*vehicle-triggers-api.*"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            service: vehicle-triggers-api
+          annotations:
+            summary: "/health probe failing"
+            description: "vehicle-triggers-api /health is returning 503 sustained. Check NATS stream leaders via `nats stream report`."
+{{- end }}

@@ -8,6 +8,42 @@ evaluate against user webhooks.
 It applies when vehicle-triggers-api runs with `NATS_MODE=primary` (Kafka
 bridges into NATS) or `NATS_MODE=exclusive` (NATS only, no Kafka).
 
+---
+
+## ⚠️ Webhook receivers MUST dedup on `data.webhookId`
+
+This is the single most important thing to know if you build something that
+*receives* DIMO webhooks. The pipeline guarantees **at-least-once**
+delivery: the same logical fire can be delivered to your endpoint more than
+once due to JetStream redelivery, replica races during cluster events, or
+in-dispatcher retries on transient network failures.
+
+The CloudEvent ID (`data.webhookId` field, also surfaced as the CloudEvent
+`id` header) is **deterministic**: `sha256(triggerID || sourceID)[:16]`
+where `sourceID` is the inbound signal/event's CloudEvent ID. The same
+logical fire always produces the same `data.webhookId` regardless of how
+many times we deliver it.
+
+**Required receiver behavior:**
+
+```
+seen = persistent_set()                      // any KV / Redis / DB unique key
+on receive(webhook):
+  id = webhook.data.webhookId
+  if id in seen:
+    return 200                              // already processed; ack and move on
+  process(webhook)
+  seen.add(id, ttl=24h)                     // TTL > our redelivery window
+  return 200
+```
+
+`vehicle_triggers_state_cas_conflicts_total{outcome="fallback"}` ticking on
+our side is the public symptom that duplicates are reaching your endpoint.
+If your endpoint isn't dedup'ing on `webhookId`, your downstream side-effects
+WILL execute twice on any meaningful cluster event.
+
+---
+
 ## Streams
 
 The service provisions these on startup (idempotent `CreateOrUpdateStream`).

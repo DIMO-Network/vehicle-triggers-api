@@ -328,7 +328,15 @@ func (m *MetricListener) createWebhookPayload(trigger *models.Trigger, assetDid 
 	payload := &cloudevent.CloudEvent[webhook.WebhookPayload]{
 		CloudEventHeader: cloudevent.CloudEventHeader{
 			ID:              id,
-			Source:          "vehicle-triggers-api", //TODO(kevin): Should be 0x of the storageNode
+			// Source is hardcoded today. The right value is the 0x address
+			// of the DIMO storage node that emitted the signal/event we
+			// fired on - that's the only identity that lets receivers
+			// verify CloudEvent provenance. Blocked on storage-node
+			// identity being available to the evaluator at runtime; tracked
+			// in PROD_HARDENING_V2.md item P. Until that lands, "vehicle-
+			// triggers-api" stamps the dispatcher service identity, which
+			// is at least stable.
+			Source: "vehicle-triggers-api",
 			Subject:         assetDid.String(),
 			Time:            time.Now().UTC(),
 			DataContentType: "application/json",
