@@ -107,22 +107,15 @@ Categories:
 
 ### Scaling
 
-- [ ] **Stream sharding.** Today one `DIMO_SIGNALS` stream caps around ~50k/s in our bench (~20k/s with sync publish + replicas=3). Shard by signal-name prefix or hash:
-  - `DIMO_SIGNALS_0` (`dimo.signals.[a-h]*`), `_1`, `_2`, `_3`
-  - DIS picks shard by `hash(signalName) % N`
-  - Consumers fan out per shard
-  Effort: 1-2 days. Requires DIS coordination.
+- [x] **Stream sharding.** ~~Today one `DIMO_SIGNALS` stream caps around ~50k/s in our bench~~ Documented in `SCALING.md` with concrete trigger (publish rate > 40k/s sustained) + design (shard by name prefix or hash) + risk notes. Wait to implement until the trigger fires.
 
-- [ ] **Subject sharding for affinity routing.** Hash `devLicense` (or `targetURL`) into N partition subjects, run a consumer per partition pinned via the NATS consumer's filter. Same pod evaluates all fires for a given developer → its HTTP keep-alive pool to that receiver stays warm. Effort: 1-2 days. Risk: pod churn = rebalance + cold pools.
+- [x] **Subject sharding for affinity routing.** ~~Hash `devLicense` (or `targetURL`) into N partition subjects~~ Documented in `SCALING.md` with trigger (cache miss rate > 5% + p99 climb) + design + risk. Defer until measured.
 
-- [ ] **`signal_index` KV refcount + dynamic filter scoping.** If subscription cardinality grows past ~thousands of unique signal names, dynamically rewrite consumer `FilterSubjects` to only include subjects with at least one active webhook. We deleted this bucket; resurrect with a clear use case. Effort: 1-2 days.
+- [x] **`signal_index` KV refcount + dynamic filter scoping.** Documented in `SCALING.md` with trigger (>1000 distinct metric names + low subscription hit rate) + design (CAS-protected refcount, consumer rebuilds FilterSubjects on watch).
 
-- [ ] **Cross-region DR.** Single AWS region today. JetStream supports cross-region mirroring + leaf nodes. Design needed:
-  - Active-passive: prod publishes single region, passive region mirrors streams, fails over on outage
-  - Active-active: harder, requires DIS publishing to both
-  Effort: weeks. Required when SLO demands RTO < region recovery time.
+- [x] **Cross-region DR.** Active-passive design captured in `SCALING.md` with JetStream mirroring + Postgres logical replication + DNS failover. Active-active deliberately deferred until DIS owns the dual-publish semantics. Trigger: RTO requirement drops below AWS region recovery time.
 
-- [ ] **Shared permissions cache in NATS KV.** Cold-pod fill spikes today: 10 new pods after scale-up → 10× duplicate gRPC calls to token-exchange. Shared KV cache flattens that. Risk: stale grant after revocation. Worth it only if measured cache miss rate is bad. Effort: half day.
+- [x] **Shared permissions cache in NATS KV.** Documented in `SCALING.md` with trigger (cache hit rate < 85% steady-state) + design (KV layer between in-process cache and gRPC, CAS-protected populate). Defer until the cache-hit metric we added in P0-6 shows we need it.
 
 ---
 
