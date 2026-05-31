@@ -39,10 +39,6 @@ func TestNATSExclusiveFlow(t *testing.T) {
 
 	devAddress := tests.RandomAddr(t)
 	settingsCopy := tc.Settings
-	// Wipe Kafka topics to make sure nothing accidentally falls back to it.
-	settingsCopy.KafkaBrokers = ""
-	settingsCopy.DeviceSignalsTopic = ""
-	settingsCopy.DeviceEventsTopic = ""
 
 	settingsCopy.NATS.Mode = "exclusive"
 	settingsCopy.NATS.URL = natsServer.URL()
@@ -75,8 +71,6 @@ func TestNATSExclusiveFlow(t *testing.T) {
 
 	servers, err := app.CreateServers(t.Context(), &settingsCopy, zerolog.New(os.Stdout))
 	require.NoError(t, err)
-	require.Nil(t, servers.SignalConsumer, "Kafka signal consumer should not be created in exclusive mode")
-	require.Nil(t, servers.EventConsumer, "Kafka event consumer should not be created in exclusive mode")
 	require.NotNil(t, servers.NATSClient)
 	require.NotNil(t, servers.NATSSignalConsumer)
 

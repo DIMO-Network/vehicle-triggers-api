@@ -37,9 +37,6 @@ env:
   SERVICE_NAME: vehicle-triggers-api
   JWK_KEY_SET_URL: https://auth.dev.dimo.zone/keys
   IDENTITY_API_URL: https://identity-api.dev.dimo.zone/query
-  KAFKA_BROKERS: kafka-dev-dimo-kafka-kafka-brokers:9092
-  DEVICE_SIGNALS_TOPIC: topic.device.signals
-  DEVICE_EVENTS_TOPIC: topic.device.events
   VEHICLE_NFT_ADDRESS: '0x45fbCD3ef7361d156e8b16F5538AE36DEdf61Da8'
   DIMO_REGISTRY_CHAIN_ID: 80002
   MAX_WEBHOOK_FAILURE_COUNT: 5
@@ -48,10 +45,9 @@ env:
   TOKEN_EXCHANGE_CACHE_EXPIRATION: 15m
   TOKEN_EXCHANGE_CACHE_CLEANUP_INTERVAL: 5m
   # NATS JetStream ingest. Modes:
-  #   off       - Kafka does everything, NATS unused (default).
-  #   primary   - Kafka consumers bridge into NATS, NATS does evaluation.
-  #   exclusive - NATS only. Kafka consumers are skipped; KAFKA_BROKERS can
-  #               be empty. Target state.
+  #   off       - API only, no ingest pipeline.
+  #   primary | exclusive - NATS owns evaluation + dispatch (equivalent
+  #               post-Kafka rip; "exclusive" is canonical prod).
   #
   # Storage planning rule of thumb (file storage, replicas=3):
   #   per_node_disk_per_stream = msgs_per_sec * avg_msg_bytes * max_age_seconds

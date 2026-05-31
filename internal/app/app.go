@@ -18,18 +18,16 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/metriclistener"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
 	vtnats "github.com/DIMO-Network/vehicle-triggers-api/internal/nats"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/auditqueue"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/cachebroadcast"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/configaudit"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerstate"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookdispatcher"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhooksender"
-	"github.com/IBM/sarama"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/redirect"
 	"github.com/gofiber/swagger"
@@ -38,9 +36,7 @@ import (
 )
 
 type Servers struct {
-	Application    *fiber.App
-	SignalConsumer *kafka.Consumer
-	EventConsumer  *kafka.Consumer
+	Application *fiber.App
 
 	// NATSClient is non-nil when NATSSettings.Enabled(). main owns shutdown.
 	NATSClient *vtnats.Client
@@ -93,7 +89,6 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		natsListener *metriclistener.MetricListener
 		natsSigCons  jetstream.Consumer
 		natsEvtCons  jetstream.Consumer
-		bridge       metriclistener.NATSBridge
 		dispatcher   *webhookdispatcher.Dispatcher
 		auditQ       *auditqueue.Queue
 	)
@@ -116,7 +111,6 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 			return nil, fmt.Errorf("failed to subscribe to cache invalidate: %w", err)
 		}
 		if settings.NATS.PrimaryMode() {
-			bridge = natsClient
 			stateKV, err := natsClient.TriggerState(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("failed to open trigger-state bucket: %w", err)
@@ -132,22 +126,19 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 				maxFailureCount = 1
 			}
 			auditQ = auditqueue.New(auditqueue.Config{
-				Workers: settings.NATS.AuditWorkers,
-				Buffer:  settings.NATS.AuditQueueSize,
+				Workers: settings.Audit.Workers,
+				Buffer:  settings.Audit.QueueSize,
 			}, natsClient, logger)
 			dispatcher = webhookdispatcher.New(webhookdispatcher.Config{
-				Workers:           settings.NATS.DispatcherWorkers,
-				QueueSize:         settings.NATS.DispatcherQueueSize,
+				Workers:           settings.Dispatcher.Workers,
+				QueueSize:         settings.Dispatcher.QueueSize,
 				MaxFailureCount:   maxFailureCount,
-				RetryAttempts:     settings.NATS.DispatcherRetryAttempts,
-				RetryInitialDelay: settings.NATS.DispatcherRetryInitialDelay,
-				PerHostRPS:        settings.NATS.DispatcherPerHostRPS,
-				PerHostBurst:      settings.NATS.DispatcherPerHostBurst,
+				RetryAttempts:     settings.Dispatcher.RetryAttempts,
+				RetryInitialDelay: settings.Dispatcher.RetryInitialDelay,
+				PerHostRPS:        settings.Dispatcher.PerHostRPS,
+				PerHostBurst:      settings.Dispatcher.PerHostBurst,
 			}, webhookSender, stateStore, auditQ, repo, logger)
-			natsListener = buildListenerWithState(settings, tokenExchangeCache, repo, webhookCache, stateStore).
-				WithAuditor(natsClient).
-				WithStateRecorder(stateStore).
-				WithDispatcher(dispatcher)
+			natsListener = buildListener(settings, tokenExchangeCache, repo, webhookCache, stateStore, dispatcher)
 			natsSigCons, err = natsClient.EnsureConsumer(ctx, vtnats.ConsumerSpec{
 				Stream:         settings.NATS.SignalsStream,
 				Durable:        settings.NATS.SignalsDurable,
@@ -177,31 +168,6 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 		}
 	}
 
-	var (
-		signalConsumer *kafka.Consumer
-		eventConsumer  *kafka.Consumer
-	)
-	if !settings.NATS.KafkaDisabled() {
-		// Kafka path evaluates triggers (or bridges to NATS). When it
-		// evaluates, it needs a state store for cooldown / previousValue.
-		// Without NATS-primary providing a KV store, fall back to an
-		// in-memory store - works for single-replica deployments and tests;
-		// real multi-replica setups must enable NATS_MODE=primary.
-		var kafkaState *triggerstate.InMemoryStore
-		if bridge == nil {
-			kafkaState = triggerstate.NewInMemory()
-		}
-		signalConsumer, err = createSignalConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache, bridge, kafkaState)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create signal consumer: %w", err)
-		}
-
-		eventConsumer, err = createEventConsumer(ctx, settings, tokenExchangeCache, repo, webhookCache, bridge, kafkaState)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create event consumer: %w", err)
-		}
-	}
-
 	identityClient, err := identity.New(settings, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create identity client: %w", err)
@@ -213,8 +179,6 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 	}
 	return &Servers{
 		Application:        app,
-		SignalConsumer:     signalConsumer,
-		EventConsumer:      eventConsumer,
 		NATSClient:         natsClient,
 		NATSSignalConsumer: natsSigCons,
 		NATSEventConsumer:  natsEvtCons,
@@ -359,100 +323,19 @@ func startWebhookCache(ctx context.Context, settings *config.Settings, tokenExch
 		}
 	}()
 
-	logger.Info().Msgf("Device signals consumer started on topic: %s", settings.DeviceSignalsTopic)
+	logger.Info().Msg("webhook cache started")
 
 	return webhookCache, nil
 }
 
-// buildListener wires a MetricListener with shared services. Used by both
-// the Kafka and NATS sides; the Kafka path optionally wraps it with a bridge.
-//
-// Convention used throughout this file:
-//
-//   - settings.NATS.{Enabled,PrimaryMode,KafkaDisabled} decides what to
-//     construct at startup (in CreateServers).
-//   - Functions further down (like createSignalConsumer) take the
-//     dependency directly and check for nil to decide whether to wire it.
-//     "Pass the dependency; let nil opt out" keeps the function signatures
-//     honest about what they actually need.
-//
-// Deprecated handling: when NATS_MODE=exclusive the Kafka-side listener is
-// never constructed, so the bridge variant is only used in the transitional
-// NATS_MODE=primary mode.
-func buildListener(settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache) *metriclistener.MetricListener {
-	return buildListenerWithState(settings, tokenExchangeCache, repo, webhookCache, nil)
-}
-
-// buildListenerWithState builds a listener whose evaluator consults the
-// supplied state store for cooldown. Pass nil for state to fall back to the
-// trigger_logs table on every check.
-func buildListenerWithState(settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, state triggerevaluator.StateStore) *metriclistener.MetricListener {
-	webhookSender := webhooksender.NewWebhookSender(nil)
+// buildListener builds a listener whose evaluator consults the supplied
+// state store for cooldown / previousValue lookups and hands fires off to
+// the supplied dispatcher. State and dispatcher are required for the
+// production path; only the unit test harness passes nil.
+func buildListener(settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, state triggerevaluator.StateStore, dispatcher metriclistener.WebhookDispatcher) *metriclistener.MetricListener {
 	evaluator := triggerevaluator.NewTriggerEvaluator(tokenExchangeCache)
 	if state != nil {
 		evaluator = evaluator.WithStateStore(state)
 	}
-	return metriclistener.NewMetricsListener(webhookCache, repo, webhookSender, evaluator, settings)
-}
-
-func createSignalConsumer(_ context.Context, settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, bridge metriclistener.NATSBridge, state *triggerstate.InMemoryStore) (*kafka.Consumer, error) {
-	clusterConfig := sarama.NewConfig()
-	clusterConfig.Version = sarama.V2_8_1_0
-	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-	var listener *metriclistener.MetricListener
-	if state != nil {
-		listener = buildListenerWithState(settings, tokenExchangeCache, repo, webhookCache, state).WithStateRecorder(state)
-	} else {
-		listener = buildListener(settings, tokenExchangeCache, repo, webhookCache)
-	}
-	if bridge != nil {
-		listener = listener.WithBridge(bridge)
-	}
-	consumerConfig := &kafka.Config{
-		ClusterConfig:   clusterConfig,
-		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
-		Topic:           settings.DeviceSignalsTopic,
-		GroupID:         "vehicle-triggers",
-		MaxInFlight:     int64(settings.MaxInFlight),
-		Processor:       listener.ProcessSignalMessages,
-		Name:            "signals",
-	}
-
-	consumer, err := kafka.NewConsumer(consumerConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create device signals consumer: %w", err)
-	}
-
-	return consumer, nil
-}
-
-func createEventConsumer(_ context.Context, settings *config.Settings, tokenExchangeCache *tokenexchange.Cache, repo *triggersrepo.Repository, webhookCache *webhookcache.WebhookCache, bridge metriclistener.NATSBridge, state *triggerstate.InMemoryStore) (*kafka.Consumer, error) {
-	clusterConfig := sarama.NewConfig()
-	clusterConfig.Version = sarama.V2_8_1_0
-	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-	var listener *metriclistener.MetricListener
-	if state != nil {
-		listener = buildListenerWithState(settings, tokenExchangeCache, repo, webhookCache, state).WithStateRecorder(state)
-	} else {
-		listener = buildListener(settings, tokenExchangeCache, repo, webhookCache)
-	}
-	if bridge != nil {
-		listener = listener.WithBridge(bridge)
-	}
-	consumerConfig := &kafka.Config{
-		ClusterConfig:   clusterConfig,
-		BrokerAddresses: strings.Split(settings.KafkaBrokers, ","),
-		Topic:           settings.DeviceEventsTopic,
-		GroupID:         "vehicle-triggers",
-		MaxInFlight:     int64(settings.MaxInFlight),
-		Processor:       listener.ProcessEventMessages,
-		Name:            "events",
-	}
-
-	consumer, err := kafka.NewConsumer(consumerConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create device events consumer: %w", err)
-	}
-
-	return consumer, nil
+	return metriclistener.NewMetricsListener(webhookCache, repo, evaluator, dispatcher, settings)
 }

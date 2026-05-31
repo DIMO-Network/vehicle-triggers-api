@@ -9,9 +9,6 @@ import (
 
 func validBaseSettings() Settings {
 	return Settings{
-		KafkaBrokers:             "kafka:9092",
-		DeviceSignalsTopic:       "signals",
-		DeviceEventsTopic:        "events",
 		MaxInFlight:              50,
 		MaxAllowedCooldownPeriod: 2592000, // 30 days
 		NATS: NATSSettings{
@@ -36,12 +33,9 @@ func TestSettingsValidate(t *testing.T) {
 		require.NoError(t, validBaseSettings().Validate())
 	})
 
-	t.Run("happy path exclusive omits kafka", func(t *testing.T) {
+	t.Run("happy path exclusive", func(t *testing.T) {
 		s := validBaseSettings()
 		s.NATS.Mode = "exclusive"
-		s.KafkaBrokers = ""
-		s.DeviceSignalsTopic = ""
-		s.DeviceEventsTopic = ""
 		require.NoError(t, s.Validate())
 	})
 
@@ -49,12 +43,6 @@ func TestSettingsValidate(t *testing.T) {
 		s := validBaseSettings()
 		s.NATS.Mode = "bogus"
 		require.ErrorContains(t, s.Validate(), "NATS_MODE")
-	})
-
-	t.Run("rejects missing kafka outside exclusive", func(t *testing.T) {
-		s := validBaseSettings()
-		s.KafkaBrokers = ""
-		require.ErrorContains(t, s.Validate(), "KAFKA_BROKERS")
 	})
 
 	t.Run("rejects MaxDeliver < 1 when nats enabled", func(t *testing.T) {

@@ -28,11 +28,6 @@ func (m *MetricListener) HandleEventPayload(ctx context.Context, payload []byte)
 		return fmt.Errorf("failed to parse event CloudEvent: %w", err)
 	}
 
-	if m.bridge != nil {
-		_, err := m.bridge.PublishEvents(ctx, eventCE)
-		return err
-	}
-
 	events := vss.UnpackEvents(eventCE)
 
 	var errs error

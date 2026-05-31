@@ -60,11 +60,11 @@ type WebhookCache struct {
 }
 
 func NewWebhookCache(repo Repository, settings *config.Settings) *WebhookCache {
-	debounce := settings.CacheDebounceTime
+	debounce := settings.Cache.DebounceTime
 	if debounce == 0 {
 		debounce = defaultCacheDebounceTime
 	}
-	workers := settings.CacheBuildWorkers
+	workers := settings.Cache.BuildWorkers
 	if workers < 1 {
 		workers = defaultCacheBuildWorkers
 	}

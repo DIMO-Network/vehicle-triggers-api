@@ -19,9 +19,6 @@ type Settings struct {
 	ServiceName                       string         `env:"SERVICE_NAME"`
 	JWKKeySetURL                      string         `env:"JWK_KEY_SET_URL"`
 	IdentityAPIURL                    string         `env:"IDENTITY_API_URL"`
-	KafkaBrokers                      string         `env:"KAFKA_BROKERS"`
-	DeviceSignalsTopic                string         `env:"DEVICE_SIGNALS_TOPIC"`
-	DeviceEventsTopic                 string         `env:"DEVICE_EVENTS_TOPIC"`
 	TokenExchangeGRPCAddr             string         `env:"TOKEN_EXCHANGE_GRPC_ADDR"`
 	TokenExchangeCacheExpiration      time.Duration  `env:"TOKEN_EXCHANGE_CACHE_EXPIRATION"`
 	TokenExchangeCacheCleanupInterval time.Duration  `env:"TOKEN_EXCHANGE_CACHE_CLEANUP_INTERVAL"`
@@ -30,14 +27,6 @@ type Settings struct {
 	MaxWebhookFailureCount            uint           `env:"MAX_WEBHOOK_FAILURE_COUNT"`
 	// MaxInFlight is the maximum number of messages to process concurrently per consumer
 	MaxInFlight int `env:"MAX_IN_FLIGHT" envDefault:"50"`
-	// CacheDebounceTime wait time betweeen to successive cache refreshes
-	CacheDebounceTime time.Duration `env:"CACHE_DEBOUNCE_TIME"`
-	// CacheBuildWorkers caps the parallelism of the per-trigger fetch+CEL
-	// compile loop in webhookcache.PopulateCache. Each worker takes one DB
-	// roundtrip plus one CEL compile at a time, so it doubles as a DB
-	// connection-pool guard. Defaults to 2 because the prod pod is pinned
-	// to ~1 CPU; raise it on multi-core nodes.
-	CacheBuildWorkers int `env:"CACHE_BUILD_WORKERS" envDefault:"2"`
 
 	// MaxAllowedCooldownPeriod is the hard upper bound (seconds) on
 	// triggers.cooldown_period. It exists so the cooldown KV bucket TTL is
@@ -54,23 +43,61 @@ type Settings struct {
 	// plaintext when the stored value doesn't look encrypted.
 	SigningSecretKeyHex string `env:"SIGNING_SECRET_KEY_HEX"`
 
-	NATS NATSSettings `envPrefix:"NATS_"`
+	NATS       NATSSettings       `envPrefix:"NATS_"`
+	// Env prefix kept as NATS_DISPATCHER_*, NATS_AUDIT_*, CACHE_* so the
+	// regroup is a pure code-organisation change and prod env files don't
+	// have to move. The semantics live with the subsystem; the namespace
+	// reflects history.
+	Dispatcher DispatcherSettings `envPrefix:"NATS_DISPATCHER_"`
+	Audit      AuditSettings      `envPrefix:"NATS_AUDIT_"`
+	Cache      CacheSettings      `envPrefix:"CACHE_"`
 
 	DB db.Settings `envPrefix:"DB_"`
 }
 
+// DispatcherSettings tunes the webhook delivery worker pool. Owned by
+// webhookdispatcher.Dispatcher; lived under NATSSettings historically
+// because the env prefix was the path of least resistance.
+type DispatcherSettings struct {
+	// Workers=0 keeps the legacy synchronous behavior; >0 spins up a worker
+	// pool that owns delivery + state + audit + failure-count bookkeeping
+	// so a slow receiver can't throttle the consumer.
+	Workers           int           `env:"WORKERS" envDefault:"32"`
+	QueueSize         int           `env:"QUEUE_SIZE" envDefault:"4096"`
+	RetryAttempts     int           `env:"RETRY_ATTEMPTS" envDefault:"2"`
+	RetryInitialDelay time.Duration `env:"RETRY_INITIAL_DELAY" envDefault:"100ms"`
+	PerHostRPS        float64       `env:"PER_HOST_RPS" envDefault:"0"`
+	PerHostBurst      int           `env:"PER_HOST_BURST" envDefault:"0"`
+}
+
+// AuditSettings tunes the fire-and-forget audit queue fronting JetStream
+// PublishAsync. Sized to absorb a stream-side stall without spawning one
+// goroutine per fire.
+type AuditSettings struct {
+	Workers   int `env:"WORKERS" envDefault:"4"`
+	QueueSize int `env:"QUEUE_SIZE" envDefault:"16384"`
+}
+
+// CacheSettings tunes the webhookcache rebuild loop.
+type CacheSettings struct {
+	// DebounceTime is the wait between successive cache refreshes so a
+	// CRUD burst collapses into one rebuild.
+	DebounceTime time.Duration `env:"DEBOUNCE_TIME"`
+	// BuildWorkers caps the parallelism of the per-trigger fetch+CEL
+	// compile loop. Each worker takes one DB roundtrip plus one CEL
+	// compile at a time, so it doubles as a DB connection-pool guard.
+	// Defaults to 2 because the prod pod is pinned to ~1 CPU; raise it
+	// on multi-core nodes.
+	BuildWorkers int `env:"BUILD_WORKERS" envDefault:"2"`
+}
+
 // NATSSettings holds NATS JetStream wiring.
 //
-// Mode controls ingest topology:
-//   - off       (default): Kafka consumers evaluate triggers, NATS unused.
-//   - primary:             Kafka consumers parse + republish to NATS without
-//                          evaluating; NATS consumers do the evaluation and
-//                          webhook dispatch. Transitional mode used while DIS
-//                          still publishes to Kafka but the service runs
-//                          evaluation on NATS, avoiding double-fires.
-//   - exclusive:           NATS only. Kafka consumers are not created, and
-//                          KAFKA_* env vars become optional. Target state
-//                          once DIS publishes directly to JetStream.
+// Mode is now effectively a two-valued switch since Kafka was ripped out:
+//   - off       (default): service runs the HTTP API only, no ingest.
+//   - primary | exclusive: NATS owns the evaluation path. (The two values
+//     are kept distinct for backwards-compat with prod env files but
+//     behave identically post-Kafka deletion.)
 //
 // When Mode != off the service refuses to start if a NATS connection cannot
 // be established.
@@ -117,22 +144,10 @@ type NATSSettings struct {
 	FilterSubjectCap       int           `env:"FILTER_SUBJECT_CAP" envDefault:"2048"`
 	PublishAsyncMaxPending int           `env:"PUBLISH_ASYNC_MAX_PENDING" envDefault:"4000"`
 
-	// Dispatcher decouples webhook delivery from the JetStream handler.
-	// Workers=0 keeps the legacy synchronous behavior; >0 spins up a worker
-	// pool that owns delivery + state + audit + failure-count bookkeeping
-	// so a slow receiver can't throttle the consumer.
-	DispatcherWorkers           int           `env:"DISPATCHER_WORKERS" envDefault:"32"`
-	DispatcherQueueSize         int           `env:"DISPATCHER_QUEUE_SIZE" envDefault:"4096"`
-	DispatcherRetryAttempts     int           `env:"DISPATCHER_RETRY_ATTEMPTS" envDefault:"2"`
-	DispatcherRetryInitialDelay time.Duration `env:"DISPATCHER_RETRY_INITIAL_DELAY" envDefault:"100ms"`
-	DispatcherPerHostRPS        float64       `env:"DISPATCHER_PER_HOST_RPS" envDefault:"0"`
-	DispatcherPerHostBurst      int           `env:"DISPATCHER_PER_HOST_BURST" envDefault:"0"`
-
-	// Audit queue is fronted by a fire-and-forget pool so the dispatcher's
-	// success path never spawns one goroutine per fire (was a goroutine
-	// explosion risk at 30k/s when the audit publisher slowed down).
-	AuditWorkers   int `env:"AUDIT_WORKERS" envDefault:"4"`
-	AuditQueueSize int `env:"AUDIT_QUEUE_SIZE" envDefault:"16384"`
+	// Dispatcher and Audit live as their own subsystem-typed Settings
+	// off the root struct; see Settings.Dispatcher and Settings.Audit.
+	// They keep NATS_DISPATCHER_* and NATS_AUDIT_* env prefixes for
+	// backwards compatibility with prod env files.
 
 	TriggerStateBucket   string        `env:"TRIGGER_STATE_BUCKET" envDefault:"trigger_state"`
 	TriggerStateTTL      time.Duration `env:"TRIGGER_STATE_TTL" envDefault:"168h"` // 7d
@@ -143,13 +158,11 @@ type NATSSettings struct {
 // Enabled reports whether any NATS wiring should run.
 func (n NATSSettings) Enabled() bool { return n.Mode != "" && n.Mode != "off" }
 
-// PrimaryMode reports whether NATS owns the evaluation path. True for both
-// "primary" (Kafka bridges into NATS) and "exclusive" (no Kafka at all).
-func (n NATSSettings) PrimaryMode() bool { return n.Mode == "primary" || n.Mode == "exclusive" }
-
-// KafkaDisabled reports whether the Kafka consumers should be skipped
-// entirely. True only in exclusive mode.
-func (n NATSSettings) KafkaDisabled() bool { return n.Mode == "exclusive" }
+// PrimaryMode reports whether NATS owns the evaluation path. Equivalent to
+// Enabled() post-Kafka-deletion; kept as a separate method so the wiring
+// reads naturally ("if NATS is the primary ingest path") and a future split
+// (e.g. "evaluator-only, no consumer" Mode) has a place to land.
+func (n NATSSettings) PrimaryMode() bool { return n.Enabled() }
 
 // Validate returns an error describing any misconfiguration. Called from
 // main at startup so we fail fast rather than discovering trouble at first
@@ -161,19 +174,6 @@ func (s Settings) Validate() error {
 
 	if err := s.NATS.Validate(); err != nil {
 		errs = append(errs, err.Error())
-	}
-
-	// Kafka is required unless NATS is in exclusive mode.
-	if !s.NATS.KafkaDisabled() {
-		if strings.TrimSpace(s.KafkaBrokers) == "" {
-			errs = append(errs, "KAFKA_BROKERS empty but NATS_MODE != exclusive")
-		}
-		if strings.TrimSpace(s.DeviceSignalsTopic) == "" {
-			errs = append(errs, "DEVICE_SIGNALS_TOPIC empty but NATS_MODE != exclusive")
-		}
-		if strings.TrimSpace(s.DeviceEventsTopic) == "" {
-			errs = append(errs, "DEVICE_EVENTS_TOPIC empty but NATS_MODE != exclusive")
-		}
 	}
 
 	if s.MaxInFlight < 1 {

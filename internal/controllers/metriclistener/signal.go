@@ -29,11 +29,6 @@ func (m *MetricListener) HandleSignalPayload(ctx context.Context, payload []byte
 		return fmt.Errorf("failed to parse signal CloudEvent: %w", err)
 	}
 
-	if m.bridge != nil {
-		_, err := m.bridge.PublishSignals(ctx, signalCE)
-		return err
-	}
-
 	sigs := vss.UnpackSignals(signalCE)
 
 	vehicleDID, err := cloudevent.DecodeERC721DID(signalCE.Subject)
