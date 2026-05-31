@@ -12,11 +12,8 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/rs/zerolog"
-	"golang.org/x/sync/errgroup"
 )
 
 func (m *MetricListener) processSignalMessage(msg *message.Message) error {
@@ -71,63 +68,17 @@ func inferSignalValueType(sig vss.Signal) string {
 
 func (m *MetricListener) processSingleSignal(ctx context.Context, sig vss.Signal, vehicleDID cloudevent.ERC721DID, rawPayload json.RawMessage) error {
 	signalDef := signals.GetSignalDefinitionOrDefault(sig.Data.Name, inferSignalValueType(sig))
-
-	sigAndRaw := triggerevaluator.SignalEvaluationData{
+	eval := &triggerevaluator.SignalEvaluationData{
 		Signal:     sig,
 		VehicleDID: vehicleDID,
 		Def:        signalDef,
 		RawData:    rawPayload,
 	}
-
 	webhooks := m.webhookCache.GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignal, signals.VSSPrefix+sig.Data.Name)
-	if len(webhooks) == 0 {
-		return nil
-	}
-
-	group, groupCtx := errgroup.WithContext(ctx)
-	group.SetLimit(100)
-	for _, wh := range webhooks {
-		group.Go(func() error {
-			if err := m.processSignalWebhook(groupCtx, wh, &sigAndRaw); err != nil {
-				zerolog.Ctx(groupCtx).Error().Str("trigger_id", wh.Trigger.ID).Err(err).Msg("failed to process webhook")
-			}
-			return nil
-		})
-	}
-	return group.Wait()
+	return fanoutAndFire(ctx, m, webhooks, vehicleDID, rawPayload, eval,
+		m.triggerEvaluator.EvaluateSignalTrigger, m.createSignalPayload)
 }
 
-func (m *MetricListener) processSignalWebhook(ctx context.Context, wh *webhookcache.Webhook, sigAndRaw *triggerevaluator.SignalEvaluationData) error {
-	// Evaluate the trigger using the new service
-	result, err := m.triggerEvaluator.EvaluateSignalTrigger(ctx, wh.Trigger, wh.Program, sigAndRaw)
-	if err != nil {
-		return fmt.Errorf("failed to evaluate signal trigger: %w", err)
-	}
-
-	if !result.ShouldFire {
-		// Handle permission denied - unsubscribe from the trigger
-		if result.PermissionDenied {
-			_, err := m.repo.DeleteVehicleSubscription(ctx, wh.Trigger.ID, sigAndRaw.VehicleDID)
-			if err != nil {
-				return fmt.Errorf("failed to delete vehicle subscription: %w", err)
-			}
-			// Surgical local invalidation; no broadcast. A permission-denied
-			// signal stream could fire this thousands of times per second on
-			// a misconfigured developer, and broadcasting each one would
-			// thrash every replica. Other replicas catch up via the periodic
-			// poll or the next permission-denied on their side.
-			m.webhookCache.InvalidateVehicleTrigger(sigAndRaw.VehicleDID.String(), wh.Trigger.ID)
-		}
-		return nil
-	}
-
-	payload, err := m.createSignalPayload(wh.Trigger, sigAndRaw)
-	if err != nil {
-		return fmt.Errorf("failed to create webhook payload: %w", err)
-	}
-
-	return m.handleTriggeredWebhook(ctx, wh.Trigger, sigAndRaw.RawData, payload)
-}
 func (m *MetricListener) createSignalPayload(trigger *models.Trigger, sigEval *triggerevaluator.SignalEvaluationData) (*cloudevent.CloudEvent[webhook.WebhookPayload], error) {
 	var signalValue any
 	switch sigEval.Def.ValueType {
