@@ -47,16 +47,38 @@ type noopNotifier struct{}
 
 func (noopNotifier) Notify(context.Context, string, string) error { return nil }
 
-// WebhookCache is an in-memory map: assetDID -> signal name -> []*models.Trigger.
+// WebhookCache is an in-memory map: assetDID -> signal name -> []*Webhook.
+//
+// Two levels of caching live here:
+//   - `webhooks`: the per-vehicle dispatch index hit on every signal.
+//   - `compiled`: a shared cache of {trigger row + compiled CEL program}
+//     keyed by trigger ID. Rebuilds reuse compiled programs for triggers
+//     whose config hasn't changed, so a 5-min periodic refresh on a
+//     stable config does ~0 CEL compiles. CRUD invalidations drop the
+//     affected trigger from `compiled` so the next rebuild recompiles it.
+//
+// This is the "diff-rebuild" half of the V2 review. Full tenant-scoped
+// lazy loading (per-developer subscriptions fetched on first signal)
+// is deliberately not implemented yet - the compiled-program cache is
+// the easy 80% of the CPU win and avoids the cache-coherence complexity
+// of partial scoping.
 type WebhookCache struct {
-	mu            sync.RWMutex
-	webhooks      map[string]map[string][]*Webhook
-	repo          Repository
-	lastRefresh   time.Time // last time the cache was refreshed
-	schedule      atomic.Bool
-	debounce      time.Duration
-	buildWorkers  int
-	notifier      Notifier
+	mu          sync.RWMutex
+	webhooks    map[string]map[string][]*Webhook
+	repo        Repository
+	lastRefresh time.Time // last time the cache was refreshed
+	schedule    atomic.Bool
+	debounce    time.Duration
+	buildWorkers int
+	notifier    Notifier
+
+	// compiled is the shared {trigger row, CEL program} cache keyed by
+	// trigger ID. Owned by mu (read under RLock for build-time lookup,
+	// write under Lock for refresh + targeted invalidation). nil program
+	// entries are never stored - compile failures are skipped at fetch
+	// time. The dispatch path doesn't read this map; it only reads the
+	// `webhooks` map populated from it.
+	compiled map[string]*Webhook
 }
 
 func NewWebhookCache(repo Repository, settings *config.Settings) *WebhookCache {
@@ -70,11 +92,30 @@ func NewWebhookCache(repo Repository, settings *config.Settings) *WebhookCache {
 	}
 	return &WebhookCache{
 		webhooks:     make(map[string]map[string][]*Webhook),
+		compiled:     make(map[string]*Webhook),
 		repo:         repo,
 		debounce:     debounce,
 		buildWorkers: workers,
 		notifier:     noopNotifier{},
 	}
+}
+
+// InvalidateTrigger drops a single trigger from the compiled-program cache
+// so the next rebuild re-fetches and recompiles it. Called by the
+// cachebroadcast subscriber when a remote replica's CRUD broadcast carries
+// a specific webhook ID. Targeted invalidation lets a CRUD on one trigger
+// avoid recompiling every other trigger's CEL program on every replica.
+//
+// Does NOT trigger an immediate rebuild - the caller decides cadence via
+// ScheduleRefreshSilent. Keep these methods orthogonal so a burst of
+// CRUDs collapses into one rebuild after the debounce window.
+func (wc *WebhookCache) InvalidateTrigger(triggerID string) {
+	if triggerID == "" {
+		return
+	}
+	wc.mu.Lock()
+	delete(wc.compiled, triggerID)
+	wc.mu.Unlock()
 }
 
 // SetNotifier wires the cache to publish a "config changed" event on
@@ -245,12 +286,12 @@ func (wc *WebhookCache) fetchVehicleWebhooks(ctx context.Context) (map[string]ma
 		uniqueTriggerIDs[sub.TriggerID] = struct{}{}
 	}
 
-	// Fetch + CEL-compile each unique trigger in parallel. Each compile is
-	// CPU-bound (~5ms) and the loop is hot on startup (~10k triggers => 50s
-	// serial). Parallelising across GOMAXPROCS workers brings build_elapsed
-	// well under the kubelet liveness deadline.
+	// Diff-rebuild: split the set into already-compiled (cheap, reused)
+	// and new (must fetch + compile). Eviction of compiled-but-no-longer-
+	// subscribed entries is done at the end so we keep CPU bounded by
+	// "what actually changed since the last refresh."
 	triggerFetchStart := time.Now()
-	uniqueTriggers := wc.compileTriggersParallel(ctx, uniqueTriggerIDs)
+	uniqueTriggers, reusedCount := wc.buildCompiledIndex(ctx, uniqueTriggerIDs)
 
 	newData := make(map[string]map[string][]*Webhook)
 	for _, sub := range subs {
@@ -273,6 +314,7 @@ func (wc *WebhookCache) fetchVehicleWebhooks(ctx context.Context) (map[string]ma
 		Int("sub_count", len(subs)).
 		Int("unique_trigger_ids", len(uniqueTriggerIDs)).
 		Int("unique_trigger_cache", len(uniqueTriggers)).
+		Int("reused_compiled", reusedCount).
 		Int("asset_count", len(newData)).
 		Dur("build_elapsed", time.Since(triggerFetchStart)).
 		Msg("webhook cache build complete")
@@ -286,6 +328,48 @@ func (wc *WebhookCache) fetchVehicleWebhooks(ctx context.Context) (map[string]ma
 
 func webhookKey(service, metricName string) string {
 	return service + ":" + metricName
+}
+
+// buildCompiledIndex returns the full {triggerID -> *Webhook} index for the
+// requested IDs, reusing entries from wc.compiled when present and only
+// fetching + CEL-compiling the new ones. Returns (index, reusedCount).
+//
+// Eviction: triggers that fall out of triggerIDs (no remaining subscribers)
+// are dropped from wc.compiled at the end so the map can't grow unbounded
+// as customers churn triggers.
+func (wc *WebhookCache) buildCompiledIndex(ctx context.Context, triggerIDs map[string]struct{}) (map[string]*Webhook, int) {
+	wc.mu.RLock()
+	out := make(map[string]*Webhook, len(triggerIDs))
+	missing := make(map[string]struct{}, len(triggerIDs))
+	for id := range triggerIDs {
+		if w, ok := wc.compiled[id]; ok {
+			out[id] = w
+			continue
+		}
+		missing[id] = struct{}{}
+	}
+	wc.mu.RUnlock()
+	reused := len(out)
+
+	if len(missing) > 0 {
+		fresh := wc.compileTriggersParallel(ctx, missing)
+		wc.mu.Lock()
+		for id, w := range fresh {
+			wc.compiled[id] = w
+			out[id] = w
+		}
+		// Evict compiled entries that no longer have any subscribers so
+		// the map stays bounded as triggers churn. Comparing against
+		// triggerIDs (the *current* subscription set) is the right
+		// invariant - anything not in there isn't being dispatched on.
+		for id := range wc.compiled {
+			if _, ok := triggerIDs[id]; !ok {
+				delete(wc.compiled, id)
+			}
+		}
+		wc.mu.Unlock()
+	}
+	return out, reused
 }
 
 // compileTriggersParallel fetches and CEL-compiles each unique trigger in

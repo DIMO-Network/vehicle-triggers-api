@@ -13,16 +13,10 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
-	"github.com/ThreeDotsLabs/watermill/message"
 )
 
-func (m *MetricListener) processSignalMessage(msg *message.Message) error {
-	return m.HandleSignalPayload(msg.Context(), msg.Payload)
-}
-
-// HandleSignalPayload parses a SignalCloudEvent and either republishes it via
-// the bridge or evaluates triggers against each unpacked signal. Shared by
-// the Kafka and NATS entry points.
+// HandleSignalPayload parses a SignalCloudEvent and evaluates triggers
+// against each unpacked signal. The NATS pull-loop entry point.
 func (m *MetricListener) HandleSignalPayload(ctx context.Context, payload []byte) error {
 	var signalCE vss.SignalCloudEvent
 	if err := json.Unmarshal(payload, &signalCE); err != nil {

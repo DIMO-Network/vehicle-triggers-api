@@ -12,16 +12,10 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
-	"github.com/ThreeDotsLabs/watermill/message"
 )
 
-func (m *MetricListener) processEventMessage(msg *message.Message) error {
-	return m.HandleEventPayload(msg.Context(), msg.Payload)
-}
-
-// HandleEventPayload parses an EventCloudEvent and either republishes it via
-// the bridge or evaluates triggers against each unpacked event. Shared by
-// the Kafka and NATS entry points.
+// HandleEventPayload parses an EventCloudEvent and evaluates triggers
+// against each unpacked event. The NATS pull-loop entry point.
 func (m *MetricListener) HandleEventPayload(ctx context.Context, payload []byte) error {
 	var eventCE vss.EventCloudEvent
 	if err := json.Unmarshal(payload, &eventCE); err != nil {

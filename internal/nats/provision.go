@@ -86,6 +86,12 @@ func (c *Client) EnsureBuckets(ctx context.Context) error {
 		{Bucket: c.cfg.TriggerStateBucket, History: 1, Replicas: c.cfg.StreamReplicas, TTL: c.cfg.TriggerStateTTL, Description: "per-trigger per-vehicle fire record"},
 		{Bucket: c.cfg.SignalHistoryBucket, History: 1, Replicas: c.cfg.StreamReplicas, TTL: c.cfg.SignalHistoryTTL, Description: "per-vehicle per-metric last fire snapshot"},
 	}
+	if c.cfg.RateLimitBucket != "" {
+		buckets = append(buckets, jetstream.KeyValueConfig{
+			Bucket: c.cfg.RateLimitBucket, History: 1, Replicas: c.cfg.StreamReplicas, TTL: c.cfg.RateLimitTTL,
+			Description: "cluster-shared per-host token bucket state",
+		})
+	}
 	for _, b := range buckets {
 		if _, err := c.JS.CreateOrUpdateKeyValue(ctx, b); err != nil {
 			return fmt.Errorf("ensure kv %s: %w", b.Bucket, err)

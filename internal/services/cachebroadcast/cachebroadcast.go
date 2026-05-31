@@ -92,16 +92,23 @@ func (n *NATSNotifier) Notify(_ context.Context, webhookID string, op string) er
 }
 
 // Refresher is the callback Subscriber invokes on each received notification.
-// In production this is webhookCache.ScheduleRefreshSilent so received
-// notifications don't echo back into another publish.
+// InvalidateTrigger drops the compiled program for one specific trigger so
+// the next refresh recompiles it; ScheduleRefreshSilent kicks the refresh
+// without re-broadcasting. Together they implement diff-rebuild on the
+// receive side: a CRUD on one trigger touches only that trigger's compiled
+// program in every replica's cache, not every program.
 type Refresher interface {
+	InvalidateTrigger(triggerID string)
 	ScheduleRefreshSilent(ctx context.Context)
 }
 
 // Subscribe registers a long-lived subscription on Subject. The returned
 // *nc.Subscription must be unsubscribed during shutdown. Each received
-// notification triggers r.ScheduleRefresh(ctx). Decode errors are logged
-// and the message is dropped - schema mismatches shouldn't break the cache.
+// notification with a non-empty WebhookID invalidates just that trigger's
+// compiled program before scheduling the rebuild. Notifications with an
+// empty WebhookID (legacy "refresh all") fall back to a full rebuild.
+// Decode errors are logged and the message is dropped - schema mismatches
+// shouldn't break the cache.
 func Subscribe(conn *nc.Conn, ctx context.Context, r Refresher, log zerolog.Logger) (*nc.Subscription, error) {
 	sub, err := conn.Subscribe(Subject, func(msg *nc.Msg) {
 		var n Notification
@@ -110,6 +117,9 @@ func Subscribe(conn *nc.Conn, ctx context.Context, r Refresher, log zerolog.Logg
 			return
 		}
 		log.Debug().Str("webhookId", n.WebhookID).Str("op", string(n.Op)).Msg("cache invalidate received")
+		if n.WebhookID != "" {
+			r.InvalidateTrigger(n.WebhookID)
+		}
 		r.ScheduleRefreshSilent(ctx)
 	})
 	if err != nil {

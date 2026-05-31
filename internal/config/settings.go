@@ -149,10 +149,16 @@ type NATSSettings struct {
 	// They keep NATS_DISPATCHER_* and NATS_AUDIT_* env prefixes for
 	// backwards compatibility with prod env files.
 
-	TriggerStateBucket   string        `env:"TRIGGER_STATE_BUCKET" envDefault:"trigger_state"`
-	TriggerStateTTL      time.Duration `env:"TRIGGER_STATE_TTL" envDefault:"168h"` // 7d
-	SignalHistoryBucket  string        `env:"SIGNAL_HISTORY_BUCKET" envDefault:"signal_history"`
-	SignalHistoryTTL     time.Duration `env:"SIGNAL_HISTORY_TTL" envDefault:"168h"` // 7d
+	TriggerStateBucket  string        `env:"TRIGGER_STATE_BUCKET" envDefault:"trigger_state"`
+	TriggerStateTTL     time.Duration `env:"TRIGGER_STATE_TTL" envDefault:"168h"` // 7d
+	SignalHistoryBucket string        `env:"SIGNAL_HISTORY_BUCKET" envDefault:"signal_history"`
+	SignalHistoryTTL    time.Duration `env:"SIGNAL_HISTORY_TTL" envDefault:"168h"` // 7d
+
+	// RateLimitBucket holds the cluster-shared per-host token bucket
+	// state for outbound webhook delivery. Empty disables cluster
+	// sharing (dispatcher falls back to the per-pod hostLimiter).
+	RateLimitBucket string        `env:"RATE_LIMIT_BUCKET" envDefault:"webhook_rate_limit"`
+	RateLimitTTL    time.Duration `env:"RATE_LIMIT_TTL" envDefault:"1h"`
 }
 
 // Enabled reports whether any NATS wiring should run.

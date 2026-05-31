@@ -16,6 +16,8 @@ type recordingRefresher struct {
 	count atomic.Uint64
 }
 
+func (r *recordingRefresher) InvalidateTrigger(string) {}
+
 func (r *recordingRefresher) ScheduleRefreshSilent(context.Context) {
 	r.count.Add(1)
 }

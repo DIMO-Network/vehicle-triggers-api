@@ -138,6 +138,17 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 				PerHostRPS:        settings.Dispatcher.PerHostRPS,
 				PerHostBurst:      settings.Dispatcher.PerHostBurst,
 			}, webhookSender, stateStore, auditQ, repo, logger)
+			// Promote the dispatcher's per-pod limiter to a cluster-shared
+			// one when RATE_LIMIT_BUCKET is configured and reachable. KV
+			// hiccups degrade gracefully to the per-pod limiter inside
+			// clusterLimiter.Wait; an empty bucket name skips it entirely.
+			if settings.Dispatcher.PerHostRPS > 0 && settings.NATS.RateLimitBucket != "" {
+				if rlKV, err := natsClient.RateLimit(ctx); err != nil {
+					logger.Warn().Err(err).Msg("cluster rate limit KV unavailable; using per-pod limiter")
+				} else {
+					dispatcher = dispatcher.WithClusterLimiter(rlKV)
+				}
+			}
 			natsListener = buildListener(settings, tokenExchangeCache, repo, webhookCache, stateStore, dispatcher)
 			natsSigCons, err = natsClient.EnsureConsumer(ctx, vtnats.ConsumerSpec{
 				Stream:         settings.NATS.SignalsStream,

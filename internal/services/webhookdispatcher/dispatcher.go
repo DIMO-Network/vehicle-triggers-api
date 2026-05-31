@@ -35,6 +35,7 @@ import (
 	vtnats "github.com/DIMO-Network/vehicle-triggers-api/internal/nats"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhooksender"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 )
 
@@ -79,6 +80,13 @@ type Job struct {
 	VehicleDID cloudevent.ERC721DID
 }
 
+// FailureFlushInterval is how often the failure-count coalescer drains its
+// in-memory accumulator into the DB. Default 1s: short enough that the
+// circuit breaker reacts within the same second as the receiver outage,
+// long enough that 32 workers hammering a broken receiver collapse into
+// one UPDATE per trigger per second instead of one per delivery.
+const DefaultFailureFlushInterval = time.Second
+
 // Config tunes pool size and queue depth.
 type Config struct {
 	// Workers is the number of goroutines pulling from the queue. 0 means
@@ -110,22 +118,61 @@ type Config struct {
 	// PerHostBurst is the immediate token allowance per host. Defaults to
 	// PerHostRPS so a short spike doesn't queue.
 	PerHostBurst int
+
+	// FailureFlushInterval is the failure-count coalescer drain cadence.
+	// 0 = DefaultFailureFlushInterval. Set to a negative value to disable
+	// coalescing entirely (writes go straight to the repo, legacy
+	// behaviour - only useful in tests that want immediate visibility).
+	FailureFlushInterval time.Duration
+}
+
+// rateLimiter is the dispatch-side interface satisfied by hostLimiter
+// (per-pod) and clusterLimiter (KV-shared). Both honour ctx cancellation
+// and return nil when no limit applies.
+type rateLimiter interface {
+	Wait(ctx context.Context, target string) error
 }
 
 // Dispatcher owns the worker pool and the job channel.
 type Dispatcher struct {
-	cfg     Config
-	sender  Sender
-	state   StateRecorder
-	audit   AuditPublisher
-	repo    FailureRepo
-	limiter *hostLimiter
-	log     zerolog.Logger
+	cfg       Config
+	sender    Sender
+	state     StateRecorder
+	audit     AuditPublisher
+	repo      FailureRepo
+	limiter   rateLimiter
+	coalescer *failureCoalescer
+	log       zerolog.Logger
 
 	queue chan Job
 	wg    sync.WaitGroup
 	stop  chan struct{}
 	once  sync.Once
+}
+
+// WithClusterLimiter swaps the per-pod token bucket for a cluster-shared one
+// backed by the supplied JetStream KV. Returns the dispatcher for chaining.
+// Falls back to the per-pod limiter (or no limit) for the same call when
+// the KV is nil or PerHostRPS <= 0.
+//
+// Apply BEFORE Run; the limiter is consulted inline in the worker's send
+// path and isn't safe to swap once jobs are flowing.
+func (d *Dispatcher) WithClusterLimiter(kv jetstream.KeyValue) *Dispatcher {
+	cl := newClusterLimiter(kv, d.cfg.PerHostRPS, d.cfg.PerHostBurst, asHostLimiter(d.limiter))
+	if cl != nil {
+		d.limiter = cl
+	}
+	return d
+}
+
+// asHostLimiter is a tiny helper used by WithClusterLimiter to grab the
+// existing per-pod limiter (if any) as the fallback. Returns nil when the
+// current limiter is something else.
+func asHostLimiter(l rateLimiter) *hostLimiter {
+	if hl, ok := l.(*hostLimiter); ok {
+		return hl
+	}
+	return nil
 }
 
 // New builds a dispatcher. Call Run before Enqueue or jobs will block on a
@@ -152,17 +199,30 @@ func New(cfg Config, sender Sender, state StateRecorder, audit AuditPublisher, r
 	if cfg.PerHostBurst < 1 {
 		cfg.PerHostBurst = int(cfg.PerHostRPS)
 	}
-	return &Dispatcher{
+	hl := newHostLimiter(cfg.PerHostRPS, cfg.PerHostBurst)
+	var lim rateLimiter
+	if hl != nil {
+		lim = hl
+	}
+	d := &Dispatcher{
 		cfg:     cfg,
 		sender:  sender,
 		state:   state,
 		audit:   audit,
 		repo:    repo,
-		limiter: newHostLimiter(cfg.PerHostRPS, cfg.PerHostBurst),
+		limiter: lim,
 		log:     log,
 		queue:   make(chan Job, cfg.QueueSize),
 		stop:    make(chan struct{}),
 	}
+	flush := cfg.FailureFlushInterval
+	if flush == 0 {
+		flush = DefaultFailureFlushInterval
+	}
+	if flush > 0 && repo != nil {
+		d.coalescer = newFailureCoalescer(repo, cfg.MaxFailureCount, flush, log)
+	}
+	return d
 }
 
 // Run starts the worker pool. Returns when ctx cancels and all in-flight
@@ -174,6 +234,13 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 	for i := 0; i < d.cfg.Workers; i++ {
 		d.wg.Add(1)
 		go d.worker(ctx, i)
+	}
+	if d.coalescer != nil {
+		d.wg.Add(1)
+		go func() {
+			defer d.wg.Done()
+			d.coalescer.Run(ctx)
+		}()
 	}
 	<-ctx.Done()
 	d.once.Do(func() { close(d.stop) })
@@ -248,9 +315,11 @@ retryLoop:
 		// Per-host rate limit: blocks until the receiver's token bucket
 		// allows another send. Critically, this happens INSIDE the worker
 		// goroutine so other workers serving other receivers don't wait.
-		if err := d.limiter.Wait(ctx, j.Trigger.TargetURI); err != nil {
-			lastErr = err
-			break
+		if d.limiter != nil {
+			if err := d.limiter.Wait(ctx, j.Trigger.TargetURI); err != nil {
+				lastErr = err
+				break
+			}
 		}
 		err := d.sender.SendWebhook(ctx, j.Trigger, j.Payload)
 		if err == nil {
@@ -293,6 +362,13 @@ func (d *Dispatcher) onFailure(ctx context.Context, j Job, err error) {
 		return
 	}
 	if richError, ok := richerrors.AsRichError(err); ok && richError.Code == webhooksender.WebhookFailureCode {
+		// Route through the coalescer when wired so a receiver outage
+		// doesn't fan one UPDATE per worker per delivery at Postgres.
+		// Without it (tests, sync mode), call the repo directly.
+		if d.coalescer != nil {
+			d.coalescer.Record(j.Trigger, err)
+			return
+		}
 		if failErr := d.repo.IncrementTriggerFailureCount(ctx, j.Trigger, err, d.cfg.MaxFailureCount); failErr != nil {
 			d.log.Error().Err(failErr).Str("triggerId", j.Trigger.ID).Msg("failed to handle webhook failure")
 		}
