@@ -37,9 +37,6 @@ env:
   SERVICE_NAME: vehicle-triggers-api
   JWK_KEY_SET_URL: https://auth.dev.dimo.zone/keys
   IDENTITY_API_URL: https://identity-api.dev.dimo.zone/query
-  KAFKA_BROKERS: kafka-dev-dimo-kafka-kafka-brokers:9092
-  DEVICE_SIGNALS_TOPIC: topic.device.signals
-  DEVICE_EVENTS_TOPIC: topic.device.events
   VEHICLE_NFT_ADDRESS: '0x45fbCD3ef7361d156e8b16F5538AE36DEdf61Da8'
   DIMO_REGISTRY_CHAIN_ID: 80002
   MAX_WEBHOOK_FAILURE_COUNT: 5
@@ -47,6 +44,75 @@ env:
   CACHE_DEBOUNCE_TIME: 5s
   TOKEN_EXCHANGE_CACHE_EXPIRATION: 15m
   TOKEN_EXCHANGE_CACHE_CLEANUP_INTERVAL: 5m
+  # NATS JetStream ingest. Modes:
+  #   off       - API only, no ingest pipeline.
+  #   primary | exclusive - NATS owns evaluation + dispatch (equivalent
+  #               post-Kafka rip; "exclusive" is canonical prod).
+  #
+  # Storage planning rule of thumb (file storage, replicas=3):
+  #   per_node_disk_per_stream = msgs_per_sec * avg_msg_bytes * max_age_seconds
+  # At ~30k msg/s steady state, 600B avg signal envelope, 24h MaxAge:
+  #   30000 * 600 * 86400 ~= 50 GB per node per signals stream.
+  # Audit and DLQ are sized off fire rate (typically 10-100x lower than
+  # signal rate); CONFIG_AUDIT is sized off CRUD rate (negligible).
+  # Bump NATS_*_MAX_AGE down to reduce storage, up to reduce risk of
+  # discarding mid-retry messages (see Settings.Validate).
+  NATS_MODE: off
+  NATS_URL: nats://nats-dev.dimo-platform.svc.cluster.local:4222
+  NATS_NAME: vehicle-triggers-api
+  NATS_SIGNALS_STREAM: DIMO_SIGNALS
+  NATS_EVENTS_STREAM: DIMO_EVENTS
+  NATS_AUDIT_STREAM: DIMO_TRIGGER_AUDIT
+  NATS_DLQ_STREAM: DIMO_TRIGGER_DLQ
+  NATS_SIGNALS_SUBJECT: dimo.signals.>
+  NATS_EVENTS_SUBJECT: dimo.events.>
+  NATS_AUDIT_SUBJECT: dimo.trigger.fired.>
+  NATS_DLQ_SUBJECT: dimo.dlq.>
+  NATS_SIGNALS_DURABLE: triggers-signals
+  NATS_EVENTS_DURABLE: triggers-events
+  NATS_STREAM_REPLICAS: '3'
+  NATS_ACK_WAIT: 45s
+  NATS_MAX_DELIVER: '5'
+  NATS_MAX_ACK_PENDING: '5000'
+  NATS_FETCH_BATCH: '100'
+  NATS_PUBLISH_ASYNC_MAX_PENDING: '4000'
+  NATS_DLQ_MAX_AGE: 168h
+  # KV buckets for distributed cooldown state and signal history. Named
+  # explicitly because the backup CronJob snapshots them by name - if they're
+  # absent the backup silently skips them and a restore comes up with empty
+  # cooldown state (every trigger re-fires).
+  NATS_TRIGGER_STATE_BUCKET: trigger_state
+  NATS_SIGNAL_HISTORY_BUCKET: signal_history
+  # Cooldown TTL invariant: NATS_TRIGGER_STATE_TTL must be >=
+  # 2*MAX_ALLOWED_COOLDOWN_PERIOD or the service refuses to start
+  # (Settings.Validate). 63d TTL covers the 30d cooldown ceiling.
+  NATS_TRIGGER_STATE_TTL: 1512h
+  MAX_ALLOWED_COOLDOWN_PERIOD: '2592000'
+# Grace period for the ordered pipeline drain on SIGTERM (consumers ->
+# dispatcher -> audit -> 30s NATS close). Must exceed the 30s default or the
+# pod is SIGKILLed mid-drain, dropping acked-but-unsent webhooks.
+terminationGracePeriodSeconds: 120
+# NATS authentication. When credsEnabled is true an ExternalSecret pulls the
+# creds file from AWS Secrets Manager (credsSecretKey) into a k8s Secret,
+# mounts it at credsMountPath, and sets NATS_CREDS_FILE for the app. Leave
+# disabled for unauthenticated local/dev NATS.
+nats:
+  credsEnabled: false
+  credsSecretKey: dev/vehicle-triggers-api/nats/creds
+  credsMountPath: /etc/nats
+
+# Daily JetStream backup. Snapshots every configured stream + KV bucket via
+# `nats stream backup` from a nats-box container and (if aws CLI is present)
+# uploads the tarball to s3://<s3Bucket>/<s3Prefix>/. Restore procedure in
+# OPERATIONS.md. Image must include both `nats` CLI and `aws` CLI - the
+# default natsio/nats-box only has nats; override with an image that bakes
+# aws in for prod use.
+backup:
+  enabled: false
+  schedule: "0 6 * * *" # daily 06:00 UTC
+  image: natsio/nats-box:latest
+  s3Bucket: ""
+  s3Prefix: "vehicle-triggers-api/jetstream"
 service:
   type: ClusterIP
   ports:
@@ -103,6 +169,10 @@ autoscaling:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+# minAvailable: 0 is intentional for the single-replica dev deployment so a
+# node drain isn't blocked by the lone pod. Multi-replica environments MUST
+# override this to >=1 (see values-prod.yaml) or a drain can take all
+# replicas down at once.
 podDisruptionBudget:
   minAvailable: 0
 serviceMonitor:
@@ -110,3 +180,7 @@ serviceMonitor:
   path: /metrics
   port: mon-http
   interval: 30s
+  # PrometheusRule wiring for the SLOs documented in OPERATIONS.md.
+  # Disabled by default so envs without prometheus-operator don't fail
+  # on the missing CRD; flip to true when the operator is installed.
+  alertsEnabled: false

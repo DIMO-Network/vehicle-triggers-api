@@ -8,6 +8,7 @@ import (
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/configaudit"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/aarondl/null/v8"
@@ -21,6 +22,7 @@ type Repository interface {
 	GetTriggerByIDAndDeveloperLicense(ctx context.Context, triggerID string, developerLicense common.Address) (*models.Trigger, error)
 	UpdateTrigger(ctx context.Context, trigger *models.Trigger) error
 	DeleteTrigger(ctx context.Context, triggerID string, developerLicense common.Address) error
+	RotateSigningSecret(ctx context.Context, triggerID string, developerLicense common.Address) (string, error)
 
 	// subscriptions
 	CreateVehicleSubscription(ctx context.Context, assetDID cloudevent.ERC721DID, triggerID string) (*models.VehicleSubscription, error)
@@ -34,20 +36,57 @@ type WebhookCache interface {
 	ScheduleRefresh(ctx context.Context)
 }
 
-// WebhookController is the controller for creating and managing webhooks.
-type WebhookController struct {
-	repo       Repository
-	signalDefs []signals.SignalDefinition
-	cache      WebhookCache
+// ConfigAudit publishes config-change events for downstream compliance and
+// change-management. Best-effort: failures are logged, never block the API.
+type ConfigAudit interface {
+	Publish(ctx context.Context, e configaudit.Event) error
 }
 
-// NewWebhookController creates a new WebhookController.
-func NewWebhookController(repo Repository, cache WebhookCache) (*WebhookController, error) {
+// WebhookController is the controller for creating and managing webhooks.
+type WebhookController struct {
+	repo              Repository
+	signalDefs        []signals.SignalDefinition
+	cache             WebhookCache
+	audit             ConfigAudit
+	maxCooldownPeriod int
+}
+
+// NewWebhookController creates a new WebhookController. maxCooldownPeriod
+// caps trigger.cooldown_period at registration; the cap is required so the
+// trigger_state KV bucket TTL can be sized to cover any allowed cooldown
+// (enforced by Settings.Validate).
+func NewWebhookController(repo Repository, cache WebhookCache, maxCooldownPeriod int) (*WebhookController, error) {
 	return &WebhookController{
-		repo:       repo,
-		signalDefs: signals.GetAllSignalDefinitions(),
-		cache:      cache,
+		repo:              repo,
+		signalDefs:        signals.GetAllSignalDefinitions(),
+		cache:             cache,
+		audit:             configaudit.Noop{},
+		maxCooldownPeriod: maxCooldownPeriod,
 	}, nil
+}
+
+// WithAudit wires the controller to publish config-change events. Returns
+// the same controller for fluent chaining at construction time.
+func (w *WebhookController) WithAudit(a ConfigAudit) *WebhookController {
+	if a == nil {
+		a = configaudit.Noop{}
+	}
+	w.audit = a
+	return w
+}
+
+// publishAudit emits a config-change event for the audit trail. Failures are
+// logged via the audit publisher's own logging; the controller continues.
+func (w *WebhookController) publishAudit(ctx context.Context, op configaudit.Op, webhookID, devLicense string, snapshot map[string]any) {
+	if w.audit == nil {
+		return
+	}
+	_ = w.audit.Publish(ctx, configaudit.Event{
+		Op:         op,
+		WebhookID:  webhookID,
+		DevLicense: devLicense,
+		Snapshot:   snapshot,
+	})
 }
 
 // RegisterWebhook godoc
@@ -80,7 +119,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		return err
 	}
 
-	if err := validateCoolDownPeriod(payload.CoolDownPeriod); err != nil {
+	if err := validateCoolDownPeriod(payload.CoolDownPeriod, w.maxCooldownPeriod); err != nil {
 		return err
 	}
 
@@ -118,7 +157,23 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(RegisterWebhookResponse{ID: trigger.ID, Message: "Webhook registered successfully"})
+	secret := ""
+	if trigger.SigningSecret.Valid {
+		secret = trigger.SigningSecret.String
+	}
+	w.publishAudit(c.Context(), configaudit.OpWebhookCreate, trigger.ID, token.EthereumAddress.Hex(), map[string]any{
+		"service":    trigger.Service,
+		"metricName": trigger.MetricName,
+		"targetUri":  trigger.TargetURI,
+		"status":     trigger.Status,
+		"cooldown":   trigger.CooldownPeriod,
+	})
+	return c.Status(fiber.StatusCreated).JSON(RegisterWebhookResponse{
+		ID:                 trigger.ID,
+		Message:            "Webhook registered successfully",
+		SigningSecret:      secret,
+		SignatureAlgorithm: "HMAC-SHA256(timestamp + \".\" + body)",
+	})
 }
 
 // ListWebhooks godoc
@@ -220,7 +275,7 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		event.Condition = *payload.Condition
 	}
 	if payload.CoolDownPeriod != nil {
-		if err := validateCoolDownPeriod(*payload.CoolDownPeriod); err != nil {
+		if err := validateCoolDownPeriod(*payload.CoolDownPeriod, w.maxCooldownPeriod); err != nil {
 			return err
 		}
 		event.CooldownPeriod = *payload.CoolDownPeriod
@@ -239,8 +294,51 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	}
 
 	w.cache.ScheduleRefresh(c.Context())
+	w.publishAudit(c.Context(), configaudit.OpWebhookUpdate, event.ID, common.BytesToAddress(event.DeveloperLicenseAddress).Hex(), map[string]any{
+		"status":    event.Status,
+		"targetUri": event.TargetURI,
+		"condition": event.Condition,
+		"cooldown":  event.CooldownPeriod,
+	})
 
 	return c.Status(fiber.StatusOK).JSON(UpdateWebhookResponse{ID: event.ID, Message: "Webhook updated successfully"})
+}
+
+// RotateSigningSecret godoc
+// @Summary      Rotate a webhook signing secret
+// @Description  Generates and persists a new HMAC-SHA256 signing secret for
+// @Description  the webhook. The new secret is returned exactly once - store
+// @Description  it on the receiver side before the response leaves the wire.
+// @Tags         Webhooks
+// @Produce      json
+// @Param        webhookId  path  string  true  "Webhook ID"
+// @Success      200  {object}  RotateSigningSecretResponse  "New signing secret"
+// @Failure      404  "Webhook not found"
+// @Failure      500  "Internal server error"
+// @Security     BearerAuth
+// @Router       /v1/webhooks/{webhookId}/rotate-secret [post]
+func (w *WebhookController) RotateSigningSecret(c *fiber.Ctx) error {
+	webhookID, err := getWebhookID(c)
+	if err != nil {
+		return err
+	}
+	devLicense, err := getDevLicense(c)
+	if err != nil {
+		return err
+	}
+	secret, err := w.repo.RotateSigningSecret(c.Context(), webhookID, devLicense)
+	if err != nil {
+		return err
+	}
+	w.publishAudit(c.Context(), configaudit.OpWebhookUpdate, webhookID, devLicense.Hex(), map[string]any{
+		"secretRotated": true,
+	})
+	return c.Status(fiber.StatusOK).JSON(RotateSigningSecretResponse{
+		ID:                 webhookID,
+		Message:            "Signing secret rotated",
+		SigningSecret:      secret,
+		SignatureAlgorithm: "HMAC-SHA256(timestamp + \".\" + body)",
+	})
 }
 
 // DeleteWebhook godoc
@@ -273,6 +371,7 @@ func (w *WebhookController) DeleteWebhook(c *fiber.Ctx) error {
 		return fmt.Errorf("failed to delete webhook: %w", err)
 	}
 	w.cache.ScheduleRefresh(c.Context())
+	w.publishAudit(c.Context(), configaudit.OpWebhookDelete, webhookID, devLicense.Hex(), nil)
 
 	return c.Status(fiber.StatusOK).JSON(GenericResponse{Message: "Webhook deleted successfully"})
 }

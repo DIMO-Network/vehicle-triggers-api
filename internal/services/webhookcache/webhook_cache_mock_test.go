@@ -41,6 +41,21 @@ func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
 }
 
+// DecryptSigningSecret mocks base method.
+func (m *MockRepository) DecryptSigningSecret(stored string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DecryptSigningSecret", stored)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DecryptSigningSecret indicates an expected call of DecryptSigningSecret.
+func (mr *MockRepositoryMockRecorder) DecryptSigningSecret(stored any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecryptSigningSecret", reflect.TypeOf((*MockRepository)(nil).DecryptSigningSecret), stored)
+}
+
 // InternalGetAllVehicleSubscriptions mocks base method.
 func (m *MockRepository) InternalGetAllVehicleSubscriptions(ctx context.Context) ([]*models.VehicleSubscription, error) {
 	m.ctrl.T.Helper()
@@ -69,4 +84,42 @@ func (m *MockRepository) InternalGetTriggerByID(ctx context.Context, triggerID s
 func (mr *MockRepositoryMockRecorder) InternalGetTriggerByID(ctx, triggerID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InternalGetTriggerByID", reflect.TypeOf((*MockRepository)(nil).InternalGetTriggerByID), ctx, triggerID)
+}
+
+// MockNotifier is a mock of Notifier interface.
+type MockNotifier struct {
+	ctrl     *gomock.Controller
+	recorder *MockNotifierMockRecorder
+	isgomock struct{}
+}
+
+// MockNotifierMockRecorder is the mock recorder for MockNotifier.
+type MockNotifierMockRecorder struct {
+	mock *MockNotifier
+}
+
+// NewMockNotifier creates a new mock instance.
+func NewMockNotifier(ctrl *gomock.Controller) *MockNotifier {
+	mock := &MockNotifier{ctrl: ctrl}
+	mock.recorder = &MockNotifierMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockNotifier) EXPECT() *MockNotifierMockRecorder {
+	return m.recorder
+}
+
+// Notify mocks base method.
+func (m *MockNotifier) Notify(ctx context.Context, webhookID, op string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Notify", ctx, webhookID, op)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Notify indicates an expected call of Notify.
+func (mr *MockNotifierMockRecorder) Notify(ctx, webhookID, op any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Notify", reflect.TypeOf((*MockNotifier)(nil).Notify), ctx, webhookID, op)
 }

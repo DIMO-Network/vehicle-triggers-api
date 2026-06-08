@@ -9,3 +9,6 @@ data:
 {{- range $key, $val := .Values.env }}
   {{ $key }} : {{ $val | quote}}
 {{- end}}
+{{- if .Values.nats.credsEnabled }}
+  NATS_CREDS_FILE: {{ printf "%s/nats.creds" .Values.nats.credsMountPath | quote }}
+{{- end}}

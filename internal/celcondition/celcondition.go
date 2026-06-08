@@ -37,7 +37,11 @@ func buildSignalEnv() (*cel.Env, error) {
 		cel.Variable("value.longitude", cel.DynType),
 		cel.Variable("value.hdop", cel.DynType),
 		geoDistanceOpt(),
-		cel.Variable("source", cel.DoubleType),
+		// source is the signal's origin string (e.g. device address); it is
+		// populated from signal.Source (a string) at eval time, so it must be
+		// declared StringType. Declaring it DoubleType made any condition
+		// referencing source fail type-checking at prepare time.
+		cel.Variable("source", cel.StringType),
 		cel.Variable("previousValueNumber", cel.DoubleType),
 		cel.Variable("previousValueString", cel.StringType),
 		cel.Variable("previousValue", cel.DynType),

@@ -37,14 +37,17 @@ func (c *Cache) HasVehiclePermissions(ctx context.Context, assetDid cloudevent.E
 	cacheKey := accessRequestCacheKey(&req)
 
 	if hasAccess, found := c.cache.Get(cacheKey); found {
+		metricsCache("hit")
 		return hasAccess.(bool), nil
 	}
 
 	hasAccess, err := c.tokenExchangeClient.HasVehiclePermissions(ctx, assetDid, devLicense, permissions)
 	if err != nil {
+		metricsCache("error")
 		return false, fmt.Errorf("failed to check access: %w", err)
 	}
 	c.cache.Set(cacheKey, hasAccess, 0)
+	metricsCache("miss")
 	return hasAccess, nil
 }
 

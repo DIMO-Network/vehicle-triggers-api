@@ -15,6 +15,7 @@ import (
 
 	cloudevent "github.com/DIMO-Network/cloudevent"
 	models "github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	configaudit "github.com/DIMO-Network/vehicle-triggers-api/internal/services/configaudit"
 	triggersrepo "github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	common "github.com/ethereum/go-ethereum/common"
 	gomock "go.uber.org/mock/gomock"
@@ -178,6 +179,21 @@ func (mr *MockRepositoryMockRecorder) GetVehicleSubscriptionsByVehicleAndDevelop
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVehicleSubscriptionsByVehicleAndDeveloperLicense", reflect.TypeOf((*MockRepository)(nil).GetVehicleSubscriptionsByVehicleAndDeveloperLicense), ctx, assetDID, developerLicense)
 }
 
+// RotateSigningSecret mocks base method.
+func (m *MockRepository) RotateSigningSecret(ctx context.Context, triggerID string, developerLicense common.Address) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RotateSigningSecret", ctx, triggerID, developerLicense)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RotateSigningSecret indicates an expected call of RotateSigningSecret.
+func (mr *MockRepositoryMockRecorder) RotateSigningSecret(ctx, triggerID, developerLicense any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateSigningSecret", reflect.TypeOf((*MockRepository)(nil).RotateSigningSecret), ctx, triggerID, developerLicense)
+}
+
 // UpdateTrigger mocks base method.
 func (m *MockRepository) UpdateTrigger(ctx context.Context, trigger *models.Trigger) error {
 	m.ctrl.T.Helper()
@@ -226,4 +242,42 @@ func (m *MockWebhookCache) ScheduleRefresh(ctx context.Context) {
 func (mr *MockWebhookCacheMockRecorder) ScheduleRefresh(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScheduleRefresh", reflect.TypeOf((*MockWebhookCache)(nil).ScheduleRefresh), ctx)
+}
+
+// MockConfigAudit is a mock of ConfigAudit interface.
+type MockConfigAudit struct {
+	ctrl     *gomock.Controller
+	recorder *MockConfigAuditMockRecorder
+	isgomock struct{}
+}
+
+// MockConfigAuditMockRecorder is the mock recorder for MockConfigAudit.
+type MockConfigAuditMockRecorder struct {
+	mock *MockConfigAudit
+}
+
+// NewMockConfigAudit creates a new mock instance.
+func NewMockConfigAudit(ctrl *gomock.Controller) *MockConfigAudit {
+	mock := &MockConfigAudit{ctrl: ctrl}
+	mock.recorder = &MockConfigAuditMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockConfigAudit) EXPECT() *MockConfigAuditMockRecorder {
+	return m.recorder
+}
+
+// Publish mocks base method.
+func (m *MockConfigAudit) Publish(ctx context.Context, e configaudit.Event) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Publish", ctx, e)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Publish indicates an expected call of Publish.
+func (mr *MockConfigAuditMockRecorder) Publish(ctx, e any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockConfigAudit)(nil).Publish), ctx, e)
 }

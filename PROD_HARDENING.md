@@ -1,0 +1,159 @@
+# vehicle-triggers-api Prod Hardening Backlog
+
+Tracking list of items surfaced during the NATS JetStream migration review.
+Ordered by priority. Effort estimates are rough.
+
+Categories:
+- **Correctness**: could cause wrong webhook fires or data loss
+- **Performance**: throughput / latency / resource ceilings
+- **Operational**: ops can't recover, can't observe, can't tune
+- **Architecture**: structural smells that block future scale
+- **Scaling**: items needed when load grows past current ceiling
+
+---
+
+## P0 — Land before / shortly after merge
+
+### Correctness
+
+- [x] **CAS-based `RecordFire`.** ~~Two replicas racing on same `(trigger, vehicle)` both pass cooldown KV read, both fire, both `Put`. Replace `kv.Put` with `kv.Update` on observed revision (or `kv.Create` for first write), retry once on conflict, skip fire on second conflict. Effort: 1-2h. File: `internal/services/triggerstate/triggerstate.go`.~~ Done: `writeWithCAS` retries once then falls back to `Put`, bumping `vehicle_triggers_state_cas_conflicts_total{bucket, outcome=retry|fallback}`. Full prevention requires receiver dedup via deterministic ID (P0-2). Race test in `tests/e2e/nats_state_cas_test.go`.
+- [x] **Deterministic webhook ID for receiver dedup.** ~~Today `payload.ID = uuid.New().String()` regenerates per delivery~~ Done: `webhookID(triggerID, sourceID)` returns `sha256(triggerID|sourceID)[:16]` hex. `sourceID` = inbound CloudEvent ID from the signal/event (carried by DIS), stable across JS redelivery. UUID fallback only when source absent. Unit tested.
+- [x] **KV decode error metric.** ~~`lookupPreviousSignal` / `lookupPreviousEvent` silently swallow JSON decode errors and return zero-value. Add `vehicle_triggers_kv_decode_errors_total{bucket}` so silent corruption shows up.~~ Done: `vehicle_triggers_state_decode_errors_total{bucket}` bumped from both evaluator lookup paths.
+
+### Performance — quick wins
+
+- [x] **Configure webhook HTTP Transport.** ~~Today `webhook_sender.go` uses Go's default Transport (`MaxIdleConnsPerHost=2`).~~ Done: cloned default with `MaxIdleConnsPerHost=64`, `MaxIdleConns=1024`, `IdleConnTimeout=90s`, `ForceAttemptHTTP2=true`. See `defaultTransport()`.
+  ```go
+  Transport: &http.Transport{
+      MaxIdleConns:          1024,
+      MaxIdleConnsPerHost:   64,
+      IdleConnTimeout:       90 * time.Second,
+      ForceAttemptHTTP2:     true,
+      TLSHandshakeTimeout:   10 * time.Second,
+      ResponseHeaderTimeout: 20 * time.Second,
+      DisableCompression:    false,
+  }
+  ```
+  Removes TLS handshake overhead at high fire rates. Effort: 30m. File: `internal/services/webhooksender/webhook_sender.go`.
+
+- [x] **End-to-end latency histogram.** ~~Add `vehicle_triggers_eval_latency_seconds{outcome}`~~ Done: `vehicle_triggers_nats_eval_latency_seconds{stream, outcome}` recorded from `meta.Timestamp` at ack/nak/dlq sites. Buckets 1ms-30s.
+
+- [x] **Token-exchange cache hit/miss counters.** ~~No way today to see whether the 15m permission cache is doing its job.~~ Done: `vehicle_triggers_tokenexchange_cache_total{outcome=hit|miss|error}` bumped in `Cache.HasVehiclePermissions`.
+
+### Operational
+
+- [x] **`Settings.Validate()` called from `main`.** ~~Catches misconfigurations at startup instead of at first failure.~~ Done: `Settings.Validate()` + `NATSSettings.Validate()` enforce mode enum, KAFKA-required-when-not-exclusive, MaxDeliver/MaxAckPending/AckWait/FetchBatch/StreamReplicas >= 1, retention >= AckWait * MaxDeliver. Called from `main` after `env.LoadSettings`. Unit-tested in `settings_test.go`.
+  - `MaxDeliver > len(BackOff)` (already mitigated in EnsureConsumer but config-level too)
+  - `AckWait < BackOff[0]` is a footgun
+  - `MaxAckPending > 0`
+  - `SignalsMaxAge >= AckWait * MaxDeliver` (else messages discarded mid-retry)
+  - `NATS_MODE` in {`off`, `primary`, `exclusive`}
+  - When `Mode != off`, `URL` non-empty
+  Effort: 1-2h. File: `internal/config/settings.go`.
+
+- [x] **Stream/KV write canary in `/health`.** ~~Connection alive ≠ JetStream writable.~~ Done: `Client.StreamHealth(ctx)` probes each configured stream via `js.Stream(name).Info()`, reports per-stream status, no-leader detected. `/health` returns 503 when any stream lookup/info fails.
+
+- [x] **Backup automation.** ~~Today recovery story is "you can `nats stream backup`."~~ Done: Helm CronJob templates (`backup-cronjob.yaml` + `backup-script-configmap.yaml`) run `nats stream backup` for each stream + KV bucket via the nats-box image, tarball + S3 upload. Default off; enabled with `backup.enabled=true` + `backup.s3Bucket`. Restore procedure documented in `OPERATIONS.md`. We deliberately did NOT build a Go binary - the standard `nats` CLI is the right tool for server-native snapshots.
+
+---
+
+## P1 — Land before exclusive cutover in prod
+
+### Performance / architecture
+
+- [x] **Decouple webhook delivery from eval handler.** ~~Today `SendWebhook` is synchronous to the JetStream message handler — a slow receiver holds `MaxAckPending` slots and throttles consume.~~ Done: `internal/services/webhookdispatcher` is a pluggable pool. Workers own send + state + audit + circuit-breaker bookkeeping. `Enqueue` returns `ErrQueueFull` on overflow so the JetStream handler naks and JetStream retries. Default pool size 32 / queue 4096 via `NATS_DISPATCHER_WORKERS` / `NATS_DISPATCHER_QUEUE_SIZE`. `WithDispatcher` on the listener swaps the sync path out; sync path retained for the Kafka-only legacy mode. Metrics: queue depth gauge, queue_full counter, delivery_total+latency histogram.
+
+- [x] **Audit publish fire-and-forget queue.** ~~`PublishAsync` blocks at `MaxAckPending=4000`. We launch a 5s detached goroutine per fire — at 30k/s with 5s blocks that's potentially 150k goroutines.~~ Done: `internal/services/auditqueue` is a bounded buffer + small drainer pool. `Submit` drops on overflow (non-blocking). Drops surface via `vehicle_triggers_audit_dropped_total` — alarm on this. Adapter implements the `webhookdispatcher.AuditPublisher` interface so the dispatcher's `publishAudit` no longer spawns a goroutine. Default `NATS_AUDIT_WORKERS=4`, `NATS_AUDIT_QUEUE_SIZE=16384`.
+
+- [x] **Webhook cache distributed updates.** ~~Today each replica polls Postgres every 5 min.~~ Done: `internal/services/cachebroadcast` publishes change events on plain NATS subject `dimo.cache.webhook.changed`. `WebhookCache.ScheduleRefresh` publishes; receiver side calls `ScheduleRefreshSilent` to avoid echo loops. App wires the notifier on `WebhookCache` and subscribes in `CreateServers` when NATS is enabled. CRUD controllers untouched. 5-min poll stays as reconciliation safety net.
+
+- [x] **Webhook signing (HMAC).** ~~TODO in `webhook_sender.go:74`.~~ Done: migration `00006_trigger_signing_secret.sql` adds nullable `signing_secret`. `CreateTrigger` generates 32 random bytes per trigger; `RegisterWebhookResponse` exposes once. Sender adds `X-DIMO-Timestamp`, `X-DIMO-Signature`, `X-DIMO-Signature-Version: v1` headers when secret set. Algorithm documented in response: `HMAC-SHA256(timestamp + "." + body)`.
+
+### Operational
+
+- [x] **DLQ-headers include developer + vehicle context.** ~~Today DLQ records carry `X-Original-Subject` / `X-Failure-Reason` / `X-Delivered-Count`.~~ Done: `X-Source-Name` (subject suffix), `X-Asset-DID` (best-effort parsed from payload), `X-Recorded-At` (RFC3339Nano) added. Skipped `X-Developer-License` deliberately — one inbound message can match webhooks across multiple developers; tagging "the" developer would mislead. CLI `triggers-dlq list` updated.
+
+- [x] **Webhook config audit trail.** ~~Currently CRUD modifies `triggers` row in place with no history.~~ Done: new stream `DIMO_CONFIG_AUDIT` subject `dimo.config.changed.<webhookID>` provisioned alongside the others. `internal/services/configaudit` publishes on RegisterWebhook / UpdateWebhook / DeleteWebhook / AssignVehicleToWebhook / RemoveVehicleFromWebhook. `WithAudit` setters on both controllers; `configaudit.Noop` when NATS off. 90d retention default. Best-effort: failures logged, never block CRUD.
+
+---
+
+## P2 — Nice-to-have / cleanup
+
+### Architecture
+
+- [~] **Failure count out of DB.** ~~`IncrementTriggerFailureCount` writes one row per delivery failure.~~ Deferred. Re-analysis: failure_count writes only occur on delivery failure, which is rare under healthy conditions. Once the circuit breaker trips, writes stop. Cross-replica CAS coordination is heavy for a slow-path write. Re-open if/when prod metrics show this is a real DB hotspot.
+
+- [x] **Drop `webhooks` KV bucket OR wire it.** ~~Provisioned in `EnsureBuckets`, never read or written.~~ Done: bucket + accessor removed. Provisioned in `EnsureBuckets`, never read or written. Either delete or commit to using it for distributed cache invalidation (paired with P1 webhook cache item). Effort: varies. File: `internal/nats/provision.go`.
+
+- [x] **Drop dead `triggersrepo` methods.** ~~`GetLastLogValue`, `GetLastLogForMetric`, `CreateTriggerLog` no longer called.~~ Done: removed + tests. `GetLastLogValue`, `GetLastLogForMetric`, `CreateTriggerLog` no longer called by anything. Either remove or leave with a `// Deprecated:` doc string pointing at the audit stream. Effort: 30m.
+
+- [~] **Drop `trigger_logs` table.** Deferred per its own pre-req: requires audit-stream consumer (owned by billing team, not us) and a soak period proving DB history is no longer queried. Re-open once those land. After audit-stream consumer is built and a soak period proves we don't need it. Effort: 30m migration + coordination.
+
+- [x] **Normalize one name for trigger ID.** ~~Audit and webhook payloads use both `webhookId` and `triggers.id` for the same value.~~ Done: Go field is `WebhookID`, JSON name stays `webhookId` (public name; comment documents the equivalence with triggers.id). Audit and webhook payloads use both `webhookId` and `triggers.id` for the same value. Pick one and use it everywhere. Effort: 1h.
+
+- [x] **Unify "do work when X enabled" pattern.** ~~Two styles in app.go.~~ Done (clarification, not rewrite): documented the convention in `buildListener` doc - settings.NATS.X decides what to construct; downstream functions take dependencies and check nil. Standard DI idiom; no code change. Two styles in app.go: `bridge != nil` (interface presence) vs `settings.NATS.PrimaryMode()` (config). Pick one. Effort: 1h.
+
+### Operational
+
+- [x] **Helm storage sizing guidance.** ~~`NATS_STREAM_REPLICAS=3` default, no comment on storage per `MaxAge`.~~ Done: rule of thumb and worked example in `values.yaml`. `NATS_STREAM_REPLICAS=3` default, no comment on storage per `MaxAge`. At 30k/s × 24h × ~600B = ~50GB/node/stream. Document in `values.yaml`. Effort: 30m.
+
+- [x] **CI smoke load test.** ~~`cmd/triggers-bench` is manual.~~ Done: `tests/e2e/load_smoke_test.go` (build tag `load`) runs ~300 msg/s for 5s against testcontainer NATS via `vtnats.Connect` + `PullLoop`, asserts zero drops and clean drain. CI runs `go test -tags=load ./tests/e2e/...` in a separate job. `cmd/triggers-bench` is manual. Add a `go test -tags=load` test that runs it briefly against a testcontainer cluster and asserts no drops at low rate. Catches wiring regressions. Effort: half day.
+
+- [~] **Reconciler pod for webhook cache.** Deferred. The 5-min DB poll in `webhookCache` is the existing reconciliation safety net for the new cachebroadcast pub/sub path (P1-3). Promote to a dedicated CronJob only if the poll proves insufficient in prod (e.g. propagation lag observed > 5 min sustained).
+
+---
+
+## P3 — When load forces it
+
+### Scaling
+
+- [x] **Stream sharding.** ~~Today one `DIMO_SIGNALS` stream caps around ~50k/s in our bench~~ Documented in `SCALING.md` with concrete trigger (publish rate > 40k/s sustained) + design (shard by name prefix or hash) + risk notes. Wait to implement until the trigger fires.
+
+- [x] **Subject sharding for affinity routing.** ~~Hash `devLicense` (or `targetURL`) into N partition subjects~~ Documented in `SCALING.md` with trigger (cache miss rate > 5% + p99 climb) + design + risk. Defer until measured.
+
+- [x] **`signal_index` KV refcount + dynamic filter scoping.** Documented in `SCALING.md` with trigger (>1000 distinct metric names + low subscription hit rate) + design (CAS-protected refcount, consumer rebuilds FilterSubjects on watch).
+
+- [x] **Cross-region DR.** Active-passive design captured in `SCALING.md` with JetStream mirroring + Postgres logical replication + DNS failover. Active-active deliberately deferred until DIS owns the dual-publish semantics. Trigger: RTO requirement drops below AWS region recovery time.
+
+- [x] **Shared permissions cache in NATS KV.** Documented in `SCALING.md` with trigger (cache hit rate < 85% steady-state) + design (KV layer between in-process cache and gRPC, CAS-protected populate). Defer until the cache-hit metric we added in P0-6 shows we need it.
+
+---
+
+## Cutover gates
+
+Before flipping `NATS_MODE=primary` in **dev**:
+- All **P0** items done
+- DIS publish-to-NATS PR ready (or accept bridge mode indefinitely)
+- Backup CronJob running
+- `/health` includes stream-write canary
+
+Before flipping `NATS_MODE=primary` in **prod**:
+- 1-week soak in staging clean
+- Audit consumer exists somewhere (billing team)
+- Latency histogram + cache-hit counters wired
+- All **P1** items done
+
+Before flipping `NATS_MODE=exclusive` in **prod**:
+- DIS publishes natively, Kafka topic going empty
+- 1-week soak in `primary` showing 0 nak/dlq drift
+- Drop `KAFKA_*` from chart values
+- Open follow-up PR to remove Kafka code paths
+
+---
+
+## Open questions
+
+- What's our actual signal volume (peak msg/sec)? Current bench measures 30k/s/pod ceiling; we need to know if production is 1k or 100k.
+- Who owns audit-stream consumer for billing? Stream is populated; nobody reads.
+- What's the SLO for webhook delivery latency? Drives whether we need async dispatcher (P1) or current sync path is fine.
+- What's the retention requirement for `DIMO_TRIGGER_AUDIT`? 90d default; finance/legal may need 7+ years (different storage entirely).
+
+---
+
+## Reference
+
+- Branch: `nats-jetstream-migration`
+- PR: https://github.com/DIMO-Network/vehicle-triggers-api/pull/129
+- Contract: `NATS_CONTRACT.md`
+- Bench: `cmd/triggers-bench`
+- Inspection: `cmd/triggers-state`, `cmd/triggers-dlq`

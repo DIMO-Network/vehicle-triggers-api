@@ -7,22 +7,22 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/DIMO-Network/server-garage/pkg/env"
 	"github.com/DIMO-Network/server-garage/pkg/logging"
 	"github.com/DIMO-Network/server-garage/pkg/monserver"
-	"github.com/DIMO-Network/server-garage/pkg/runner"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/app"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/migrations"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/kafka"
+	vtnats "github.com/DIMO-Network/vehicle-triggers-api/internal/nats"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -71,8 +71,7 @@ func main() {
 		if *migrationCommand == "" {
 			*migrationCommand = "up -v"
 		}
-		err := migrations.RunGoose(mainCtx, strings.Fields(*migrationCommand), settings.DB)
-		if err != nil {
+		if err := migrations.RunGoose(mainCtx, strings.Fields(*migrationCommand), settings.DB); err != nil {
 			logger.Fatal().Err(err).Msg("Failed to run migrations")
 		}
 		if *migrateOnly {
@@ -80,97 +79,104 @@ func main() {
 		}
 	}
 
+	// Migrations don't need full config; validate everything else only
+	// when we're about to start the service.
+	if err := settings.Validate(); err != nil {
+		log.Fatalf("settings.Validate: %s", err)
+	}
+
 	monApp := monserver.NewMonitoringServer(&logger, settings.EnablePprof)
 	logger.Info().Str("port", strconv.Itoa(settings.MonPort)).Msgf("Starting monitoring server")
-	runHandlerWithLogging(runnerCtx, runnerGroup, &logger, "monitoring", monApp, net.JoinHostPort("0.0.0.0", strconv.Itoa(settings.MonPort)))
+	runHTTPServer(runnerCtx, runnerGroup, &logger, "monitoring", monApp, net.JoinHostPort("0.0.0.0", strconv.Itoa(settings.MonPort)))
 
 	servers, err := app.CreateServers(runnerCtx, &settings, logger)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to create servers")
 	}
 	logger.Info().Str("port", strconv.Itoa(settings.Port)).Msgf("Starting web server")
-	runFiberWithLogging(runnerCtx, runnerGroup, &logger, servers.Application, net.JoinHostPort("0.0.0.0", strconv.Itoa(settings.Port)))
-	RunConsumer(runnerCtx, runnerGroup, &logger, servers.SignalConsumer)
-	RunConsumer(runnerCtx, runnerGroup, &logger, servers.EventConsumer)
+	runFiber(runnerCtx, runnerGroup, &logger, servers.Application, net.JoinHostPort("0.0.0.0", strconv.Itoa(settings.Port)))
+
+	// Phased shutdown for the ingest -> dispatch -> NATS pipeline. A webhook is
+	// acked off JetStream as soon as it is enqueued (async dispatch), so an
+	// unordered teardown would drop acked-but-unsent webhooks on every deploy.
+	// We tear the pipeline down strictly in dependency order:
+	//   1. signal cancels runnerCtx        -> pull loops stop pulling/acking and
+	//                                          drain their in-flight handlers
+	//   2. once consumers have exited       -> stop the dispatcher; its workers
+	//                                          drain the queue (no new Enqueue can
+	//                                          race them now)
+	//   3. once the dispatcher has drained  -> stop the audit queue; it flushes
+	//                                          the dispatcher's final audit records
+	//   4. once audit has drained           -> close the NATS connection last so
+	//                                          RecordFire / audit publishes landed
+	if servers.NATSClient != nil {
+		client := servers.NATSClient
+		dispatcherCtx, stopDispatcher := context.WithCancel(context.Background())
+		auditCtx, stopAudit := context.WithCancel(context.Background())
+		var dispatcherWG, auditWG, consumerWG sync.WaitGroup
+
+		if servers.AuditQueue != nil {
+			aq := servers.AuditQueue
+			auditWG.Go(func() {
+				logger.Info().Msg("audit queue: starting drainer pool")
+				err := aq.Run(auditCtx)
+				logger.Info().Err(err).Msg("audit queue: drainer pool exited")
+			})
+		}
+		if servers.Dispatcher != nil {
+			disp := servers.Dispatcher
+			dispatcherWG.Go(func() {
+				logger.Info().Msg("dispatcher: starting workers")
+				err := disp.Run(dispatcherCtx)
+				logger.Info().Err(err).Msg("dispatcher: workers exited")
+			})
+		}
+
+		startPullLoop := func(name string, cons jetstream.Consumer, handler vtnats.PayloadHandler) {
+			consumerWG.Add(1)
+			runnerGroup.Go(func() error {
+				defer consumerWG.Done()
+				slog := logger.With().Str("subsystem", name).Logger()
+				slog.Info().Msg("pull loop: start")
+				err := client.PullLoop(runnerCtx, cons, settings.MaxInFlight, handler)
+				slog.Info().Err(err).Msg("pull loop: exit")
+				if err != nil && !errors.Is(err, context.Canceled) {
+					return fmt.Errorf("%s: %w", name, err)
+				}
+				return nil
+			})
+		}
+		if servers.NATSSignalConsumer != nil {
+			startPullLoop("nats-signals", servers.NATSSignalConsumer, servers.NATSListener.HandleSignalPayload)
+		}
+		if servers.NATSEventConsumer != nil {
+			startPullLoop("nats-events", servers.NATSEventConsumer, servers.NATSListener.HandleEventPayload)
+		}
+
+		// Shutdown coordinator: the single errgroup member that owns the
+		// ordered teardown. It blocks the group from returning until every
+		// phase completes.
+		runnerGroup.Go(func() error {
+			<-runnerCtx.Done()
+			consumerWG.Wait() // phase 1: consumers + in-flight handlers done
+			logger.Info().Msg("shutdown: consumers drained; stopping dispatcher")
+			stopDispatcher() // phase 2
+			dispatcherWG.Wait()
+			logger.Info().Msg("shutdown: dispatcher drained; stopping audit queue")
+			stopAudit() // phase 3
+			auditWG.Wait()
+			logger.Info().Msg("shutdown: audit drained; closing NATS")
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := client.Shutdown(shutdownCtx); err != nil { // phase 4
+				return fmt.Errorf("nats shutdown: %w", err)
+			}
+			return nil
+		})
+	}
 
 	if err := runnerGroup.Wait(); err != nil {
 		logger.Fatal().Err(err).Msg("Server failed.")
 	}
 	logger.Info().Msg("Server stopped.")
-}
-
-// RunConsumer starts the Kafka consumer in a single goroutine. Stop is
-// deferred until Start returns so the subscriber cannot be closed before
-// Subscribe runs (which would mask the real Subscribe error as
-// "subscriber closed"). Entry/exit is logged with the consumer's name.
-func RunConsumer(ctx context.Context, group *errgroup.Group, logger *zerolog.Logger, consumer *kafka.Consumer) {
-	name := consumer.Name()
-	topic := consumer.Topic()
-	group.Go(func() error {
-		logger.Info().Str("consumer", name).Str("topic", topic).Msg("consumer goroutine: start enter")
-		err := consumer.Start(ctx)
-		logger.Info().Str("consumer", name).Str("topic", topic).Err(err).Msg("consumer goroutine: start exit")
-
-		stopErr := consumer.Stop(context.Background())
-		logger.Info().Str("consumer", name).Str("topic", topic).Err(stopErr).Msg("consumer goroutine: stop exit")
-
-		if err != nil {
-			return fmt.Errorf("consumer %q (topic %q) start: %w", name, topic, err)
-		}
-		if stopErr != nil {
-			return fmt.Errorf("consumer %q (topic %q) stop: %w", name, topic, stopErr)
-		}
-		return nil
-	})
-}
-
-// runFiberWithLogging mirrors runner.RunFiber but logs goroutine
-// enter/exit so we can see which subsystem returned first.
-func runFiberWithLogging(ctx context.Context, group *errgroup.Group, logger *zerolog.Logger, fiberApp runner.FiberApp, addr string) {
-	group.Go(func() error {
-		logger.Info().Str("addr", addr).Msg("fiber goroutine: listen enter")
-		err := fiberApp.Listen(addr)
-		logger.Info().Str("addr", addr).Err(err).Msg("fiber goroutine: listen exit")
-		if err != nil {
-			return fmt.Errorf("fiber listen %q: %w", addr, err)
-		}
-		return nil
-	})
-	group.Go(func() error {
-		<-ctx.Done()
-		logger.Info().Str("addr", addr).Msg("fiber goroutine: shutdown enter")
-		err := fiberApp.Shutdown()
-		logger.Info().Str("addr", addr).Err(err).Msg("fiber goroutine: shutdown exit")
-		if err != nil {
-			return fmt.Errorf("fiber shutdown %q: %w", addr, err)
-		}
-		return nil
-	})
-}
-
-// runHandlerWithLogging mirrors runner.RunHandler but logs goroutine
-// enter/exit so we can see which subsystem returned first.
-func runHandlerWithLogging(ctx context.Context, group *errgroup.Group, logger *zerolog.Logger, name string, handler http.Handler, addr string) {
-	srv := &http.Server{Addr: addr, Handler: handler}
-	group.Go(func() error {
-		logger.Info().Str("server", name).Str("addr", addr).Msg("http goroutine: listen enter")
-		err := srv.ListenAndServe()
-		logger.Info().Str("server", name).Str("addr", addr).Err(err).Msg("http goroutine: listen exit")
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("%s listen %q: %w", name, addr, err)
-		}
-		return nil
-	})
-	group.Go(func() error {
-		<-ctx.Done()
-		logger.Info().Str("server", name).Str("addr", addr).Msg("http goroutine: shutdown enter")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		err := srv.Shutdown(shutdownCtx)
-		logger.Info().Str("server", name).Str("addr", addr).Err(err).Msg("http goroutine: shutdown exit")
-		if err != nil {
-			return fmt.Errorf("%s shutdown %q: %w", name, addr, err)
-		}
-		return nil
-	})
 }

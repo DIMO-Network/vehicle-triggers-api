@@ -12,10 +12,22 @@ import (
 
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/celcondition"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/safetransport"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/gofiber/fiber/v2"
 )
+
+// verifyClient is the SSRF-guarded HTTP client for the registration
+// verification probe. The guard refuses to dial internal/loopback/metadata
+// addresses so a developer can't point a webhook at the cluster's internal
+// network or the instance metadata endpoint.
+var verifyClient = safetransport.Client(10 * time.Second)
+
+// maxVerifyBodySize caps the verification response read. The token is a
+// short opaque string; a larger body is a misbehaving receiver and must not
+// be allowed to exhaust the API server heap.
+const maxVerifyBodySize = 4096
 
 // verifyWebhookURL verifies that the target URL is valid and returns the verification token.
 // It sends a POST request to the target URL with a dummy payload and verifies that the response contains the expected verification token.
@@ -31,7 +43,7 @@ func verifyWebhookURL(ctx context.Context, targetURL string, verificationToken s
 		}
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := verifyClient.Do(req)
 	if err != nil {
 		return richerrors.Error{
 			ExternalMsg: "Failed to call target URL",
@@ -47,7 +59,7 @@ func verifyWebhookURL(ctx context.Context, targetURL string, verificationToken s
 		}
 	}
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxVerifyBodySize))
 	if err != nil {
 		return richerrors.Error{
 			ExternalMsg: "Failed to read response from target URL",
@@ -116,10 +128,16 @@ func validateCondition(serviceName, condition, valueType string) error {
 	return nil
 }
 
-func validateCoolDownPeriod(coolDownPeriod int) error {
+func validateCoolDownPeriod(coolDownPeriod, maxAllowed int) error {
 	if coolDownPeriod < 0 {
 		return richerrors.Error{
 			ExternalMsg: "Cool down period must be greater than or equal to 0",
+			Code:        fiber.StatusBadRequest,
+		}
+	}
+	if maxAllowed > 0 && coolDownPeriod > maxAllowed {
+		return richerrors.Error{
+			ExternalMsg: fmt.Sprintf("Cool down period %d exceeds MAX_ALLOWED_COOLDOWN_PERIOD=%d; the state KV bucket's TTL cannot cover longer cooldowns", coolDownPeriod, maxAllowed),
 			Code:        fiber.StatusBadRequest,
 		}
 	}

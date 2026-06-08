@@ -15,13 +15,44 @@ env:
   SERVICE_NAME: vehicle-triggers-api
   JWK_KEY_SET_URL: https://auth.dimo.zone/keys
   IDENTITY_API_URL: https://identity-api.dimo.zone/query
-  KAFKA_BROKERS: kafka-prod-dimo-kafka-kafka-brokers:9092
   TOKEN_EXCHANGE_GRPC_ADDR: token-exchange-api-prod:8086
   DIMO_REGISTRY_CHAIN_ID: 137
   VEHICLE_NFT_ADDRESS: '0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF'
   MAX_IN_FLIGHT: 50
   TOKEN_EXCHANGE_CACHE_EXPIRATION: 10m
   TOKEN_EXCHANGE_CACHE_CLEANUP_INTERVAL: 2m
+  # NATS JetStream ingest. This is what activates the consume+dispatch
+  # pipeline in prod; without NATS_MODE=exclusive the service runs API-only.
+  # DELIVER_POLICY=new is the safe cutover default (no replay of retained
+  # telemetry). Switch to "all" only for a deliberate backfill.
+  NATS_MODE: exclusive
+  NATS_URL: nats://nats-prod.dimo-platform.svc.cluster.local:4222
+  NATS_NAME: vehicle-triggers-api
+  NATS_DELIVER_POLICY: new
+  NATS_SIGNALS_STREAM: DIMO_SIGNALS
+  NATS_EVENTS_STREAM: DIMO_EVENTS
+  NATS_AUDIT_STREAM: DIMO_TRIGGER_AUDIT
+  NATS_DLQ_STREAM: DIMO_TRIGGER_DLQ
+  NATS_SIGNALS_SUBJECT: dimo.signals.>
+  NATS_EVENTS_SUBJECT: dimo.events.>
+  NATS_AUDIT_SUBJECT: dimo.trigger.fired.>
+  NATS_DLQ_SUBJECT: dimo.dlq.>
+  NATS_SIGNALS_DURABLE: triggers-signals
+  NATS_EVENTS_DURABLE: triggers-events
+  NATS_STREAM_REPLICAS: '3'
+  NATS_ACK_WAIT: 45s
+  NATS_MAX_DELIVER: '5'
+  NATS_MAX_ACK_PENDING: '5000'
+  NATS_FETCH_BATCH: '100'
+  NATS_PUBLISH_ASYNC_MAX_PENDING: '4000'
+  NATS_DLQ_MAX_AGE: 168h
+  NATS_TRIGGER_STATE_BUCKET: trigger_state
+  NATS_SIGNAL_HISTORY_BUCKET: signal_history
+  # Cooldown TTL invariant: TTL >= 2*MAX_ALLOWED_COOLDOWN_PERIOD or startup fails.
+  NATS_TRIGGER_STATE_TTL: 1512h
+  MAX_ALLOWED_COOLDOWN_PERIOD: '2592000'
+# Ordered pipeline drain needs > 30s default (see deployment.yaml note).
+terminationGracePeriodSeconds: 120
 ingress:
   enabled: true
   className: nginx

@@ -12,16 +12,14 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerevaluator"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
-	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
-	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/rs/zerolog"
-	"golang.org/x/sync/errgroup"
 )
 
-func (m *MetricListener) processSignalMessage(msg *message.Message) error {
+// HandleSignalPayload parses a SignalCloudEvent and evaluates triggers
+// against each unpacked signal. The NATS pull-loop entry point.
+func (m *MetricListener) HandleSignalPayload(ctx context.Context, payload []byte) error {
 	var signalCE vss.SignalCloudEvent
-	if err := json.Unmarshal(msg.Payload, &signalCE); err != nil {
+	if err := json.Unmarshal(payload, &signalCE); err != nil {
 		return fmt.Errorf("failed to parse signal CloudEvent: %w", err)
 	}
 
@@ -39,7 +37,7 @@ func (m *MetricListener) processSignalMessage(msg *message.Message) error {
 			errs = errors.Join(errs, fmt.Errorf("failed to marshal signal: %w", err))
 			continue
 		}
-		if err := m.processSingleSignal(msg.Context(), sig, vehicleDID, sigData); err != nil {
+		if err := m.processSingleSignal(ctx, sig, vehicleDID, sigData); err != nil {
 			errs = errors.Join(errs, err)
 		}
 	}
@@ -59,58 +57,17 @@ func inferSignalValueType(sig vss.Signal) string {
 
 func (m *MetricListener) processSingleSignal(ctx context.Context, sig vss.Signal, vehicleDID cloudevent.ERC721DID, rawPayload json.RawMessage) error {
 	signalDef := signals.GetSignalDefinitionOrDefault(sig.Data.Name, inferSignalValueType(sig))
-
-	sigAndRaw := triggerevaluator.SignalEvaluationData{
+	eval := &triggerevaluator.SignalEvaluationData{
 		Signal:     sig,
 		VehicleDID: vehicleDID,
 		Def:        signalDef,
 		RawData:    rawPayload,
 	}
-
 	webhooks := m.webhookCache.GetWebhooks(vehicleDID.String(), triggersrepo.ServiceSignal, signals.VSSPrefix+sig.Data.Name)
-	if len(webhooks) == 0 {
-		return nil
-	}
-
-	group, groupCtx := errgroup.WithContext(ctx)
-	group.SetLimit(100)
-	for _, wh := range webhooks {
-		group.Go(func() error {
-			if err := m.processSignalWebhook(groupCtx, wh, &sigAndRaw); err != nil {
-				zerolog.Ctx(groupCtx).Error().Str("trigger_id", wh.Trigger.ID).Err(err).Msg("failed to process webhook")
-			}
-			return nil
-		})
-	}
-	return group.Wait()
+	return fanoutAndFire(ctx, m, webhooks, vehicleDID, rawPayload, eval,
+		m.triggerEvaluator.EvaluateSignalTrigger, m.createSignalPayload)
 }
 
-func (m *MetricListener) processSignalWebhook(ctx context.Context, wh *webhookcache.Webhook, sigAndRaw *triggerevaluator.SignalEvaluationData) error {
-	// Evaluate the trigger using the new service
-	result, err := m.triggerEvaluator.EvaluateSignalTrigger(ctx, wh.Trigger, wh.Program, sigAndRaw)
-	if err != nil {
-		return fmt.Errorf("failed to evaluate signal trigger: %w", err)
-	}
-
-	if !result.ShouldFire {
-		// Handle permission denied - unsubscribe from the trigger
-		if result.PermissionDenied {
-			_, err := m.repo.DeleteVehicleSubscription(ctx, wh.Trigger.ID, sigAndRaw.VehicleDID)
-			if err != nil {
-				return fmt.Errorf("failed to delete vehicle subscription: %w", err)
-			}
-			m.webhookCache.ScheduleRefresh(ctx)
-		}
-		return nil
-	}
-
-	payload, err := m.createSignalPayload(wh.Trigger, sigAndRaw)
-	if err != nil {
-		return fmt.Errorf("failed to create webhook payload: %w", err)
-	}
-
-	return m.handleTriggeredWebhook(ctx, wh.Trigger, sigAndRaw.RawData, payload)
-}
 func (m *MetricListener) createSignalPayload(trigger *models.Trigger, sigEval *triggerevaluator.SignalEvaluationData) (*cloudevent.CloudEvent[webhook.WebhookPayload], error) {
 	var signalValue any
 	switch sigEval.Def.ValueType {
@@ -123,7 +80,7 @@ func (m *MetricListener) createSignalPayload(trigger *models.Trigger, sigEval *t
 	default:
 		return nil, fmt.Errorf("unsupported signal type: %s", sigEval.Def.ValueType)
 	}
-	payload := m.createWebhookPayload(trigger, sigEval.VehicleDID)
+	payload := m.createWebhookPayload(trigger, sigEval.VehicleDID, sigEval.Signal.ID)
 	payload.Data.Signal = &webhook.SignalData{
 		Name:      sigEval.Signal.Data.Name,
 		Source:    sigEval.Signal.Source,

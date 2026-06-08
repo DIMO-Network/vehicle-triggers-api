@@ -12,6 +12,7 @@ import (
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/configaudit"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggersrepo"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/signals"
 	"github.com/ethereum/go-ethereum/common"
@@ -34,6 +35,7 @@ type VehicleSubscriptionController struct {
 	tokenExchangeClient TokenExchangeClient
 	cache               WebhookCache
 	repo                Repository
+	audit               ConfigAudit
 }
 
 // NewVehicleSubscriptionController creates a new VehicleSubscriptionController.
@@ -43,7 +45,30 @@ func NewVehicleSubscriptionController(repo Repository, identityClient IdentityCl
 		tokenExchangeClient: tokenExchangeClient,
 		cache:               cache,
 		repo:                repo,
+		audit:               configaudit.Noop{},
 	}
+}
+
+// WithAudit wires the controller to publish subscription change events.
+func (v *VehicleSubscriptionController) WithAudit(a ConfigAudit) *VehicleSubscriptionController {
+	if a == nil {
+		a = configaudit.Noop{}
+	}
+	v.audit = a
+	return v
+}
+
+// publishSubscriptionAudit emits a subscription change event. Best-effort.
+func (v *VehicleSubscriptionController) publishSubscriptionAudit(ctx context.Context, op configaudit.Op, webhookID, assetDID, devLicense string) {
+	if v.audit == nil {
+		return
+	}
+	_ = v.audit.Publish(ctx, configaudit.Event{
+		Op:         op,
+		WebhookID:  webhookID,
+		AssetDID:   assetDID,
+		DevLicense: devLicense,
+	})
 }
 
 // AssignVehicleToWebhook godoc
@@ -104,6 +129,7 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 	}
 
 	v.cache.ScheduleRefresh(c.Context())
+	v.publishSubscriptionAudit(c.Context(), configaudit.OpSubscribeVehicle, webhookID, assetDid.String(), dl.Hex())
 	return c.Status(http.StatusCreated).JSON(GenericResponse{Message: "Vehicle assigned successfully"})
 }
 
@@ -247,6 +273,7 @@ func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) e
 		return richerrors.Error{ExternalMsg: "Failed to unsubscribe", Err: err, Code: http.StatusInternalServerError}
 	}
 	v.cache.ScheduleRefresh(c.Context())
+	v.publishSubscriptionAudit(c.Context(), configaudit.OpUnsubscribeVehicle, webhookID, assetDid.String(), dl.Hex())
 	return c.JSON(GenericResponse{Message: "Vehicle unsubscribed successfully"})
 }
 

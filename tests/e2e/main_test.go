@@ -23,7 +23,6 @@ var (
 type TestServices struct {
 	Identity      *mockIdentityServer
 	Auth          *mockAuthServer
-	Kafka         *mockKafkaServer
 	Postgres      *tests.TestContainer
 	TokenExchange *mockTokenExchangeServer
 	refs          atomic.Int64
@@ -47,6 +46,7 @@ func TestMain(m *testing.M) {
 
 func GetTestServices(t *testing.T) *TestServices {
 	t.Helper()
+	tests.SkipIfNoDocker(t)
 	srvcLock.Lock()
 	globalTestContainer.Do(func() {
 		logger := zerolog.New(os.Stdout).Level(zerolog.WarnLevel)
@@ -57,7 +57,7 @@ func GetTestServices(t *testing.T) *TestServices {
 			JWKKeySetURL:        "http://127.0.0.1:3003/keys",
 			VehicleNFTAddress:   common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
 			DIMORegistryChainID: 137,
-			CacheDebounceTime:   -1,
+			Cache:               config.CacheSettings{DebounceTime: -1},
 		}
 
 		// Setup services
@@ -74,13 +74,6 @@ func GetTestServices(t *testing.T) *TestServices {
 			auth := setupAuthServer(t)
 			testServices.Auth = auth
 			testServices.Settings.JWKKeySetURL = auth.URL() + "/keys"
-		})
-		waitForSetup(t, &wg, func(t *testing.T) {
-			kafka := setupMockKafkaServer(t)
-			testServices.Kafka = kafka
-			testServices.Settings.KafkaBrokers = kafka.GetBrokerAddress(t)
-			testServices.Settings.DeviceSignalsTopic = "test.default.signals.topic"
-			testServices.Settings.DeviceEventsTopic = "test.default.events.topic"
 		})
 		waitForSetup(t, &wg, func(t *testing.T) {
 			db := tests.SetupTestContainer(t)
@@ -109,9 +102,6 @@ func (tc *TestServices) TeardownIfLastTest(t *testing.T) {
 		}
 		tc.Identity.Close()
 		tc.Auth.Close()
-		if err := tc.Kafka.Close(); err != nil {
-			t.Logf("Error closing Kafka: %v", err)
-		}
 		tc.TokenExchange.Close()
 		// reset the onceSetup to allow the next test to run if this one is closed
 		globalTestContainer = sync.Once{}

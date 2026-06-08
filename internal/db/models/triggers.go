@@ -37,6 +37,7 @@ type Trigger struct {
 	Description             null.String `boil:"description" json:"description,omitempty" toml:"description" yaml:"description,omitempty"`
 	FailureCount            int         `boil:"failure_count" json:"failure_count" toml:"failure_count" yaml:"failure_count"`
 	DisplayName             string      `boil:"display_name" json:"display_name" toml:"display_name" yaml:"display_name"`
+	SigningSecret           null.String `boil:"signing_secret" json:"signing_secret,omitempty" toml:"signing_secret" yaml:"signing_secret,omitempty"`
 
 	R *triggerR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L triggerL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -56,6 +57,7 @@ var TriggerColumns = struct {
 	Description             string
 	FailureCount            string
 	DisplayName             string
+	SigningSecret           string
 }{
 	ID:                      "id",
 	Service:                 "service",
@@ -70,6 +72,7 @@ var TriggerColumns = struct {
 	Description:             "description",
 	FailureCount:            "failure_count",
 	DisplayName:             "display_name",
+	SigningSecret:           "signing_secret",
 }
 
 var TriggerTableColumns = struct {
@@ -86,6 +89,7 @@ var TriggerTableColumns = struct {
 	Description             string
 	FailureCount            string
 	DisplayName             string
+	SigningSecret           string
 }{
 	ID:                      "triggers.id",
 	Service:                 "triggers.service",
@@ -100,6 +104,7 @@ var TriggerTableColumns = struct {
 	Description:             "triggers.description",
 	FailureCount:            "triggers.failure_count",
 	DisplayName:             "triggers.display_name",
+	SigningSecret:           "triggers.signing_secret",
 }
 
 // Generated where
@@ -150,6 +155,7 @@ var TriggerWhere = struct {
 	Description             whereHelpernull_String
 	FailureCount            whereHelperint
 	DisplayName             whereHelperstring
+	SigningSecret           whereHelpernull_String
 }{
 	ID:                      whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"id\""},
 	Service:                 whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"service\""},
@@ -164,6 +170,7 @@ var TriggerWhere = struct {
 	Description:             whereHelpernull_String{field: "\"vehicle_triggers_api\".\"triggers\".\"description\""},
 	FailureCount:            whereHelperint{field: "\"vehicle_triggers_api\".\"triggers\".\"failure_count\""},
 	DisplayName:             whereHelperstring{field: "\"vehicle_triggers_api\".\"triggers\".\"display_name\""},
+	SigningSecret:           whereHelpernull_String{field: "\"vehicle_triggers_api\".\"triggers\".\"signing_secret\""},
 }
 
 // TriggerRels is where relationship names are stored.
@@ -222,9 +229,9 @@ func (r *triggerR) GetVehicleSubscriptions() VehicleSubscriptionSlice {
 type triggerL struct{}
 
 var (
-	triggerAllColumns            = []string{"id", "service", "metric_name", "condition", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description", "failure_count", "display_name"}
+	triggerAllColumns            = []string{"id", "service", "metric_name", "condition", "target_uri", "cooldown_period", "developer_license_address", "created_at", "updated_at", "status", "description", "failure_count", "display_name", "signing_secret"}
 	triggerColumnsWithoutDefault = []string{"id", "service", "metric_name", "condition", "target_uri", "developer_license_address", "status"}
-	triggerColumnsWithDefault    = []string{"cooldown_period", "created_at", "updated_at", "description", "failure_count", "display_name"}
+	triggerColumnsWithDefault    = []string{"cooldown_period", "created_at", "updated_at", "description", "failure_count", "display_name", "signing_secret"}
 	triggerPrimaryKeyColumns     = []string{"id"}
 	triggerGeneratedColumns      = []string{}
 )

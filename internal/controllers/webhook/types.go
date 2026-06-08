@@ -32,12 +32,31 @@ type RegisterWebhookRequest struct {
 	VerificationToken string `json:"verificationToken" validate:"required" example:"1234567890"`
 }
 
+// RotateSigningSecretResponse is returned after a webhook signing secret is
+// rotated. The new secret is surfaced exactly once; subsequent reads only
+// see the old delivery behavior with the new secret applied.
+type RotateSigningSecretResponse struct {
+	ID                 string `json:"id"`
+	Message            string `json:"message"`
+	SigningSecret      string `json:"signingSecret"`
+	SignatureAlgorithm string `json:"signatureAlgorithm"`
+}
+
 // RegisterWebhookResponse is returned after a webhook is successfully created.
 type RegisterWebhookResponse struct {
 	// ID is the unique identifier of the created webhook.
 	ID string `json:"id"`
 	// Message provides a brief status message for the operation.
 	Message string `json:"message"`
+	// SigningSecret is the per-trigger HMAC-SHA256 key used to sign outbound
+	// webhook bodies. Returned ONCE at registration time - store it on the
+	// receiver side and verify the X-DIMO-Signature header on every webhook.
+	// The server does not surface this value again; rotation is delete +
+	// recreate.
+	SigningSecret string `json:"signingSecret"`
+	// SignatureAlgorithm describes how to verify the signature header:
+	// X-DIMO-Signature = hex(HMAC-SHA256(SigningSecret, X-DIMO-Timestamp + "." + body))
+	SignatureAlgorithm string `json:"signatureAlgorithm"`
 }
 
 // UpdateWebhookRequest represents the fields that can be modified on an existing webhook.
@@ -111,8 +130,10 @@ type WebhookPayload struct {
 	// MetricName is the fully qualified signal/metric monitored by the webhook.
 	MetricName string `json:"metricName"`
 
-	// WebhookId is the ID of the webhook trigger that fired
-	WebhookId string `json:"webhookId"`
+	// WebhookID is the ID of the webhook trigger that fired. Same value as
+	// triggers.id in the database; surfaced under the public name
+	// "webhookId" in the JSON payload.
+	WebhookID string `json:"webhookId"`
 
 	// WebhookName is the user-friendly display name of the trigger
 	WebhookName string `json:"webhookName"`

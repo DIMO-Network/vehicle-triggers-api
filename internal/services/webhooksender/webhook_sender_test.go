@@ -39,14 +39,14 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 			var payload cloudevent.CloudEvent[webhook.WebhookPayload]
 			err = json.Unmarshal(body, &payload)
 			require.NoError(t, err)
-			assert.Equal(t, "test-webhook-id", payload.Data.WebhookId)
+			assert.Equal(t, "test-webhook-id", payload.Data.WebhookID)
 
 			w.WriteHeader(http.StatusOK)
 			_, _ = fmt.Fprint(w, "success")
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:                      "test-webhook-id",
 			TargetURI:               testServer.URL,
@@ -67,7 +67,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: testServer.URL,
@@ -92,7 +92,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: testServer.URL,
@@ -110,7 +110,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 	})
 
 	t.Run("network connection failure", func(t *testing.T) {
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: "http://invalid.localhost:0", // Invalid endpoint
@@ -128,7 +128,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 	})
 
 	t.Run("invalid URL format", func(t *testing.T) {
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: "://invalid-url", // Invalid URL format
@@ -181,7 +181,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: testServer.URL,
@@ -212,7 +212,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: testServer.URL,
@@ -226,8 +226,9 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 
 		// Error message should contain truncated response (limited by maxResponseBodySize)
 		assert.Contains(t, err.Error(), "webhook returned status code 400")
-		// The full large response should not be in the error (should be truncated)
-		assert.True(t, len(err.Error()) <= maxResponseBodySize+50, "Response should be truncated") // +50 for buffer
+		// The full large response should not be in the error (should be truncated).
+		// Buffer accommodates the "webhook permanent failure:" wrap added for 400.
+		assert.True(t, len(err.Error()) <= maxResponseBodySize+128, "Response should be truncated")
 	})
 
 	t.Run("HTTPS server with custom client", func(t *testing.T) {
@@ -264,7 +265,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: testServer.URL,
@@ -284,7 +285,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: testServer.URL,
@@ -325,6 +326,14 @@ func TestNewWebhookSender(t *testing.T) {
 	})
 }
 
+// unguardedClient returns an http.Client without the production SSRF dial
+// guard so these tests can reach httptest servers on loopback. The guard
+// itself is covered by safetransport's own tests; here we exercise the
+// send/retry/status logic, which is independent of the dial policy.
+func unguardedClient() *http.Client {
+	return &http.Client{Timeout: defaultWebhookTimeout}
+}
+
 // Helper function to create test webhook payload
 func createTestPayload(webhookID string) *cloudevent.CloudEvent[webhook.WebhookPayload] {
 	assetDID := cloudevent.ERC721DID{
@@ -347,7 +356,7 @@ func createTestPayload(webhookID string) *cloudevent.CloudEvent[webhook.WebhookP
 		Data: webhook.WebhookPayload{
 			Service:     "signals",
 			MetricName:  "vss.speed",
-			WebhookId:   webhookID,
+			WebhookID:   webhookID,
 			WebhookName: "Test Webhook",
 			AssetDID:    assetDID,
 			Condition:   "valueNumber > 55",

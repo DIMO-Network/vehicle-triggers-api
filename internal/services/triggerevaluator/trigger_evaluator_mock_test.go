@@ -14,63 +14,65 @@ import (
 	reflect "reflect"
 
 	cloudevent "github.com/DIMO-Network/cloudevent"
-	models "github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
+	triggerstate "github.com/DIMO-Network/vehicle-triggers-api/internal/services/triggerstate"
 	common "github.com/ethereum/go-ethereum/common"
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockTriggerRepo is a mock of TriggerRepo interface.
-type MockTriggerRepo struct {
+// MockStateStore is a mock of StateStore interface.
+type MockStateStore struct {
 	ctrl     *gomock.Controller
-	recorder *MockTriggerRepoMockRecorder
+	recorder *MockStateStoreMockRecorder
 	isgomock struct{}
 }
 
-// MockTriggerRepoMockRecorder is the mock recorder for MockTriggerRepo.
-type MockTriggerRepoMockRecorder struct {
-	mock *MockTriggerRepo
+// MockStateStoreMockRecorder is the mock recorder for MockStateStore.
+type MockStateStoreMockRecorder struct {
+	mock *MockStateStore
 }
 
-// NewMockTriggerRepo creates a new mock instance.
-func NewMockTriggerRepo(ctrl *gomock.Controller) *MockTriggerRepo {
-	mock := &MockTriggerRepo{ctrl: ctrl}
-	mock.recorder = &MockTriggerRepoMockRecorder{mock}
+// NewMockStateStore creates a new mock instance.
+func NewMockStateStore(ctrl *gomock.Controller) *MockStateStore {
+	mock := &MockStateStore{ctrl: ctrl}
+	mock.recorder = &MockStateStoreMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockTriggerRepo) EXPECT() *MockTriggerRepoMockRecorder {
+func (m *MockStateStore) EXPECT() *MockStateStoreMockRecorder {
 	return m.recorder
 }
 
-// GetLastLogForMetric mocks base method.
-func (m *MockTriggerRepo) GetLastLogForMetric(ctx context.Context, assetDid cloudevent.ERC721DID, metricName string) (*models.TriggerLog, error) {
+// LastFire mocks base method.
+func (m *MockStateStore) LastFire(ctx context.Context, triggerID string, vehicleDID cloudevent.ERC721DID) (triggerstate.Record, bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLastLogForMetric", ctx, assetDid, metricName)
-	ret0, _ := ret[0].(*models.TriggerLog)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "LastFire", ctx, triggerID, vehicleDID)
+	ret0, _ := ret[0].(triggerstate.Record)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
-// GetLastLogForMetric indicates an expected call of GetLastLogForMetric.
-func (mr *MockTriggerRepoMockRecorder) GetLastLogForMetric(ctx, assetDid, metricName any) *gomock.Call {
+// LastFire indicates an expected call of LastFire.
+func (mr *MockStateStoreMockRecorder) LastFire(ctx, triggerID, vehicleDID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastLogForMetric", reflect.TypeOf((*MockTriggerRepo)(nil).GetLastLogForMetric), ctx, assetDid, metricName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastFire", reflect.TypeOf((*MockStateStore)(nil).LastFire), ctx, triggerID, vehicleDID)
 }
 
-// GetLastLogValue mocks base method.
-func (m *MockTriggerRepo) GetLastLogValue(ctx context.Context, triggerID string, assetDid cloudevent.ERC721DID) (*models.TriggerLog, error) {
+// LastMetric mocks base method.
+func (m *MockStateStore) LastMetric(ctx context.Context, vehicleDID cloudevent.ERC721DID, metricName string) (triggerstate.MetricRecord, bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLastLogValue", ctx, triggerID, assetDid)
-	ret0, _ := ret[0].(*models.TriggerLog)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "LastMetric", ctx, vehicleDID, metricName)
+	ret0, _ := ret[0].(triggerstate.MetricRecord)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
-// GetLastLogValue indicates an expected call of GetLastLogValue.
-func (mr *MockTriggerRepoMockRecorder) GetLastLogValue(ctx, triggerID, assetDid any) *gomock.Call {
+// LastMetric indicates an expected call of LastMetric.
+func (mr *MockStateStoreMockRecorder) LastMetric(ctx, vehicleDID, metricName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastLogValue", reflect.TypeOf((*MockTriggerRepo)(nil).GetLastLogValue), ctx, triggerID, assetDid)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastMetric", reflect.TypeOf((*MockStateStore)(nil).LastMetric), ctx, vehicleDID, metricName)
 }
 
 // MockTokenExchangeClient is a mock of TokenExchangeClient interface.
