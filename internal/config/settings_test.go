@@ -9,6 +9,10 @@ import (
 
 func validBaseSettings() Settings {
 	return Settings{
+		Port:                     8080,
+		JWKKeySetURL:             "https://auth.example.test/keys",
+		IdentityAPIURL:           "https://identity.example.test/query",
+		TokenExchangeGRPCAddr:    "token-exchange:8086",
 		MaxInFlight:              50,
 		MaxAllowedCooldownPeriod: 2592000, // 30 days
 		NATS: NATSSettings{

@@ -43,6 +43,33 @@ func TestQueueDrains(t *testing.T) {
 	cancel()
 }
 
+// TestQueueDrainsBufferOnShutdown asserts that cancelling ctx flushes entries
+// still sitting in the buffer rather than dropping them. The dispatcher emits
+// its final audit records during its own drain, so the audit queue must flush
+// what's buffered when it is stopped (after the dispatcher) or those records
+// are lost on every deploy.
+func TestQueueDrainsBufferOnShutdown(t *testing.T) {
+	t.Parallel()
+	// Slow publisher so a backlog builds in the buffer before we cancel.
+	p := &fakePublisher{delay: 10 * time.Millisecond}
+	const N = 32
+	q := New(Config{Workers: 2, Buffer: N, PublishTimeout: time.Second}, p, zerolog.Nop())
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- q.Run(ctx) }()
+
+	for range N {
+		require.True(t, q.Submit(Entry{DevLicense: "0xdead", Record: []byte("{}")}))
+	}
+	// Cancel while most entries are still buffered; Run must drain them all
+	// before returning.
+	require.Eventually(t, func() bool { return p.calls.Load() >= 1 }, time.Second, time.Millisecond)
+	cancel()
+
+	require.NoError(t, <-done)
+	require.EqualValues(t, N, p.calls.Load(), "graceful shutdown must flush every buffered audit record")
+}
+
 func TestQueueDropsWhenFull(t *testing.T) {
 	t.Parallel()
 	p := &fakePublisher{delay: 200 * time.Millisecond}

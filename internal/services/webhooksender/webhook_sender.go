@@ -20,6 +20,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/controllers/webhook"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/models"
 	vtnats "github.com/DIMO-Network/vehicle-triggers-api/internal/nats"
+	"github.com/DIMO-Network/vehicle-triggers-api/internal/safetransport"
 )
 
 // signatureHeaders sign the request body using the trigger's signing_secret.
@@ -112,7 +113,10 @@ func defaultTransport() *http.Transport {
 	t.ResponseHeaderTimeout = 20 * time.Second
 	t.ExpectContinueTimeout = 1 * time.Second
 	t.ForceAttemptHTTP2 = true
-	return t
+	// SSRF guard: webhook targets are developer-supplied, so refuse to dial
+	// internal/loopback/metadata addresses (also defends against DNS
+	// rebinding since the check runs per-dial on the resolved IP).
+	return safetransport.Guard(t)
 }
 
 // SendWebhook sends a webhook notification to the specified trigger

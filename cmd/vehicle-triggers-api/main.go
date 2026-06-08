@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -19,6 +21,8 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/app"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/db/migrations"
+	vtnats "github.com/DIMO-Network/vehicle-triggers-api/internal/nats"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -92,37 +96,79 @@ func main() {
 	logger.Info().Str("port", strconv.Itoa(settings.Port)).Msgf("Starting web server")
 	runFiber(runnerCtx, runnerGroup, &logger, servers.Application, net.JoinHostPort("0.0.0.0", strconv.Itoa(settings.Port)))
 
-	if servers.AuditQueue != nil {
-		aq := servers.AuditQueue
-		runnerGroup.Go(func() error {
-			logger.Info().Msg("audit queue: starting drainer pool")
-			err := aq.Run(runnerCtx)
-			logger.Info().Err(err).Msg("audit queue: drainer pool exited")
-			return err
-		})
-	}
-	if servers.Dispatcher != nil {
-		disp := servers.Dispatcher
-		runnerGroup.Go(func() error {
-			logger.Info().Msg("dispatcher: starting workers")
-			err := disp.Run(runnerCtx)
-			logger.Info().Err(err).Msg("dispatcher: workers exited")
-			return err
-		})
-	}
-	if servers.NATSSignalConsumer != nil {
-		runNATSPullLoop(runnerCtx, runnerGroup, &logger, "nats-signals", servers.NATSClient, servers.NATSSignalConsumer, servers.NATSListener.HandleSignalPayload, settings.MaxInFlight)
-	}
-	if servers.NATSEventConsumer != nil {
-		runNATSPullLoop(runnerCtx, runnerGroup, &logger, "nats-events", servers.NATSClient, servers.NATSEventConsumer, servers.NATSListener.HandleEventPayload, settings.MaxInFlight)
-	}
+	// Phased shutdown for the ingest -> dispatch -> NATS pipeline. A webhook is
+	// acked off JetStream as soon as it is enqueued (async dispatch), so an
+	// unordered teardown would drop acked-but-unsent webhooks on every deploy.
+	// We tear the pipeline down strictly in dependency order:
+	//   1. signal cancels runnerCtx        -> pull loops stop pulling/acking and
+	//                                          drain their in-flight handlers
+	//   2. once consumers have exited       -> stop the dispatcher; its workers
+	//                                          drain the queue (no new Enqueue can
+	//                                          race them now)
+	//   3. once the dispatcher has drained  -> stop the audit queue; it flushes
+	//                                          the dispatcher's final audit records
+	//   4. once audit has drained           -> close the NATS connection last so
+	//                                          RecordFire / audit publishes landed
 	if servers.NATSClient != nil {
 		client := servers.NATSClient
+		dispatcherCtx, stopDispatcher := context.WithCancel(context.Background())
+		auditCtx, stopAudit := context.WithCancel(context.Background())
+		var dispatcherWG, auditWG, consumerWG sync.WaitGroup
+
+		if servers.AuditQueue != nil {
+			aq := servers.AuditQueue
+			auditWG.Go(func() {
+				logger.Info().Msg("audit queue: starting drainer pool")
+				err := aq.Run(auditCtx)
+				logger.Info().Err(err).Msg("audit queue: drainer pool exited")
+			})
+		}
+		if servers.Dispatcher != nil {
+			disp := servers.Dispatcher
+			dispatcherWG.Go(func() {
+				logger.Info().Msg("dispatcher: starting workers")
+				err := disp.Run(dispatcherCtx)
+				logger.Info().Err(err).Msg("dispatcher: workers exited")
+			})
+		}
+
+		startPullLoop := func(name string, cons jetstream.Consumer, handler vtnats.PayloadHandler) {
+			consumerWG.Add(1)
+			runnerGroup.Go(func() error {
+				defer consumerWG.Done()
+				slog := logger.With().Str("subsystem", name).Logger()
+				slog.Info().Msg("pull loop: start")
+				err := client.PullLoop(runnerCtx, cons, settings.MaxInFlight, handler)
+				slog.Info().Err(err).Msg("pull loop: exit")
+				if err != nil && !errors.Is(err, context.Canceled) {
+					return fmt.Errorf("%s: %w", name, err)
+				}
+				return nil
+			})
+		}
+		if servers.NATSSignalConsumer != nil {
+			startPullLoop("nats-signals", servers.NATSSignalConsumer, servers.NATSListener.HandleSignalPayload)
+		}
+		if servers.NATSEventConsumer != nil {
+			startPullLoop("nats-events", servers.NATSEventConsumer, servers.NATSListener.HandleEventPayload)
+		}
+
+		// Shutdown coordinator: the single errgroup member that owns the
+		// ordered teardown. It blocks the group from returning until every
+		// phase completes.
 		runnerGroup.Go(func() error {
 			<-runnerCtx.Done()
+			consumerWG.Wait() // phase 1: consumers + in-flight handlers done
+			logger.Info().Msg("shutdown: consumers drained; stopping dispatcher")
+			stopDispatcher() // phase 2
+			dispatcherWG.Wait()
+			logger.Info().Msg("shutdown: dispatcher drained; stopping audit queue")
+			stopAudit() // phase 3
+			auditWG.Wait()
+			logger.Info().Msg("shutdown: audit drained; closing NATS")
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			if err := client.Shutdown(shutdownCtx); err != nil {
+			if err := client.Shutdown(shutdownCtx); err != nil { // phase 4
 				return fmt.Errorf("nats shutdown: %w", err)
 			}
 			return nil

@@ -66,6 +66,26 @@ func (c *Client) EnsureConsumer(ctx context.Context, spec ConsumerSpec) (jetstre
 		Description:    spec.Description,
 	}
 
+	// DeliverPolicy (and its OptStart* companions) is immutable once a durable
+	// exists: JetStream fixes it at creation. Passing a different value on a
+	// subsequent boot (e.g. an operator flips NATS_DELIVER_POLICY new<->all)
+	// makes CreateOrUpdateConsumer reject the update and crash startup. Reuse
+	// the existing consumer's policy so re-provisioning is a no-op on that
+	// field; the configured policy only takes effect on first creation.
+	if existing, err := c.JS.Consumer(ctx, spec.Stream, spec.Durable); err == nil {
+		ec := existing.CachedInfo().Config
+		if ec.DeliverPolicy != cfg.DeliverPolicy {
+			c.log.Warn().
+				Str("consumer", spec.Durable).
+				Str("configured", cfg.DeliverPolicy.String()).
+				Str("existing", ec.DeliverPolicy.String()).
+				Msg("nats consumer deliver policy is immutable; keeping existing policy")
+		}
+		cfg.DeliverPolicy = ec.DeliverPolicy
+		cfg.OptStartSeq = ec.OptStartSeq
+		cfg.OptStartTime = ec.OptStartTime
+	}
+
 	cons, err := c.JS.CreateOrUpdateConsumer(ctx, spec.Stream, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("ensure consumer %s/%s: %w", spec.Stream, spec.Durable, err)

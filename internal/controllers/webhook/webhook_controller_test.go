@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/DIMO-Network/server-garage/pkg/fibercommon"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
@@ -40,6 +41,18 @@ func TestMain(m *testing.M) {
 		}
 		tlsCfg.InsecureSkipVerify = true //nolint:gosec // test-only: allow self-signed cert from httptest server
 		transport.TLSClientConfig = tlsCfg
+	}
+
+	// The registration verification probe normally uses an SSRF-guarded
+	// client that refuses to dial loopback. Tests point webhooks at httptest
+	// servers on loopback, so swap in an unguarded client that also trusts
+	// the self-signed test cert. The SSRF guard is covered by safetransport's
+	// own tests.
+	verifyClient = &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // test-only
+		},
 	}
 
 	flag.Parse()

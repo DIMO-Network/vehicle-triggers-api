@@ -77,6 +77,21 @@ env:
   NATS_FETCH_BATCH: '100'
   NATS_PUBLISH_ASYNC_MAX_PENDING: '4000'
   NATS_DLQ_MAX_AGE: 168h
+  # KV buckets for distributed cooldown state and signal history. Named
+  # explicitly because the backup CronJob snapshots them by name - if they're
+  # absent the backup silently skips them and a restore comes up with empty
+  # cooldown state (every trigger re-fires).
+  NATS_TRIGGER_STATE_BUCKET: trigger_state
+  NATS_SIGNAL_HISTORY_BUCKET: signal_history
+  # Cooldown TTL invariant: NATS_TRIGGER_STATE_TTL must be >=
+  # 2*MAX_ALLOWED_COOLDOWN_PERIOD or the service refuses to start
+  # (Settings.Validate). 63d TTL covers the 30d cooldown ceiling.
+  NATS_TRIGGER_STATE_TTL: 1512h
+  MAX_ALLOWED_COOLDOWN_PERIOD: '2592000'
+# Grace period for the ordered pipeline drain on SIGTERM (consumers ->
+# dispatcher -> audit -> 30s NATS close). Must exceed the 30s default or the
+# pod is SIGKILLed mid-drain, dropping acked-but-unsent webhooks.
+terminationGracePeriodSeconds: 120
 # NATS authentication. When credsEnabled is true an ExternalSecret pulls the
 # creds file from AWS Secrets Manager (credsSecretKey) into a k8s Secret,
 # mounts it at credsMountPath, and sets NATS_CREDS_FILE for the app. Leave
@@ -154,6 +169,10 @@ autoscaling:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+# minAvailable: 0 is intentional for the single-replica dev deployment so a
+# node drain isn't blocked by the lone pod. Multi-replica environments MUST
+# override this to >=1 (see values-prod.yaml) or a drain can take all
+# replicas down at once.
 podDisruptionBudget:
   minAvailable: 0
 serviceMonitor:

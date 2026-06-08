@@ -102,7 +102,7 @@ Verify with `/health` and `triggers-state dump` / `triggers-dlq list`.
 
 ### Webhook deliveries silently failing
 
-1. Check `vehicle_triggers_consume_total{outcome="dlq"}` rate.
+1. Check `vehicle_triggers_nats_consume_total{outcome="dlq"}` rate.
 2. `triggers-dlq list` to see what's poisoned, `triggers-dlq get <seq>` for
    one record.
 3. If failures are receiver-side and resolved, `triggers-dlq replay --all`.

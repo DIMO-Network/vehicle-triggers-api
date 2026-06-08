@@ -150,11 +150,19 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 				}
 			}
 			natsListener = buildListener(settings, tokenExchangeCache, repo, webhookCache, stateStore, dispatcher)
+			// At cutover a brand-new durable defaults to DeliverNew so the
+			// service doesn't replay retained telemetry and fire stale
+			// webhooks; "all" is opt-in for backfill/replay. Ignored once the
+			// durable exists (JetStream fixes deliver policy at creation).
+			deliverPolicy := jetstream.DeliverNewPolicy
+			if settings.NATS.DeliverPolicy == "all" {
+				deliverPolicy = jetstream.DeliverAllPolicy
+			}
 			natsSigCons, err = natsClient.EnsureConsumer(ctx, vtnats.ConsumerSpec{
 				Stream:         settings.NATS.SignalsStream,
 				Durable:        settings.NATS.SignalsDurable,
 				FilterSubjects: []string{vtnats.AllSignalsFilter()},
-				DeliverPolicy:  jetstream.DeliverAllPolicy,
+				DeliverPolicy:  deliverPolicy,
 				AckWait:        settings.NATS.AckWait,
 				MaxDeliver:     settings.NATS.MaxDeliver,
 				MaxAckPending:  settings.NATS.MaxAckPending,
@@ -167,7 +175,7 @@ func CreateServers(ctx context.Context, settings *config.Settings, logger zerolo
 				Stream:         settings.NATS.EventsStream,
 				Durable:        settings.NATS.EventsDurable,
 				FilterSubjects: []string{vtnats.AllEventsFilter()},
-				DeliverPolicy:  jetstream.DeliverAllPolicy,
+				DeliverPolicy:  deliverPolicy,
 				AckWait:        settings.NATS.AckWait,
 				MaxDeliver:     settings.NATS.MaxDeliver,
 				MaxAckPending:  settings.NATS.MaxAckPending,

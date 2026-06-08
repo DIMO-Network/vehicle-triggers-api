@@ -64,7 +64,14 @@ func (c *Client) publishDLQ(m jetstream.Msg, handlerErr error) error {
 		Data:    m.Data(),
 		Header:  headers,
 	}
-	if _, err := c.JS.PublishMsg(context.Background(), dlq); err != nil {
+	// Bounded context, detached from the handler's: the handler ctx is
+	// cancelled at shutdown, but the DLQ publish must still run (the caller
+	// falls back to nak if it fails, so the message isn't Term'd without a
+	// landing spot). The timeout stops it hanging forever if the connection
+	// is draining.
+	pubCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := c.JS.PublishMsg(pubCtx, dlq); err != nil {
 		MetricsPublish(c.cfg.DLQStream, "error")
 		return fmt.Errorf("dlq publish %q: %w", dlq.Subject, err)
 	}

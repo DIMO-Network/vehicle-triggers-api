@@ -134,6 +134,36 @@ func TestDispatcherShutdownDrainsInFlight(t *testing.T) {
 	require.GreaterOrEqual(t, sender.calls.Load(), uint64(1), "at least one job should have been delivered")
 }
 
+// TestDispatcherShutdownDrainsAll asserts the graceful-shutdown contract: once
+// no more jobs are enqueued, cancelling ctx must deliver EVERY job still
+// buffered in the queue, not just the ones already dequeued. This is the fix
+// for the ack-before-send loss window - a webhook is acked off JetStream at
+// enqueue time, so dropping the queue on shutdown silently loses fires.
+func TestDispatcherShutdownDrainsAll(t *testing.T) {
+	t.Parallel()
+	// Slow enough that several jobs are still buffered when we cancel, so the
+	// drain path (not just steady-state processing) is what delivers them.
+	sender := &fakeSender{delay: 20 * time.Millisecond}
+	const N = 32
+	d := New(Config{Workers: 4, QueueSize: N, MaxFailureCount: 5}, sender, nil, nil, nil, zerolog.Nop())
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- d.Run(ctx) }()
+
+	for range N {
+		require.NoError(t, d.Enqueue(t.Context(), sampleJob()))
+	}
+
+	// Cancel while the bulk of the jobs are still buffered. The buffer should
+	// be drained by the workers' stop path before Run returns.
+	require.Eventually(t, func() bool { return sender.calls.Load() >= 1 }, time.Second, time.Millisecond)
+	cancel()
+
+	require.NoError(t, <-done)
+	require.EqualValues(t, N, sender.calls.Load(), "graceful shutdown must drain every buffered job")
+}
+
 func TestDispatcherDeliveryError(t *testing.T) {
 	t.Parallel()
 	sender := &fakeSender{err: errors.New("boom")}

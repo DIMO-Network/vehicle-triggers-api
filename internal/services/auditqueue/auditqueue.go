@@ -98,7 +98,7 @@ func (q *Queue) PublishTriggerFired(_ context.Context, devLicense string, record
 func (q *Queue) Run(ctx context.Context) error {
 	for i := 0; i < q.cfg.Workers; i++ {
 		q.wg.Add(1)
-		go q.drain(ctx, i)
+		go q.drain(i)
 	}
 	<-ctx.Done()
 	q.once.Do(func() { close(q.stop) })
@@ -106,29 +106,47 @@ func (q *Queue) Run(ctx context.Context) error {
 	return nil
 }
 
-func (q *Queue) drain(ctx context.Context, id int) {
+func (q *Queue) drain(id int) {
 	defer q.wg.Done()
 	log := q.log.With().Int("worker", id).Logger()
 	for {
 		select {
 		case <-q.stop:
-			return
+			// Graceful shutdown: flush buffered entries before exiting so
+			// audit records already enqueued aren't dropped. The dispatcher
+			// drains before us (see the main shutdown sequence), so its final
+			// audit Submits land in this buffer in time to be flushed here.
+			for {
+				select {
+				case e, ok := <-q.ch:
+					if !ok {
+						return
+					}
+					q.publishEntry(&log, e)
+				default:
+					return
+				}
+			}
 		case e, ok := <-q.ch:
 			if !ok {
 				return
 			}
-			queueDepth.Set(float64(len(q.ch)))
-			pubCtx, cancel := context.WithTimeout(context.Background(), q.cfg.PublishTimeout)
-			started := time.Now()
-			if err := q.publisher.PublishTriggerFired(pubCtx, e.DevLicense, e.Record); err != nil {
-				errorTotal.Inc()
-				log.Warn().Err(err).Str("devLicense", e.DevLicense).Msg("audit publish failed")
-			} else {
-				publishedTotal.Inc()
-			}
-			publishBlocked.Observe(time.Since(started).Seconds())
-			cancel()
-			_ = ctx // ctx parameter kept for symmetry with other Run signatures
+			q.publishEntry(&log, e)
 		}
 	}
+}
+
+// publishEntry performs one bounded audit publish and records its metrics.
+func (q *Queue) publishEntry(log *zerolog.Logger, e Entry) {
+	queueDepth.Set(float64(len(q.ch)))
+	pubCtx, cancel := context.WithTimeout(context.Background(), q.cfg.PublishTimeout)
+	defer cancel()
+	started := time.Now()
+	if err := q.publisher.PublishTriggerFired(pubCtx, e.DevLicense, e.Record); err != nil {
+		errorTotal.Inc()
+		log.Warn().Err(err).Str("devLicense", e.DevLicense).Msg("audit publish failed")
+	} else {
+		publishedTotal.Inc()
+	}
+	publishBlocked.Observe(time.Since(started).Seconds())
 }

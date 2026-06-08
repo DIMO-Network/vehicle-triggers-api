@@ -59,6 +59,20 @@ func Connect(ctx context.Context, cfg config.NATSSettings, log zerolog.Logger) (
 	if cfg.PublishAsyncMaxPending > 0 {
 		jsOpts = append(jsOpts, jetstream.WithPublishAsyncMaxPending(cfg.PublishAsyncMaxPending))
 	}
+	// Audit records are published async (PublishTriggerFired). Without this
+	// handler a server-side NACK surfaces only on the discarded PubAckFuture,
+	// so a rejected billing record would vanish silently. Surface it as a log
+	// + error metric so ops can alert on lost audit publishes.
+	jsOpts = append(jsOpts, jetstream.WithPublishAsyncErrHandler(
+		func(_ jetstream.JetStream, m *nats.Msg, err error) {
+			subject := ""
+			if m != nil {
+				subject = m.Subject
+			}
+			MetricsPublish(cfg.AuditStream, "async_error")
+			log.Error().Err(err).Str("subject", subject).Msg("nats async publish failed (audit record lost)")
+		},
+	))
 	js, err := jetstream.New(nc, jsOpts...)
 	if err != nil {
 		nc.Close()

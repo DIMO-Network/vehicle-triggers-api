@@ -122,6 +122,17 @@ type NATSSettings struct {
 	SignalsDurable string `env:"SIGNALS_DURABLE" envDefault:"triggers-signals"`
 	EventsDurable  string `env:"EVENTS_DURABLE" envDefault:"triggers-events"`
 
+	// DeliverPolicy controls where a NEWLY created signals/events consumer
+	// starts:
+	//   - "new" (default): deliver only messages published after the consumer
+	//     is created. The safe choice at cutover so the service doesn't replay
+	//     hours of retained telemetry and fire stale webhooks at receivers.
+	//   - "all": replay the stream from the beginning (backfill / replay).
+	// Ignored for an already-existing durable: JetStream fixes deliver policy
+	// at consumer-creation time, so flipping this only affects the first boot
+	// that creates the durable.
+	DeliverPolicy string `env:"DELIVER_POLICY" envDefault:"new"`
+
 	StreamReplicas         int           `env:"STREAM_REPLICAS" envDefault:"1"`
 	SignalsMaxAge          time.Duration `env:"SIGNALS_MAX_AGE" envDefault:"24h"`
 	EventsMaxAge           time.Duration `env:"EVENTS_MAX_AGE" envDefault:"24h"`
@@ -149,8 +160,12 @@ type NATSSettings struct {
 	// They keep NATS_DISPATCHER_* and NATS_AUDIT_* env prefixes for
 	// backwards compatibility with prod env files.
 
-	TriggerStateBucket  string        `env:"TRIGGER_STATE_BUCKET" envDefault:"trigger_state"`
-	TriggerStateTTL     time.Duration `env:"TRIGGER_STATE_TTL" envDefault:"168h"` // 7d
+	TriggerStateBucket string `env:"TRIGGER_STATE_BUCKET" envDefault:"trigger_state"`
+	// TriggerStateTTL must be >= 2*MaxAllowedCooldownPeriod (see
+	// Settings.Validate). Default 63d keeps that invariant satisfied against
+	// the default 30d cooldown ceiling so enabling NATS with stock defaults
+	// doesn't fail startup. Lower it only if you also lower the ceiling.
+	TriggerStateTTL     time.Duration `env:"TRIGGER_STATE_TTL" envDefault:"1512h"` // 63d
 	SignalHistoryBucket string        `env:"SIGNAL_HISTORY_BUCKET" envDefault:"signal_history"`
 	SignalHistoryTTL    time.Duration `env:"SIGNAL_HISTORY_TTL" envDefault:"168h"` // 7d
 
@@ -184,6 +199,23 @@ func (s Settings) Validate() error {
 
 	if s.MaxInFlight < 1 {
 		errs = append(errs, fmt.Sprintf("MAX_IN_FLIGHT=%d must be >= 1", s.MaxInFlight))
+	}
+
+	// Critical HTTP-serving dependencies. These are always required to serve
+	// the API (auth, identity lookups, permission checks) regardless of NATS
+	// mode. Without them the service boots and only fails on the first
+	// request - fail fast at startup instead.
+	if s.Port < 1 {
+		errs = append(errs, fmt.Sprintf("PORT=%d must be >= 1", s.Port))
+	}
+	if strings.TrimSpace(s.JWKKeySetURL) == "" {
+		errs = append(errs, "JWK_KEY_SET_URL is required")
+	}
+	if strings.TrimSpace(s.IdentityAPIURL) == "" {
+		errs = append(errs, "IDENTITY_API_URL is required")
+	}
+	if strings.TrimSpace(s.TokenExchangeGRPCAddr) == "" {
+		errs = append(errs, "TOKEN_EXCHANGE_GRPC_ADDR is required")
 	}
 
 	if s.MaxAllowedCooldownPeriod < 1 {
@@ -220,6 +252,12 @@ func (n NATSSettings) Validate() error {
 	case "", "off", "primary", "exclusive":
 	default:
 		errs = append(errs, fmt.Sprintf("NATS_MODE=%q must be one of off|primary|exclusive", n.Mode))
+	}
+
+	switch n.DeliverPolicy {
+	case "", "new", "all":
+	default:
+		errs = append(errs, fmt.Sprintf("NATS_DELIVER_POLICY=%q must be one of new|all", n.DeliverPolicy))
 	}
 
 	if !n.Enabled() {

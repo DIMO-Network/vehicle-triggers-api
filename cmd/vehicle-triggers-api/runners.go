@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/DIMO-Network/server-garage/pkg/runner"
-	vtnats "github.com/DIMO-Network/vehicle-triggers-api/internal/nats"
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -63,15 +61,9 @@ func supervised(
 	})
 }
 
-// runNATSPullLoop wires a JetStream pull loop through the supervisor.
-func runNATSPullLoop(ctx context.Context, group *errgroup.Group, logger *zerolog.Logger, name string, client *vtnats.Client, cons jetstream.Consumer, handler vtnats.PayloadHandler, maxInFlight int) {
-	supervised(ctx, group, logger, name, nil,
-		func(ctx context.Context) error {
-			return client.PullLoop(ctx, cons, maxInFlight, handler)
-		},
-		nil,
-	)
-}
+// NATS pull loops are wired directly in main with phased-shutdown tracking
+// (see the shutdown coordinator there), so they intentionally bypass the
+// generic supervisor helper.
 
 // runFiber wires a Fiber app's Listen/Shutdown pair through the supervisor.
 func runFiber(ctx context.Context, group *errgroup.Group, logger *zerolog.Logger, fiberApp runner.FiberApp, addr string) {

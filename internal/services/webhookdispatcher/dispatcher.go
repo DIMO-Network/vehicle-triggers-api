@@ -225,26 +225,43 @@ func New(cfg Config, sender Sender, state StateRecorder, audit AuditPublisher, r
 	return d
 }
 
-// Run starts the worker pool. Returns when ctx cancels and all in-flight
-// jobs drain.
+// Run starts the worker pool and blocks until ctx cancels. On cancel the
+// workers drain every job still buffered in the queue before exiting, so a
+// graceful shutdown (SIGTERM during a deploy) never loses an acked-but-unsent
+// webhook. The caller MUST stop feeding Enqueue before cancelling ctx - the
+// main shutdown sequence cancels the JetStream pull loops first and waits for
+// them to exit - otherwise a late Enqueue can race a drained worker.
+//
+// Shutdown ordering inside Run:
+//  1. workers drain the queue and exit
+//  2. THEN the failure coalescer flushes, so failure counts recorded while
+//     draining are folded into the final UPDATE instead of being dropped.
+//
+// Residual gap: a hard crash (SIGKILL / OOM / panic) still loses jobs sitting
+// in the queue - at-least-once at the ingest boundary plus async dispatch
+// can't survive that without persisting the queue. Graceful shutdown is
+// lossless; an ungraceful exit is bounded by JetStream redelivery only for
+// messages not yet acked.
 func (d *Dispatcher) Run(ctx context.Context) error {
 	if d.cfg.Workers <= 0 {
 		return nil // synchronous mode: nothing to run
+	}
+	if d.coalescer != nil {
+		// Detached context: the coalescer must outlive ctx cancel so failures
+		// recorded during the worker drain still get flushed. We stop it
+		// explicitly via Close() after the workers have finished.
+		go d.coalescer.Run(context.Background())
 	}
 	for i := 0; i < d.cfg.Workers; i++ {
 		d.wg.Add(1)
 		go d.worker(ctx, i)
 	}
-	if d.coalescer != nil {
-		d.wg.Add(1)
-		go func() {
-			defer d.wg.Done()
-			d.coalescer.Run(ctx)
-		}()
-	}
 	<-ctx.Done()
 	d.once.Do(func() { close(d.stop) })
 	d.wg.Wait()
+	if d.coalescer != nil {
+		d.coalescer.Close()
+	}
 	return nil
 }
 
@@ -273,8 +290,24 @@ func (d *Dispatcher) worker(ctx context.Context, id int) {
 	for {
 		select {
 		case <-d.stop:
-			log.Info().Msg("dispatcher worker stopping")
-			return
+			// Graceful shutdown: drain every job already buffered before
+			// exiting so acked-but-unsent webhooks are still delivered. Pull
+			// loops have stopped by the time stop fires, so no new jobs
+			// arrive. process() detaches the parent context, so deliveries
+			// complete on their own JobTimeout even though ctx is cancelled.
+			for {
+				select {
+				case j, ok := <-d.queue:
+					if !ok {
+						return
+					}
+					queueDepth.Set(float64(len(d.queue)))
+					d.process(ctx, j)
+				default:
+					log.Info().Msg("dispatcher worker stopping")
+					return
+				}
+			}
 		case j, ok := <-d.queue:
 			if !ok {
 				return

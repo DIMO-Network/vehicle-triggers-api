@@ -46,7 +46,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:                      "test-webhook-id",
 			TargetURI:               testServer.URL,
@@ -67,7 +67,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: testServer.URL,
@@ -92,7 +92,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: testServer.URL,
@@ -110,7 +110,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 	})
 
 	t.Run("network connection failure", func(t *testing.T) {
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: "http://invalid.localhost:0", // Invalid endpoint
@@ -128,7 +128,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 	})
 
 	t.Run("invalid URL format", func(t *testing.T) {
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: "://invalid-url", // Invalid URL format
@@ -181,7 +181,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: testServer.URL,
@@ -212,7 +212,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: testServer.URL,
@@ -265,7 +265,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: testServer.URL,
@@ -285,7 +285,7 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sender := NewWebhookSender(nil)
+		sender := NewWebhookSender(unguardedClient())
 		trigger := &models.Trigger{
 			ID:        "test-webhook-id",
 			TargetURI: testServer.URL,
@@ -324,6 +324,14 @@ func TestNewWebhookSender(t *testing.T) {
 		assert.Equal(t, customClient, sender.client)
 		assert.Equal(t, customTimeout, sender.client.Timeout)
 	})
+}
+
+// unguardedClient returns an http.Client without the production SSRF dial
+// guard so these tests can reach httptest servers on loopback. The guard
+// itself is covered by safetransport's own tests; here we exercise the
+// send/retry/status logic, which is independent of the dial policy.
+func unguardedClient() *http.Client {
+	return &http.Client{Timeout: defaultWebhookTimeout}
 }
 
 // Helper function to create test webhook payload
