@@ -231,6 +231,11 @@ func TestMetricListener_ProcessSignalMessages(t *testing.T) {
 			Times(1)
 
 		mockRepo.EXPECT().
+			ResetTriggerFailureCount(gomock.Any(), mockTrigger).
+			Return(nil).
+			Times(1)
+
+		mockRepo.EXPECT().
 			CreateTriggerLog(gomock.Any(), gomock.Any()).
 			Return(nil).
 			Times(1)
@@ -405,6 +410,11 @@ func TestMetricListener_ProcessEventMessages(t *testing.T) {
 
 		mockWebhookSender.EXPECT().
 			SendWebhook(gomock.Any(), mockTrigger, gomock.Any()).
+			Return(nil).
+			Times(1)
+
+		mockRepo.EXPECT().
+			ResetTriggerFailureCount(gomock.Any(), mockTrigger).
 			Return(nil).
 			Times(1)
 

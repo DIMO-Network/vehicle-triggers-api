@@ -151,11 +151,12 @@ func (m *MetricListener) handleTriggeredWebhook(ctx context.Context, trigger *mo
 		return fmt.Errorf("failed to send webhook: %w", err)
 	}
 
-	if trigger.FailureCount > 0 {
-		// If this webhook was previously failed, reset the failure count.
-		if err := m.repo.ResetTriggerFailureCount(ctx, trigger); err != nil {
-			zerolog.Ctx(ctx).Error().Err(err).Str("triggerId", trigger.ID).Msg("failed to handle webhook success")
-		}
+	// Reset the failure count on every success. The cached trigger's
+	// FailureCount can be minutes stale, so gating on it here would skip the
+	// reset and let failures accumulate across cache-refresh windows; the
+	// repo fetches fresh state and no-ops when the count is already zero.
+	if err := m.repo.ResetTriggerFailureCount(ctx, trigger); err != nil {
+		zerolog.Ctx(ctx).Error().Err(err).Str("triggerId", trigger.ID).Msg("failed to handle webhook success")
 	}
 
 	// Log the successful trigger
