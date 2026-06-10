@@ -199,9 +199,13 @@ func TestWebhookSender_SendWebhook(t *testing.T) {
 		err := sender.SendWebhook(ctx, trigger, payload)
 		require.Error(t, err)
 
+		// Cancellation of our own context is not the endpoint's fault and must
+		// not be classified as a webhook failure (it would otherwise count
+		// toward the trigger's failure threshold).
 		richErr, ok := richerrors.AsRichError(err)
-		require.True(t, ok)
-		assert.Equal(t, WebhookFailureCode, richErr.Code)
+		if ok {
+			assert.NotEqual(t, WebhookFailureCode, richErr.Code)
+		}
 	})
 
 	t.Run("large response body is truncated", func(t *testing.T) {

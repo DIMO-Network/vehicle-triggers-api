@@ -59,7 +59,7 @@ docker: dep ## build docker image
 
 tools-golangci-lint: ## install golangci-lint
 	@mkdir -p $(PATHINSTBIN)
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINARY=golangci-lint bash -s -- ${GOLANGCI_VERSION}
+	curl -sSfL https://golangci-lint.run/install.sh | BINARY=golangci-lint bash -s -- ${GOLANGCI_VERSION}
 
 
 add-migration: ## Generate migration file specify name with name=your_migration_name

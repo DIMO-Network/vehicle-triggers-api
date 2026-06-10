@@ -76,6 +76,12 @@ func (w *WebhookSender) SendWebhook(ctx context.Context, t *models.Trigger, payl
 	// Send request
 	resp, err := w.client.Do(req)
 	if err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			// Our context was canceled (e.g. consumer shutdown mid-send), so the
+			// endpoint is not at fault; don't count this toward the trigger's
+			// failure threshold. Client timeouts leave ctx.Err() nil and still count.
+			return fmt.Errorf("webhook request canceled: %w", err)
+		}
 		return richerrors.Error{
 			Code: WebhookFailureCode,
 			Err:  fmt.Errorf("failed to POST to webhook: %w", err),

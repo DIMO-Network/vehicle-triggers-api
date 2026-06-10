@@ -684,40 +684,21 @@ func (r *Repository) CreateTriggerLog(ctx context.Context, log *models.TriggerLo
 	return nil
 }
 
-// ResetTriggerFailureCount resets failure count on successful webhook delivery
+// ResetTriggerFailureCount resets failure count on successful webhook delivery.
+// This runs on every successful delivery, so it is a single conditional
+// UPDATE: when there is nothing to reset it matches no rows and takes no row
+// lock, rather than opening a SELECT ... FOR UPDATE transaction each time.
 func (r *Repository) ResetTriggerFailureCount(ctx context.Context, trigger *models.Trigger) error {
-	// Fetch latest trigger state
-	updatedTrigger, tx, err := r.GetTriggerByIDAndDeveloperLicenseForUpdate(ctx, trigger.ID, common.BytesToAddress(trigger.DeveloperLicenseAddress))
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE triggers
+		SET failure_count = 0,
+		    status = CASE WHEN status = $2 THEN $3 ELSE status END,
+		    updated_at = now()
+		WHERE id = $1 AND failure_count > 0`,
+		trigger.ID, StatusFailed, StatusEnabled)
 	if err != nil {
-		return fmt.Errorf("failed to fetch trigger for success reset: %w", err)
-	}
-	defer RollbackTx(ctx, tx)
-
-	if updatedTrigger.FailureCount < 1 {
-		// do not update if don't have anything to reset
-		return nil
-	}
-
-	// Reset failure count
-	updatedTrigger.FailureCount = 0
-
-	// If trigger was in failed state, re-enable it
-	if updatedTrigger.Status == StatusFailed {
-		updatedTrigger.Status = StatusEnabled
-	}
-
-	if err := r.UpdateTriggerWithTx(ctx, tx, updatedTrigger); err != nil {
 		return fmt.Errorf("failed to reset failure count: %w", err)
 	}
-
-	if err := tx.Commit(); err != nil {
-		return richerrors.Error{
-			ExternalMsg: "Failed to commit Update.",
-			Err:         err,
-			Code:        http.StatusInternalServerError,
-		}
-	}
-
 	return nil
 }
 
