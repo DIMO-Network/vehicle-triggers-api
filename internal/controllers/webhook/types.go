@@ -99,6 +99,12 @@ type WebhookView struct {
 	FailureCount int `json:"failureCount"`
 	// DisplayName is the user-friendly unique name per developer license.
 	DisplayName string `json:"displayName"`
+	// CreatedBySigner is the license signer (API key) whose JWT created the webhook,
+	// checksummed. Omitted for webhooks created before JWTs carried signer_address.
+	CreatedBySigner string `json:"createdBySigner,omitempty"`
+	// UpdatedBySigner is the license signer whose JWT last changed the webhook's target URL,
+	// condition or subscribed vehicles. Omitted when unknown.
+	UpdatedBySigner string `json:"updatedBySigner,omitempty"`
 }
 
 // WebhookPayload represents the standardized payload sent to webhook endpoints.

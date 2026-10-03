@@ -98,6 +98,10 @@ func (v *VehicleSubscriptionController) AssignVehicleToWebhook(c *fiber.Ctx) err
 		}
 	}
 
+	if err := markChanged(c, v.repo, webhookID); err != nil {
+		return err
+	}
+
 	_, err = v.repo.CreateVehicleSubscription(c.Context(), assetDid, webhookID)
 	if err != nil {
 		return fmt.Errorf("failed to assign vehicle: %w", err)
@@ -187,6 +191,10 @@ func (v *VehicleSubscriptionController) UnsubscribeVehiclesFromList(c *fiber.Ctx
 		}
 	}
 
+	if err := markChanged(c, v.repo, webhookID); err != nil {
+		return err
+	}
+
 	var failedUnSubscriptions []FailedSubscription
 
 	for _, assetDid := range req.AssetDIDs {
@@ -239,6 +247,10 @@ func (v *VehicleSubscriptionController) RemoveVehicleFromWebhook(c *fiber.Ctx) e
 	}
 	_, err = ownerCheck(c.Context(), v.repo, webhookID, dl)
 	if err != nil {
+		return err
+	}
+
+	if err := markChanged(c, v.repo, webhookID); err != nil {
 		return err
 	}
 
@@ -311,6 +323,10 @@ func (v *VehicleSubscriptionController) UnsubscribeAllVehiclesFromWebhook(c *fib
 	}
 	_, err = ownerCheck(c.Context(), v.repo, webhookID, dl)
 	if err != nil {
+		return err
+	}
+
+	if err := markChanged(c, v.repo, webhookID); err != nil {
 		return err
 	}
 
@@ -421,6 +437,10 @@ func (v *VehicleSubscriptionController) subscribeMultipleVehiclesToWebhook(c *fi
 		}
 	}
 
+	if err := markChanged(c, v.repo, webhookID); err != nil {
+		return err
+	}
+
 	var failedSubscriptions []FailedSubscription
 
 	for _, assetDid := range assetDIDs {
@@ -508,6 +528,28 @@ func getDevLicense(c *fiber.Ctx) (common.Address, error) {
 		return common.Address{}, err
 	}
 	return token.EthereumAddress, nil
+}
+
+func getSigner(c *fiber.Ctx) (common.Address, error) {
+	token, err := auth.GetDexJWT(c)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return token.SignerAddress, nil
+}
+
+// markChanged records the request's signer as the one changing the webhook's subscribed
+// vehicles. It runs before the change: if the change then fails, the webhook is
+// over-attributed, which only widens the console's removal review.
+func markChanged(c *fiber.Ctx, repo Repository, webhookID string) error {
+	signer, err := getSigner(c)
+	if err != nil {
+		return err
+	}
+	if signer == (common.Address{}) {
+		return nil
+	}
+	return repo.SetTriggerUpdatedBySigner(c.Context(), webhookID, signer)
 }
 
 func getWebhookID(c *fiber.Ctx) (string, error) {

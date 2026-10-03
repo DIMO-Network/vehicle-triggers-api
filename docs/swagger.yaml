@@ -168,6 +168,11 @@ definitions:
       createdAt:
         description: CreatedAt is when the webhook was created.
         type: string
+      createdBySigner:
+        description: |-
+          CreatedBySigner is the license signer (API key) whose JWT created the webhook,
+          checksummed. Omitted for webhooks created before JWTs carried signer_address.
+        type: string
       description:
         description: Description is an optional human-friendly explanation of the
           webhook.
@@ -198,6 +203,11 @@ definitions:
         type: string
       updatedAt:
         description: UpdatedAt is when the webhook was last modified.
+        type: string
+      updatedBySigner:
+        description: |-
+          UpdatedBySigner is the license signer whose JWT last changed the webhook's target URL,
+          condition or subscribed vehicles. Omitted when unknown.
         type: string
     type: object
 info:
