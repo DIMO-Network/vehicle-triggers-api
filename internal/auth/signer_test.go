@@ -69,7 +69,7 @@ func TestSignerTokenInfo(t *testing.T) {
 	})
 	_, err := app.Test(httptest.NewRequest("GET", "/", nil), -1)
 	require.NoError(t, err)
-	require.Equal(t, signercheck.TokenInfo{License: license, Signer: signer.Hex(), IssuedAt: issued}, got)
+	require.Equal(t, signercheck.TokenInfo{License: license, Signer: signer.Hex()}, got)
 }
 
 func TestSignerCheckOnWebhooksAPI(t *testing.T) {

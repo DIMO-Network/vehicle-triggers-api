@@ -108,8 +108,5 @@ func SignerTokenInfo(c *fiber.Ctx) (signercheck.TokenInfo, error) {
 	if token.SignerAddress != (common.Address{}) {
 		info.Signer = token.SignerAddress.Hex()
 	}
-	if token.IssuedAt != nil {
-		info.IssuedAt = token.IssuedAt.Time
-	}
 	return info, nil
 }

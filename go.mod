@@ -7,7 +7,7 @@ require (
 	github.com/DIMO-Network/model-garage v1.0.9
 	github.com/DIMO-Network/server-garage v0.0.5
 	github.com/DIMO-Network/shared v1.0.7
-	github.com/DIMO-Network/token-exchange-api v0.4.1-0.20261003024818-ccd2cadc2dac
+	github.com/DIMO-Network/token-exchange-api v0.4.1-0.20261003032931-24b46c97a0fb
 	github.com/IBM/sarama v1.46.2
 	github.com/ThreeDotsLabs/watermill v1.5.1
 	github.com/ThreeDotsLabs/watermill-kafka/v3 v3.1.2
