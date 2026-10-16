@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/DIMO-Network/server-garage/pkg/fibercommon"
@@ -229,6 +230,48 @@ func TestWebhookController_RegisterWebhook(t *testing.T) {
 
 		assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
 	})
+
+	t.Run("records the signer that created the webhook", func(t *testing.T) {
+		controller, mockRepo, _ := newWebhookControllerAndMocks(t)
+
+		app := newApp()
+		devLicense := common.HexToAddress("0x1234567890abcdef")
+		app.Use(tokenInjectorWithSigner(devLicense, testSigner))
+		app.Post("/webhooks", controller.RegisterWebhook)
+
+		testServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "test-token")
+		}))
+		defer testServer.Close()
+
+		var got triggersrepo.CreateTriggerRequest
+		mockRepo.EXPECT().
+			CreateTrigger(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req triggersrepo.CreateTriggerRequest) (*models.Trigger, error) {
+				got = req
+				return &models.Trigger{ID: "test-trigger-id"}, nil
+			})
+
+		body, _ := json.Marshal(RegisterWebhookRequest{
+			Service:           triggersrepo.ServiceSignal,
+			MetricName:        "vss.speed",
+			Condition:         "valueNumber > 55",
+			CoolDownPeriod:    30,
+			TargetURL:         testServer.URL,
+			Status:            "enabled",
+			VerificationToken: "test-token",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/webhooks", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
+
+		require.Equal(t, fiber.StatusCreated, resp.StatusCode)
+		assert.Equal(t, testSigner, got.CreatedBySigner)
+	})
 }
 
 func TestWebhookController_ListWebhooks(t *testing.T) {
@@ -303,6 +346,34 @@ func TestWebhookController_ListWebhooks(t *testing.T) {
 		err = json.NewDecoder(resp.Body).Decode(&webhooks)
 		require.NoError(t, err)
 		assert.Len(t, webhooks, 0)
+	})
+
+	t.Run("returns both signer fields checksummed and omits them when unknown", func(t *testing.T) {
+		controller, mockRepo, _ := newWebhookControllerAndMocks(t)
+
+		app := newApp()
+		app.Use(tokenInjector(common.HexToAddress("0x1234567890abcdef")))
+		app.Get("/webhooks", controller.ListWebhooks)
+
+		mockRepo.EXPECT().
+			GetTriggersByDeveloperLicense(gomock.Any(), gomock.Any()).
+			Return([]*models.Trigger{
+				{ID: "by-member", CreatedBySigner: null.StringFrom(testSignerLower), UpdatedBySigner: null.StringFrom(testSignerLower)},
+				{ID: "legacy"},
+			}, nil)
+
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/webhooks", nil))
+		require.NoError(t, err)
+		defer resp.Body.Close() //nolint:errcheck // fine for tests
+		require.Equal(t, fiber.StatusOK, resp.StatusCode)
+
+		var raw []map[string]any
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&raw))
+		require.Len(t, raw, 2)
+		assert.Equal(t, testSigner.Hex(), raw[0]["createdBySigner"])
+		assert.Equal(t, testSigner.Hex(), raw[0]["updatedBySigner"])
+		assert.NotContains(t, raw[1], "createdBySigner")
+		assert.NotContains(t, raw[1], "updatedBySigner")
 	})
 }
 
@@ -459,6 +530,21 @@ func tokenInjector(address common.Address) fiber.Handler {
 	}
 }
 
+func tokenInjectorWithSigner(address, signer common.Address) fiber.Handler {
+	jwtToken := &jwt.Token{Claims: &auth.Token{CustomDexClaims: auth.CustomDexClaims{
+		EthereumAddress: address,
+		SignerAddress:   signer,
+	}}}
+	return func(c *fiber.Ctx) error {
+		c.Locals(auth.UserJwtKey, jwtToken)
+		return c.Next()
+	}
+}
+
+var testSigner = common.HexToAddress("0x71efD5d71a597eB6BEC28DFDB05a49283a3e20c5")
+
+const testSignerLower = "0x71efd5d71a597eb6bec28dfdb05a49283a3e20c5"
+
 func newApp() *fiber.App {
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
@@ -476,4 +562,54 @@ func newWebhookControllerAndMocks(t *testing.T) (*WebhookController, *MockReposi
 	controller, err := NewWebhookController(mockRepo, mockCache)
 	require.NoError(t, err)
 	return controller, mockRepo, mockCache
+}
+
+func TestWebhookController_UpdateWebhookRecordsTheSigner(t *testing.T) {
+	t.Parallel()
+	webhookID := "550e8400-e29b-41d4-a716-446655440000"
+	devLicense := common.HexToAddress("0x1234567890abcdef")
+
+	tests := []struct {
+		name    string
+		signer  common.Address
+		payload string
+		marks   bool
+	}{
+		{name: "a target URL change marks the signer before saving", signer: testSigner, payload: `{"targetURL":"https://example.com/new"}`, marks: true},
+		{name: "a condition change marks the signer before saving", signer: testSigner, payload: `{"condition":"valueNumber > 60"}`, marks: true},
+		{name: "a description change does not mark", signer: testSigner, payload: `{"description":"renamed"}`},
+		{name: "a claimless target change does not mark", payload: `{"targetURL":"https://example.com/new"}`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			controller, mockRepo, mockCache := newWebhookControllerAndMocks(t)
+			app := newApp()
+			app.Use(tokenInjectorWithSigner(devLicense, tc.signer))
+			app.Put("/webhooks/:webhookId", controller.UpdateWebhook)
+
+			mockRepo.EXPECT().GetTriggerByIDAndDeveloperLicense(gomock.Any(), webhookID, devLicense).Return(&models.Trigger{
+				ID:                      webhookID,
+				DeveloperLicenseAddress: devLicense.Bytes(),
+				Service:                 triggersrepo.ServiceSignal,
+				MetricName:              "vss.speed",
+			}, nil)
+			update := mockRepo.EXPECT().UpdateTrigger(gomock.Any(), gomock.Any()).Return(nil)
+			if tc.marks {
+				gomock.InOrder(
+					mockRepo.EXPECT().SetTriggerUpdatedBySigner(gomock.Any(), webhookID, testSigner).Return(nil),
+					update,
+				)
+			}
+			mockCache.EXPECT().ScheduleRefresh(gomock.Any())
+
+			req := httptest.NewRequest(http.MethodPut, "/webhooks/"+webhookID, strings.NewReader(tc.payload))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := app.Test(req)
+			require.NoError(t, err)
+			defer resp.Body.Close() //nolint:errcheck // fine for tests
+
+			require.Equal(t, fiber.StatusOK, resp.StatusCode)
+		})
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/DIMO-Network/cloudevent"
@@ -68,6 +69,9 @@ type CreateTriggerRequest struct {
 	Description             string
 	CooldownPeriod          int
 	DeveloperLicenseAddress common.Address
+	// CreatedBySigner is the license signer (API key) whose JWT created the trigger; the zero
+	// address when the JWT carried no signer_address.
+	CreatedBySigner common.Address
 }
 
 func (req CreateTriggerRequest) Validate() error {
@@ -122,6 +126,7 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 		TargetURI:               req.TargetURI,
 		CooldownPeriod:          req.CooldownPeriod,
 		DeveloperLicenseAddress: req.DeveloperLicenseAddress.Bytes(),
+		CreatedBySigner:         SignerValue(req.CreatedBySigner),
 		Status:                  req.Status,
 		CreatedAt:               currTime,
 		UpdatedAt:               currTime,
@@ -143,6 +148,34 @@ func (r *Repository) CreateTrigger(ctx context.Context, req CreateTriggerRequest
 	}
 
 	return trigger, nil
+}
+
+// SignerValue stores a license signer as lowercase hex, or NULL for the zero address (a JWT
+// without signer_address).
+func SignerValue(signer common.Address) null.String {
+	if signer == (common.Address{}) {
+		return null.String{}
+	}
+	return null.StringFrom(strings.ToLower(signer.Hex()))
+}
+
+// SetTriggerUpdatedBySigner records the license signer whose JWT is changing the trigger's
+// target URL, condition or subscribed vehicles. The zero address (a claimless JWT) leaves
+// the existing value, so a later claimless change can't erase who changed it before.
+func (r *Repository) SetTriggerUpdatedBySigner(ctx context.Context, triggerID string, signer common.Address) error {
+	if signer == (common.Address{}) {
+		return nil
+	}
+	_, err := models.Triggers(models.TriggerWhere.ID.EQ(triggerID)).
+		UpdateAll(ctx, r.db, models.M{models.TriggerColumns.UpdatedBySigner: SignerValue(signer)})
+	if err != nil {
+		return richerrors.Error{
+			ExternalMsg: "Failed to update webhook",
+			Err:         fmt.Errorf("failed to record updated_by_signer on trigger %s: %w", triggerID, err),
+			Code:        http.StatusInternalServerError,
+		}
+	}
+	return nil
 }
 
 // GetTriggersByDeveloperLicense retrieves all triggers for a developer license.
@@ -299,6 +332,8 @@ func (r *Repository) updateTrigger(tx *sql.Tx, ctx context.Context, trigger *mod
 		models.TriggerColumns.DeveloperLicenseAddress,
 		models.TriggerColumns.Service,
 		models.TriggerColumns.CreatedAt,
+		models.TriggerColumns.CreatedBySigner,
+		models.TriggerColumns.UpdatedBySigner,
 	))
 	if err != nil {
 		if isDuplicateDisplayNameError(err) {

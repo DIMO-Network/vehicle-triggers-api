@@ -9,6 +9,7 @@ import (
 	"github.com/DIMO-Network/cloudevent"
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
 	pb "github.com/DIMO-Network/token-exchange-api/pkg/grpc"
+	"github.com/DIMO-Network/token-exchange-api/pkg/signercheck"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/ethereum/go-ethereum/common"
 	"google.golang.org/grpc"
@@ -57,4 +58,10 @@ func (c *Client) HasVehiclePermissions(ctx context.Context, assetDid cloudevent.
 		return false, richErr
 	}
 	return false, nil
+}
+
+// SignerChecker checks developer-JWT signers through token-exchange-api's SignerCheck, with
+// a 5-second deadline per call.
+func (c *Client) SignerChecker() *signercheck.GRPCChecker {
+	return signercheck.NewGRPCChecker(c.client)
 }

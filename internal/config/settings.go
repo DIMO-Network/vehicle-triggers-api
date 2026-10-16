@@ -9,17 +9,19 @@ import (
 
 // Settings contains the application config
 type Settings struct {
-	Port                              int            `env:"PORT"`
-	MonPort                           int            `env:"MON_PORT"`
-	EnablePprof                       bool           `env:"ENABLE_PPROF"`
-	LogLevel                          string         `env:"LOG_LEVEL"`
-	ServiceName                       string         `env:"SERVICE_NAME"`
-	JWKKeySetURL                      string         `env:"JWK_KEY_SET_URL"`
-	IdentityAPIURL                    string         `env:"IDENTITY_API_URL"`
-	KafkaBrokers                      string         `env:"KAFKA_BROKERS"`
-	DeviceSignalsTopic                string         `env:"DEVICE_SIGNALS_TOPIC"`
-	DeviceEventsTopic                 string         `env:"DEVICE_EVENTS_TOPIC"`
-	TokenExchangeGRPCAddr             string         `env:"TOKEN_EXCHANGE_GRPC_ADDR"`
+	Port                  int    `env:"PORT"`
+	MonPort               int    `env:"MON_PORT"`
+	EnablePprof           bool   `env:"ENABLE_PPROF"`
+	LogLevel              string `env:"LOG_LEVEL"`
+	ServiceName           string `env:"SERVICE_NAME"`
+	JWKKeySetURL          string `env:"JWK_KEY_SET_URL"`
+	IdentityAPIURL        string `env:"IDENTITY_API_URL"`
+	KafkaBrokers          string `env:"KAFKA_BROKERS"`
+	DeviceSignalsTopic    string `env:"DEVICE_SIGNALS_TOPIC"`
+	DeviceEventsTopic     string `env:"DEVICE_EVENTS_TOPIC"`
+	TokenExchangeGRPCAddr string `env:"TOKEN_EXCHANGE_GRPC_ADDR"`
+	// SignerCheckMode is enforce (default), log or off.
+	SignerCheckMode                   string         `env:"SIGNER_CHECK_MODE" envDefault:"enforce"`
 	TokenExchangeCacheExpiration      time.Duration  `env:"TOKEN_EXCHANGE_CACHE_EXPIRATION"`
 	TokenExchangeCacheCleanupInterval time.Duration  `env:"TOKEN_EXCHANGE_CACHE_CLEANUP_INTERVAL"`
 	VehicleNFTAddress                 common.Address `env:"VEHICLE_NFT_ADDRESS"`

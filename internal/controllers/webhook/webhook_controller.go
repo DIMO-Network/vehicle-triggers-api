@@ -21,6 +21,9 @@ type Repository interface {
 	GetTriggerByIDAndDeveloperLicense(ctx context.Context, triggerID string, developerLicense common.Address) (*models.Trigger, error)
 	UpdateTrigger(ctx context.Context, trigger *models.Trigger) error
 	DeleteTrigger(ctx context.Context, triggerID string, developerLicense common.Address) error
+	// SetTriggerUpdatedBySigner records the signer changing a trigger's target URL, condition
+	// or vehicles; the zero address is a no-op.
+	SetTriggerUpdatedBySigner(ctx context.Context, triggerID string, signer common.Address) error
 
 	// subscriptions
 	CreateVehicleSubscription(ctx context.Context, assetDID cloudevent.ERC721DID, triggerID string) (*models.VehicleSubscription, error)
@@ -107,6 +110,7 @@ func (w *WebhookController) RegisterWebhook(c *fiber.Ctx) error {
 		CooldownPeriod:          payload.CoolDownPeriod,
 		DeveloperLicenseAddress: token.EthereumAddress,
 		DisplayName:             payload.DisplayName,
+		CreatedBySigner:         token.SignerAddress,
 	}
 
 	trigger, err := w.repo.CreateTrigger(c.Context(), req)
@@ -148,19 +152,28 @@ func (w *WebhookController) ListWebhooks(c *fiber.Ctx) error {
 		if t.Description.Valid {
 			desc = t.Description.String
 		}
+		createdBy, updatedBy := "", ""
+		if t.CreatedBySigner.Valid {
+			createdBy = common.HexToAddress(t.CreatedBySigner.String).Hex()
+		}
+		if t.UpdatedBySigner.Valid {
+			updatedBy = common.HexToAddress(t.UpdatedBySigner.String).Hex()
+		}
 		out = append(out, WebhookView{
-			ID:             t.ID,
-			Service:        t.Service,
-			MetricName:     t.MetricName,
-			Condition:      t.Condition,
-			TargetURL:      t.TargetURI,
-			CoolDownPeriod: t.CooldownPeriod,
-			Status:         t.Status,
-			Description:    desc,
-			CreatedAt:      t.CreatedAt,
-			UpdatedAt:      t.UpdatedAt,
-			FailureCount:   t.FailureCount,
-			DisplayName:    t.DisplayName,
+			ID:              t.ID,
+			Service:         t.Service,
+			MetricName:      t.MetricName,
+			Condition:       t.Condition,
+			TargetURL:       t.TargetURI,
+			CoolDownPeriod:  t.CooldownPeriod,
+			Status:          t.Status,
+			Description:     desc,
+			CreatedAt:       t.CreatedAt,
+			UpdatedAt:       t.UpdatedAt,
+			FailureCount:    t.FailureCount,
+			DisplayName:     t.DisplayName,
+			CreatedBySigner: createdBy,
+			UpdatedBySigner: updatedBy,
 		})
 	}
 	return c.JSON(out)
@@ -201,11 +214,13 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 		}
 	}
 
+	changesDelivery := false
 	if payload.TargetURL != nil {
 		if err := validateTargetURL(*payload.TargetURL); err != nil {
 			return err
 		}
 		event.TargetURI = *payload.TargetURL
+		changesDelivery = true
 	}
 	if payload.Status != nil {
 		if err := validateStatus(*payload.Status); err != nil {
@@ -218,6 +233,7 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 			return err
 		}
 		event.Condition = *payload.Condition
+		changesDelivery = true
 	}
 	if payload.CoolDownPeriod != nil {
 		if err := validateCoolDownPeriod(*payload.CoolDownPeriod); err != nil {
@@ -233,6 +249,12 @@ func (w *WebhookController) UpdateWebhook(c *fiber.Ctx) error {
 	}
 	// Always reset failure count to 0 when updating a webhook
 	event.FailureCount = 0
+
+	if changesDelivery {
+		if err := markChanged(c, w.repo, event.ID); err != nil {
+			return err
+		}
+	}
 
 	if err := w.repo.UpdateTrigger(c.Context(), event); err != nil {
 		return fmt.Errorf("failed to update webhook: %w", err)

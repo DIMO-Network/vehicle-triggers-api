@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/DIMO-Network/cloudevent"
@@ -19,6 +20,7 @@ import (
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/services/webhookcache"
 	"github.com/DIMO-Network/vehicle-triggers-api/tests"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -761,5 +763,123 @@ func TestVehicleSubscriptionController_ListVehiclesForWebhook(t *testing.T) {
 		assert.Len(t, vehicleIDs, 2)
 		assert.Contains(t, vehicleIDs, assetDid1.String())
 		assert.Contains(t, vehicleIDs, assetDid2.String())
+	})
+}
+
+func TestWebhookChangesRecordTheSigner(t *testing.T) {
+	t.Parallel()
+	webhookID := "550e8400-e29b-41d4-a716-446655440000"
+	devLicense := common.HexToAddress("0x1234567890abcdef")
+	assetDid := cloudevent.ERC721DID{
+		ChainID:         137,
+		ContractAddress: common.HexToAddress("0xbA5738a18d83D41847dfFbDC6101d37C69c9B0cF"),
+		TokenID:         big.NewInt(12345),
+	}
+	listBody, err := json.Marshal(VehicleListRequest{AssetDIDs: []cloudevent.ERC721DID{assetDid}})
+	require.NoError(t, err)
+
+	type route struct {
+		method, path string
+		body         []byte
+		handler      func(c ControllerWithMocks) fiber.Handler
+		mutation     func(c ControllerWithMocks) *gomock.Call
+		before       func(c ControllerWithMocks)
+	}
+	permitted := func(c ControllerWithMocks) {
+		c.mockTokenExchange.EXPECT().HasVehiclePermissions(gomock.Any(), assetDid, devLicense, gomock.Any()).Return(true, nil)
+	}
+	routes := map[string]route{
+		"subscribe one": {
+			method: http.MethodPost, path: "/webhooks/:webhookId/subscribe/:assetDID",
+			handler: func(c ControllerWithMocks) fiber.Handler { return c.controller.AssignVehicleToWebhook },
+			before:  permitted,
+			mutation: func(c ControllerWithMocks) *gomock.Call {
+				return c.mockRepo.EXPECT().CreateVehicleSubscription(gomock.Any(), assetDid, webhookID).Return(&models.VehicleSubscription{}, nil)
+			},
+		},
+		"subscribe list": {
+			method: http.MethodPost, path: "/webhooks/:webhookId/subscribe/list", body: listBody,
+			handler: func(c ControllerWithMocks) fiber.Handler { return c.controller.SubscribeVehiclesFromList },
+			before:  permitted,
+			mutation: func(c ControllerWithMocks) *gomock.Call {
+				return c.mockRepo.EXPECT().CreateVehicleSubscription(gomock.Any(), assetDid, webhookID).Return(&models.VehicleSubscription{}, nil)
+			},
+		},
+		"subscribe all": {
+			method: http.MethodPost, path: "/webhooks/:webhookId/subscribe/all",
+			handler: func(c ControllerWithMocks) fiber.Handler { return c.controller.SubscribeAllVehiclesToWebhook },
+			before: func(c ControllerWithMocks) {
+				c.mockIdentityAPI.EXPECT().GetSharedVehicles(gomock.Any(), devLicense.Bytes()).Return([]cloudevent.ERC721DID{assetDid}, nil)
+				permitted(c)
+			},
+			mutation: func(c ControllerWithMocks) *gomock.Call {
+				return c.mockRepo.EXPECT().CreateVehicleSubscription(gomock.Any(), assetDid, webhookID).Return(&models.VehicleSubscription{}, nil)
+			},
+		},
+		"unsubscribe one": {
+			method: http.MethodDelete, path: "/webhooks/:webhookId/unsubscribe/:assetDID",
+			handler: func(c ControllerWithMocks) fiber.Handler { return c.controller.RemoveVehicleFromWebhook },
+			mutation: func(c ControllerWithMocks) *gomock.Call {
+				return c.mockRepo.EXPECT().DeleteVehicleSubscription(gomock.Any(), webhookID, assetDid).Return(int64(1), nil)
+			},
+		},
+		"unsubscribe list": {
+			method: http.MethodDelete, path: "/webhooks/:webhookId/unsubscribe/list", body: listBody,
+			handler: func(c ControllerWithMocks) fiber.Handler { return c.controller.UnsubscribeVehiclesFromList },
+			mutation: func(c ControllerWithMocks) *gomock.Call {
+				return c.mockRepo.EXPECT().DeleteVehicleSubscription(gomock.Any(), webhookID, assetDid).Return(int64(1), nil)
+			},
+		},
+		"unsubscribe all": {
+			method: http.MethodDelete, path: "/webhooks/:webhookId/unsubscribe/all",
+			handler: func(c ControllerWithMocks) fiber.Handler { return c.controller.UnsubscribeAllVehiclesFromWebhook },
+			mutation: func(c ControllerWithMocks) *gomock.Call {
+				return c.mockRepo.EXPECT().DeleteAllVehicleSubscriptionsForTrigger(gomock.Any(), webhookID).Return(int64(1), nil)
+			},
+		},
+	}
+
+	for name, r := range routes {
+		t.Run(name, func(t *testing.T) {
+			c := NewVehicleSubscriptionControllerAndMocks(t)
+			app := newApp()
+			app.Use(tokenInjectorWithSigner(devLicense, testSigner))
+			app.Add(r.method, r.path, r.handler(c))
+
+			c.mockRepo.EXPECT().GetTriggerByIDAndDeveloperLicense(gomock.Any(), webhookID, devLicense).Return(&models.Trigger{
+				ID: webhookID, DeveloperLicenseAddress: devLicense.Bytes(), Service: triggersrepo.ServiceSignal, MetricName: "vss.speed",
+			}, nil)
+			if r.before != nil {
+				r.before(c)
+			}
+			gomock.InOrder(
+				c.mockRepo.EXPECT().SetTriggerUpdatedBySigner(gomock.Any(), webhookID, testSigner).Return(nil),
+				r.mutation(c),
+			)
+			c.mockCache.EXPECT().ScheduleRefresh(gomock.Any())
+
+			path := strings.NewReplacer(":webhookId", webhookID, ":assetDID", url.PathEscape(assetDid.String())).Replace(r.path)
+			req := httptest.NewRequest(r.method, path, bytes.NewReader(r.body))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := app.Test(req)
+			require.NoError(t, err)
+			require.Less(t, resp.StatusCode, 300)
+		})
+	}
+
+	t.Run("a claimless change records nothing", func(t *testing.T) {
+		c := NewVehicleSubscriptionControllerAndMocks(t)
+		app := newApp()
+		app.Use(tokenInjector(devLicense))
+		app.Delete("/webhooks/:webhookId/unsubscribe/all", c.controller.UnsubscribeAllVehiclesFromWebhook)
+		c.mockRepo.EXPECT().GetTriggerByIDAndDeveloperLicense(gomock.Any(), webhookID, devLicense).Return(&models.Trigger{
+			ID: webhookID, DeveloperLicenseAddress: devLicense.Bytes(),
+		}, nil)
+		c.mockRepo.EXPECT().DeleteAllVehicleSubscriptionsForTrigger(gomock.Any(), webhookID).Return(int64(1), nil)
+		c.mockCache.EXPECT().ScheduleRefresh(gomock.Any())
+
+		resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/webhooks/"+webhookID+"/unsubscribe/all", nil))
+		require.NoError(t, err)
+		require.Equal(t, fiber.StatusOK, resp.StatusCode)
 	})
 }

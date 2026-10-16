@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/DIMO-Network/server-garage/pkg/richerrors"
+	"github.com/DIMO-Network/token-exchange-api/pkg/signercheck"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/config"
 	"github.com/ethereum/go-ethereum/common"
 	jwtware "github.com/gofiber/contrib/jwt"
@@ -30,6 +31,9 @@ type CustomDexClaims struct {
 	AtHash          string         `json:"at_hash"`
 	EmailVerified   bool           `json:"email_verified"`
 	EthereumAddress common.Address `json:"ethereum_address"`
+	// SignerAddress is the license signer (API key) that minted the token; the zero address
+	// for tokens minted before dex set signer_address.
+	SignerAddress common.Address `json:"signer_address"`
 }
 
 type IdentityClient interface {
@@ -88,4 +92,21 @@ func GetDexJWT(c *fiber.Ctx) (*Token, error) {
 		return nil, fmt.Errorf("unexpected type for user jwt key claims in context: %T", v5Token.Claims)
 	}
 	return token, nil
+}
+
+// SignerTokenInfo reads what signercheck.Middleware needs from the verified developer JWT.
+func SignerTokenInfo(c *fiber.Ctx) (signercheck.TokenInfo, error) {
+	token, err := GetDexJWT(c)
+	if err != nil {
+		return signercheck.TokenInfo{}, richerrors.Error{
+			Code:        http.StatusInternalServerError,
+			Err:         err,
+			ExternalMsg: "failed to retrieve dex jwt",
+		}
+	}
+	info := signercheck.TokenInfo{License: token.EthereumAddress}
+	if token.SignerAddress != (common.Address{}) {
+		info.Signer = token.SignerAddress.Hex()
+	}
+	return info, nil
 }

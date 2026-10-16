@@ -25,6 +25,8 @@ securityContext:
       - all
 env:
   ENVIRONMENT: dev
+  TOKEN_EXCHANGE_GRPC_ADDR: token-exchange-api-dev:8086
+  SIGNER_CHECK_MODE: log
   PORT: 8080
   MON_PORT: 8888
   ENABLE_PPROF: false
@@ -106,7 +108,7 @@ affinity: {}
 podDisruptionBudget:
   minAvailable: 0
 serviceMonitor:
-  enabled: false
+  enabled: true
   path: /metrics
   port: mon-http
   interval: 30s

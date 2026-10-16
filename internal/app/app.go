@@ -8,6 +8,7 @@ import (
 
 	"github.com/DIMO-Network/server-garage/pkg/fibercommon"
 	"github.com/DIMO-Network/shared/pkg/db"
+	"github.com/DIMO-Network/token-exchange-api/pkg/signercheck"
 	_ "github.com/DIMO-Network/vehicle-triggers-api/docs" // Import Swagger docs
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/auth"
 	"github.com/DIMO-Network/vehicle-triggers-api/internal/clients/identity"
@@ -122,7 +123,18 @@ func CreateFiberApp(logger zerolog.Logger, repo *triggersrepo.Repository,
 
 	jwtMiddleware := auth.Middleware(settings)
 	devLicenseMiddleware := auth.NewDevLicenseValidator(identityClient)
-	devJWTAuth := app.Use(jwtMiddleware, devLicenseMiddleware)
+	signerMode, err := signercheck.ParseMode(settings.SignerCheckMode)
+	if err != nil {
+		return nil, err
+	}
+	signerMiddleware := signercheck.Middleware(signercheck.Config{
+		Service: "vehicle-triggers-api",
+		Mode:    signerMode,
+		Checker: tokenExchangeClient.SignerChecker(),
+		Token:   auth.SignerTokenInfo,
+		Logger:  logger,
+	})
+	devJWTAuth := app.Use(jwtMiddleware, devLicenseMiddleware, signerMiddleware)
 	// Webhook CRUD
 	devJWTAuth.Get("/v1/webhooks", webhookController.ListWebhooks)
 	devJWTAuth.Post("/v1/webhooks", webhookController.RegisterWebhook)

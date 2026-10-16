@@ -178,6 +178,20 @@ func (mr *MockRepositoryMockRecorder) GetVehicleSubscriptionsByVehicleAndDevelop
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVehicleSubscriptionsByVehicleAndDeveloperLicense", reflect.TypeOf((*MockRepository)(nil).GetVehicleSubscriptionsByVehicleAndDeveloperLicense), ctx, assetDID, developerLicense)
 }
 
+// SetTriggerUpdatedBySigner mocks base method.
+func (m *MockRepository) SetTriggerUpdatedBySigner(ctx context.Context, triggerID string, signer common.Address) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetTriggerUpdatedBySigner", ctx, triggerID, signer)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetTriggerUpdatedBySigner indicates an expected call of SetTriggerUpdatedBySigner.
+func (mr *MockRepositoryMockRecorder) SetTriggerUpdatedBySigner(ctx, triggerID, signer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTriggerUpdatedBySigner", reflect.TypeOf((*MockRepository)(nil).SetTriggerUpdatedBySigner), ctx, triggerID, signer)
+}
+
 // UpdateTrigger mocks base method.
 func (m *MockRepository) UpdateTrigger(ctx context.Context, trigger *models.Trigger) error {
 	m.ctrl.T.Helper()

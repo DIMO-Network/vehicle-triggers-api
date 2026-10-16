@@ -58,6 +58,28 @@ func TestCreateTrigger(t *testing.T) {
 		assert.Equal(t, baseReq.DeveloperLicenseAddress.Bytes(), trigger.DeveloperLicenseAddress)
 	})
 
+	t.Run("records the creating signer as lowercase hex", func(t *testing.T) {
+		req := baseReq
+		req.CreatedBySigner = common.HexToAddress("0x71efD5d71a597eB6BEC28DFDB05a49283a3e20c5")
+
+		trigger, err := repo.CreateTrigger(ctx, req)
+		require.NoError(t, err)
+
+		stored, err := models.FindTrigger(ctx, tc.DB, trigger.ID)
+		require.NoError(t, err)
+		assert.Equal(t, null.StringFrom("0x71efd5d71a597eb6bec28dfdb05a49283a3e20c5"), stored.CreatedBySigner)
+		assert.False(t, stored.UpdatedBySigner.Valid)
+	})
+
+	t.Run("without a signer stores NULL", func(t *testing.T) {
+		trigger, err := repo.CreateTrigger(ctx, baseReq)
+		require.NoError(t, err)
+
+		stored, err := models.FindTrigger(ctx, tc.DB, trigger.ID)
+		require.NoError(t, err)
+		assert.False(t, stored.CreatedBySigner.Valid)
+	})
+
 	t.Run("allow duplicates triggers", func(t *testing.T) {
 		// Create first trigger
 		trigger1, err := repo.CreateTrigger(ctx, baseReq)
@@ -1941,4 +1963,67 @@ func TestIsEventService(t *testing.T) {
 	assert.False(t, IsEventService(ServiceSignal))
 	assert.False(t, IsEventService("events.behavior"))
 	assert.False(t, IsEventService("unknown"))
+}
+
+func TestSetTriggerUpdatedBySigner(t *testing.T) {
+	t.Parallel()
+	tc := tests.SetupTestContainer(t)
+	repo := NewRepository(tc.DB)
+	ctx := context.Background()
+
+	trigger, err := repo.CreateTrigger(ctx, CreateTriggerRequest{
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
+		Condition:               "valueNumber > 20",
+		TargetURI:               "https://example.com/webhook",
+		Status:                  StatusEnabled,
+		CooldownPeriod:          10,
+		DeveloperLicenseAddress: tests.RandomAddr(t),
+	})
+	require.NoError(t, err)
+
+	signer := common.HexToAddress("0x71efD5d71a597eB6BEC28DFDB05a49283a3e20c5")
+	require.NoError(t, repo.SetTriggerUpdatedBySigner(ctx, trigger.ID, signer))
+	stored, err := models.FindTrigger(ctx, tc.DB, trigger.ID)
+	require.NoError(t, err)
+	assert.Equal(t, null.StringFrom("0x71efd5d71a597eb6bec28dfdb05a49283a3e20c5"), stored.UpdatedBySigner)
+
+	require.NoError(t, repo.SetTriggerUpdatedBySigner(ctx, trigger.ID, common.Address{}))
+	stored, err = models.FindTrigger(ctx, tc.DB, trigger.ID)
+	require.NoError(t, err)
+	assert.Equal(t, null.StringFrom("0x71efd5d71a597eb6bec28dfdb05a49283a3e20c5"), stored.UpdatedBySigner, "a claimless change keeps the mark")
+}
+
+func TestUpdateTriggerKeepsSignerColumns(t *testing.T) {
+	t.Parallel()
+	tc := tests.SetupTestContainer(t)
+	repo := NewRepository(tc.DB)
+	ctx := context.Background()
+
+	trigger, err := repo.CreateTrigger(ctx, CreateTriggerRequest{
+		Service:                 ServiceSignal,
+		MetricName:              "vss.speed",
+		Condition:               "valueNumber > 20",
+		TargetURI:               "https://example.com/webhook",
+		Status:                  StatusEnabled,
+		CooldownPeriod:          10,
+		DeveloperLicenseAddress: tests.RandomAddr(t),
+		CreatedBySigner:         common.HexToAddress("0x71efD5d71a597eB6BEC28DFDB05a49283a3e20c5"),
+	})
+	require.NoError(t, err)
+
+	// A PUT loads the row; meanwhile a vehicle route marks the webhook; then the PUT saves
+	// its stale copy.
+	stale, err := models.FindTrigger(ctx, tc.DB, trigger.ID)
+	require.NoError(t, err)
+	require.NoError(t, repo.SetTriggerUpdatedBySigner(ctx, trigger.ID, common.HexToAddress("0x955029AC2539f4D57A1D7E6Ef2b97617e95Eb1D4")))
+	stale.Description = null.StringFrom("renamed")
+	stale.CreatedBySigner = null.String{}
+	require.NoError(t, repo.UpdateTrigger(ctx, stale))
+
+	stored, err := models.FindTrigger(ctx, tc.DB, trigger.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "renamed", stored.Description.String)
+	assert.Equal(t, null.StringFrom("0x955029ac2539f4d57a1d7e6ef2b97617e95eb1d4"), stored.UpdatedBySigner, "a whole-row update doesn't write back a stale updated_by_signer")
+	assert.Equal(t, null.StringFrom("0x71efd5d71a597eb6bec28dfdb05a49283a3e20c5"), stored.CreatedBySigner, "nor touch created_by_signer")
 }

@@ -5,6 +5,7 @@ image:
   tag: 1.4.11
 env:
   ENVIRONMENT: prod
+  SIGNER_CHECK_MODE: log
   PORT: '8080'
   MON_PORT: '8888'
   LOG_LEVEL: info
